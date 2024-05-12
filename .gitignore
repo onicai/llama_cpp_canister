@@ -44,7 +44,8 @@ build-native/
 *.wpu
 
 # VS Code
-.vscode
+.vscode/*
+!.vscode/settings.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
