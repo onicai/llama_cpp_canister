@@ -1,0 +1,45 @@
+[build-wasm]
+canister = "greet"
+did_path = "src/greet.did"
+cpp_paths = [
+    "src/llama_cpp_onicai_fork/unicode-data.cpp",
+    "src/llama_cpp_onicai_fork/unicode.cpp",
+    "src/llama_cpp_onicai_fork/common/json-schema-to-grammar.cpp",
+    "src/llama_cpp_onicai_fork/common/build-info.cpp",
+    "src/llama_cpp_onicai_fork/common/grammar-parser.cpp",
+    "src/llama_cpp_onicai_fork/common/sampling.cpp",
+    "src/llama_cpp_onicai_fork/common/common.cpp",
+    "src/llama_cpp_onicai_fork/llama.cpp",
+]
+cpp_include_dirs = [
+    "src/llama_cpp_onicai_fork",
+    "src/llama_cpp_onicai_fork/common",
+    "src/vendors/*",
+]
+cpp_compile_flags = ["-fPIC", "-D JSON_HAS_FILESYSTEM=0"]
+cpp_link_flags = []
+c_paths = [
+    "src/llama_cpp_onicai_fork/ggml.c",
+    "src/llama_cpp_onicai_fork/ggml-alloc.c",
+    "src/llama_cpp_onicai_fork/ggml-backend.c",
+    "src/llama_cpp_onicai_fork/ggml-quants.c",
+]
+c_include_dirs = [
+    "src/llama_cpp_onicai_fork",
+    "src/llama_cpp_onicai_fork/common",
+]
+c_compile_flags = ["-fPIC"]
+[build-native]
+cpp_paths = [
+    "src/llama_cpp_onicai_fork/examples/main/main.cpp",
+    "src/llama_cpp_onicai_fork/common/console.cpp",
+]
+cpp_include_dirs = [
+    "src/llama_cpp_onicai_fork",
+    "src/llama_cpp_onicai_fork/common",
+]
+cpp_compile_flags = ["-fPIC"]
+cpp_link_flags = []
+c_paths = []
+c_include_dirs = []
+c_compile_flags = []

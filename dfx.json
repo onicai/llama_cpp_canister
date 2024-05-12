@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "canisters": {
+    "greet": {
+      "type": "custom",
+      "candid": "src/greet.did",
+      "wasm": "build/greet.wasm"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  }
+}

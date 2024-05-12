@@ -1,0 +1,77 @@
+name: cicd
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "icpp_llama2/**"
+      - "Makefile"
+      - ".github/trigger.txt"
+      - ".github/workflows/cicd.yml"
+
+env:
+  PYTHON_VERSION: 3.11
+
+jobs:
+  all:
+    name: all
+    runs-on: ubuntu-latest
+    steps:
+      # https://github.com/marketplace/actions/setup-miniconda
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # -------------------------------------------------------------------
+      # Checkout icpp-llm
+      - name: checkout icpp-llm
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      # -------------------------------------------------------------------
+
+      - name: install
+        shell: bash -l {0} # activates the default conda environment ('test')
+        run: |
+          echo "Installing tool chains & dependencies"
+          pwd
+          sudo apt-get update
+          sudo apt-get install build-essential
+          make summary
+          make install-dfx
+          make install-python
+          make install-clang-ubuntu
+          make install-jp
+
+      - name: versions
+        shell: bash -l {0}
+        run: |
+          echo "icpp --version: $(icpp --version)"
+          echo "clang++ --version: $(clang++ --version)"
+          echo "g++ --version: $(g++ --version)"
+          echo "pip version     : $(pip --version)"
+          echo "python version  : $(python --version)"
+          echo "jp version      : $(jp --version)"
+          echo "dfx version    : $(dfx --version)"
+          echo "Ensure conda works properly"
+          conda info
+          which pip
+          which python
+          which icpp
+
+      - name: install-wasi-sdk
+        shell: bash -l {0}
+        run: |
+          echo "Installing wasi-sdk"
+          icpp install-wasi-sdk
+
+      - name: download models
+        shell: bash -l {0}
+        run: |
+          make icpp_llama2_get_stories15M
+          make icpp_llama2_get_stories260K
+
+      - name: all-tests
+        shell: bash -l {0}
+        run: |
+          make all-tests

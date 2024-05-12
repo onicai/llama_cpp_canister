@@ -1,0 +1,7 @@
+# Note: many packages are already installed by llama_cpp_onicai_fork/requirements.txt
+#       do not add them here again
+
+-r scripts/requirements.txt
+-r src/llama_cpp_onicai_fork/requirements.txt
+icpp-pro==3.15.2
+ic-py==1.0.1

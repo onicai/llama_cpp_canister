@@ -1,0 +1,19 @@
+type StatusCode = nat16;
+type Result = 
+ variant {
+   err: StatusCode;
+   ok: text;
+ };
+service : {
+    "greet_0": () -> (text) query;
+    "greet_0_auth": () -> (Result) query;
+    "greet_1": () -> (int) query;
+    "greet_2" : (text) -> (text) query;
+    "greet_3": (record { "icpp version" : int; OS : text }) -> 
+                      (record { "icpp Release Details" : text; "release year" : int }) 
+                      query;
+    "greet_4": (record { 6 : int; 9 : int }, record { 7 : int; 10 : int }) -> 
+                       (text, text, int, int, int, int) 
+                       query;
+    "greet_json" : (text) -> (text) query;
+}
