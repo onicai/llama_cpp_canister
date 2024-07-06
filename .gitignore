@@ -35,6 +35,8 @@ a.out
 *.exe
 build-native-unit/
 build-native/
+build-library/
+build-library-native/
 
 # PyPI packaging
 .pypirc

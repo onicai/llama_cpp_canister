@@ -75,7 +75,7 @@ The native build is already functional, but this will change drastically as we n
 icpp build-native
 
 # run it
-./build/mockic.exe -m models/stories15Mtok4096.gguf -p "Joe loves writing stories" -n 600 -c 128
+./build/mockic.exe -m ../../repos_hf/llama_cpp_canister_models/stories15Mtok4096.gguf -p "Patrick loves ice-cream. On a hot day " -n 600 -c 128
 ```
 
 ## Baseline canister, with one update call

@@ -38,7 +38,7 @@ VERSION_CLANG := $(shell cat version_clang.txt)
 
 ###########################################################################
 # Use some clang tools that come with wasi-sdk
-ICPP_COMPILER_ROOT := $(HOME)/.icpp/wasi-sdk-20.0
+ICPP_COMPILER_ROOT := $(HOME)/.icpp/wasi-sdk/wasi-sdk-22.0
 CLANG_FORMAT = $(ICPP_COMPILER_ROOT)/bin/clang-format
 CLANG_TIDY = $(ICPP_COMPILER_ROOT)/bin/clang-tidy
 
@@ -49,6 +49,7 @@ CLANG_TIDY = $(ICPP_COMPILER_ROOT)/bin/clang-tidy
 .PHONY: all-tests
 all-tests: all-static test-all-llms 
 
+# TODO: change to gguf from llama_cpp_... of onicai's huggingface repo
 .PHONY: icpp_llama2_get_stories260K
 icpp_llama2_get_stories260K:
 	cd icpp_llama2 && \
@@ -56,6 +57,7 @@ icpp_llama2_get_stories260K:
 		wget -P stories260K https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/stories260K.bin && \
 		wget -P stories260K https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/tok512.bin
 
+# TODO: change to gguf from llama_cpp_... of onicai's huggingface repo
 .PHONY: icpp_llama2_get_stories15M
 icpp_llama2_get_stories15M:
 	cd icpp_llama2 && \
@@ -73,6 +75,7 @@ summary:
 	@echo ICPP_COMPILER_ROOT=$(ICPP_COMPILER_ROOT)
 	@echo "-------------------------------------------------------------"
 
+# TODO: change to testing llama_cpp
 .PHONY: test-all-llms
 test-all-llms:
 	dfx identity use default
@@ -92,8 +95,8 @@ all-static: \
 	python-format python-lint python-type
 	
 CPP_AND_H_FILES = $(shell ls \
-icpp_llama2/src/*.cpp icpp_llama2/src/*.h \
-icpp_llama2/native/*.cpp icpp_llama2/native/*.h)
+src/*.cpp src/*.h \
+native/*.cpp native/*.h)
 
 .PHONY: cpp-format
 cpp-format:
@@ -107,7 +110,7 @@ cpp-lint:
 	@echo "cpp-lint"
 	@echo "TO IMPLEMENT with clang-tidy"
 
-PYTHON_DIRS ?= icpp_llama2
+PYTHON_DIRS ?= scripts
 
 .PHONY: python-format
 python-format:
@@ -134,7 +137,7 @@ python-type:
 .PHONY: install-clang-ubuntu
 install-clang-ubuntu:
 	@echo "Installing clang-$(VERSION_CLANG) compiler"
-	sudo apt-get remove python3-lldb-14
+	# sudo apt-get remove python3-lldb-14
 	wget https://apt.llvm.org/llvm.sh
 	chmod +x llvm.sh
 	echo | sudo ./llvm.sh $(VERSION_CLANG)
@@ -161,6 +164,7 @@ install-didc:
 	@echo "Installed successfully in:"
 	@echo /usr/local/bin/didc
 
+# TODO: update as in icpp-pro, for ubuntu & mac
 .PHONY: install-jp
 install-jp:
 	sudo apt-get update && sudo apt-get install jp

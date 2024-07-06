@@ -1,6 +1,6 @@
 [build-wasm]
-canister = "greet"
-did_path = "src/greet.did"
+canister = "llama_cpp"
+did_path = "src/llama_cpp.did"
 cpp_paths = [
     "src/llama_cpp_onicai_fork/unicode-data.cpp",
     "src/llama_cpp_onicai_fork/unicode.cpp",
@@ -10,13 +10,14 @@ cpp_paths = [
     "src/llama_cpp_onicai_fork/common/sampling.cpp",
     "src/llama_cpp_onicai_fork/common/common.cpp",
     "src/llama_cpp_onicai_fork/llama.cpp",
+    "src/*.cpp",
 ]
 cpp_include_dirs = [
     "src/llama_cpp_onicai_fork",
     "src/llama_cpp_onicai_fork/common",
     "src/vendors/*",
 ]
-cpp_compile_flags = ["-fPIC", "-D JSON_HAS_FILESYSTEM=0"]
+cpp_compile_flags = ["-fPIC"]
 cpp_link_flags = []
 c_paths = [
     "src/llama_cpp_onicai_fork/ggml.c",
@@ -31,8 +32,12 @@ c_include_dirs = [
 c_compile_flags = ["-fPIC"]
 [build-native]
 cpp_paths = [
-    "src/llama_cpp_onicai_fork/examples/main/main.cpp",
-    "src/llama_cpp_onicai_fork/common/console.cpp",
+    # Use this to build native debug executable for testing canister code
+    "native/main.cpp",
+
+    # Use this to build the original console app of llama.cpp, without canister wrapper
+    # "src/llama_cpp_onicai_fork/examples/main/main.cpp",
+    # "src/llama_cpp_onicai_fork/common/console.cpp",
 ]
 cpp_include_dirs = [
     "src/llama_cpp_onicai_fork",

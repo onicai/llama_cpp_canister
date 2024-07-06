@@ -1,0 +1,17 @@
+// Always return a single record wrapped in a variant
+type StatusCode = nat16;
+
+type RunInputRecord = record { 
+  "args" : vec text; // the CLI args of llama.cpp/examples/main, as a list of strings
+};
+
+type RunOutputRecord = record { status: StatusCode; output: text };
+type RunOutputRecordResult = variant {
+  Ok : RunOutputRecord;
+  Err : RunOutputRecord;
+};
+
+service : {
+    "run_query" : (RunInputRecord) -> (RunOutputRecordResult) query;
+    "run_update": (RunInputRecord) -> (RunOutputRecordResult);
+}
