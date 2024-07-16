@@ -8,12 +8,10 @@ paths.txt
 .*.swp
 .DS_Store
 secret
+.vscode/
 
-# llama2 models
+# llama models
 models
-
-# llama2 metrics
-etl
 
 # Windows
 .vs

@@ -1,9 +1,0 @@
-{
-  "[file src/llama_cpp_onicai_fork/**]": { 
-    "editor.formatOnSave": false // Disables formatting on save for the specific folder
-  },
-  "files.associations": {
-    "iostream": "cpp"
-  }
-}
-  

@@ -1,3 +1,5 @@
+// TODO: use ApiError for RunOutputRecordResult
+
 // Always return a single record wrapped in a variant
 type StatusCode = nat16;
 
@@ -11,7 +13,63 @@ type RunOutputRecordResult = variant {
   Err : RunOutputRecord;
 };
 
+// -----------------------------------------
+type ApiError = variant {
+  Other : text;
+  StatusCode : nat16;
+};
+
+// HTTPS status code wrapped in a Record wrapped in a Result
+type StatusCodeRecordResult = variant {
+  Err : ApiError;
+  Ok : StatusCodeRecord;
+};
+type StatusCodeRecord = record { status_code : nat16 };
+
+// -----------------------------------------------------
+type FileDownloadInputRecord = record { 
+  filename: text; 
+  chunksize: nat64; 
+  offset: nat64; 
+};
+type FileDownloadRecordResult = variant {
+  Err : ApiError;
+  Ok : FileDownloadRecord;
+};
+type FileDownloadRecord = record {
+  chunk : vec nat8;   // the chunk read from the file, as a vec of bytes
+  chunksize : nat64;  // the chunksize in bytes
+  filesize : nat64;   // the total filesize in bytes
+  offset: nat64;      // the chunk starts here (bytes from beginning)
+  done : bool;        // true if there are no more bytes to read
+};
+
+// -----------------------------------------------------
+type FileUploadInputRecord = record { 
+  filename: text;
+  chunk : vec nat8;   // the chunk being uploaded, as a vec of bytes
+  chunksize: nat64;   // the chunksize (allowing sanity check)
+  offset: nat64;      // the offset where to write the chunk
+};
+type FileUploadRecordResult = variant {
+  Err : ApiError;
+  Ok : FileUploadRecord;
+};
+type FileUploadRecord = record {
+  filesize : nat64;   // the total filesize in bytes after writing chunk at offset
+};
+
 service : {
-    "run_query" : (RunInputRecord) -> (RunOutputRecordResult) query;
-    "run_update": (RunInputRecord) -> (RunOutputRecordResult);
+  // canister
+  health : () -> (StatusCodeRecordResult) query;
+  
+  // up & down load of files
+  file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;
+  file_upload_chunk : (FileUploadInputRecord) -> (FileUploadRecordResult);
+
+  // Inference endpoints
+  "run_query" : (RunInputRecord) -> (RunOutputRecordResult) query;
+  "run_update": (RunInputRecord) -> (RunOutputRecordResult);
+
+    
 }

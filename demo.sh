@@ -35,13 +35,16 @@ dfx deploy
 #######################################################################
 echo " "
 echo "--------------------------------------------------"
+echo "Uploading the *.gguf model file"
+python -m scripts.upload ../../repos_hf/llama_cpp_canister_models/stories260Ktok512.gguf --canister-file stories260Ktok512.gguf
+python -m scripts.upload ../../repos_hf/llama_cpp_canister_models/stories15Mtok4096.gguf --canister-file stories15Mtok4096.gguf
+python -m scripts.upload ../../repos_hf/Phi-3-mini-4k-instruct-gguf/Phi-3-mini-4k-instruct-q4.gguf --canister-file Phi-3-mini-4k-instruct-q4.gguf
+
+#######################################################################
+echo " "
+echo "--------------------------------------------------"
 echo "Running some manual tests with dfx"
-dfx canister call greet greet_0
-dfx canister call greet greet_1
-dfx canister call greet greet_2 '("C++ Developer")'
-dfx canister call greet greet_3 '(record { "icpp version" = 1 : int; OS = "Linux" : text })'
-dfx canister call greet greet_4 '(record { 6 = 42 : int; 9 = 43 : int }, record { 7 = 44 : int; 10 = 45 : int })'
-dfx canister call greet greet_json '("{\"name\": \"AJ\"}")'
+dfx canister call llama_cpp run_query '(record { args = vec {"--model"; "stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "600"; "--ctx-size"; "128"} })'
 
 #######################################################################
 echo " "
