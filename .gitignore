@@ -8,12 +8,7 @@ paths.txt
 .*.swp
 .DS_Store
 secret
-
-# llama2 models
-models
-
-# llama2 metrics
-etl
+.vscode/
 
 # Windows
 .vs
@@ -35,6 +30,8 @@ a.out
 *.exe
 build-native-unit/
 build-native/
+build-library/
+build-library-native/
 
 # PyPI packaging
 .pypirc

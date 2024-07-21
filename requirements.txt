@@ -3,5 +3,5 @@
 
 -r scripts/requirements.txt
 -r src/llama_cpp_onicai_fork/requirements.txt
-icpp-pro==3.15.2
+icpp-pro==4.1.0
 ic-py==1.0.1

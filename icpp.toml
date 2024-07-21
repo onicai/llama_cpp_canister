@@ -1,6 +1,6 @@
 [build-wasm]
-canister = "greet"
-did_path = "src/greet.did"
+canister = "llama_cpp"
+did_path = "src/llama_cpp.did"
 cpp_paths = [
     "src/llama_cpp_onicai_fork/unicode-data.cpp",
     "src/llama_cpp_onicai_fork/unicode.cpp",
@@ -10,13 +10,20 @@ cpp_paths = [
     "src/llama_cpp_onicai_fork/common/sampling.cpp",
     "src/llama_cpp_onicai_fork/common/common.cpp",
     "src/llama_cpp_onicai_fork/llama.cpp",
+    "src/*.cpp",
 ]
 cpp_include_dirs = [
     "src/llama_cpp_onicai_fork",
     "src/llama_cpp_onicai_fork/common",
     "src/vendors/*",
 ]
-cpp_compile_flags = ["-fPIC", "-D JSON_HAS_FILESYSTEM=0"]
+# NOTE: Adding compile flag "-msimd128" might be too much. It will compile everything with simd
+#       Alternative is to add it at granular level in the code, like:
+#       // Function with SIMD128 enabled
+#       void __attribute__((target("simd128"))) simd_function() {
+#           // SIMD-specific code here
+#       }
+cpp_compile_flags = []
 cpp_link_flags = []
 c_paths = [
     "src/llama_cpp_onicai_fork/ggml.c",
@@ -28,17 +35,21 @@ c_include_dirs = [
     "src/llama_cpp_onicai_fork",
     "src/llama_cpp_onicai_fork/common",
 ]
-c_compile_flags = ["-fPIC"]
+c_compile_flags = []
 [build-native]
 cpp_paths = [
-    "src/llama_cpp_onicai_fork/examples/main/main.cpp",
-    "src/llama_cpp_onicai_fork/common/console.cpp",
+    # Use this to build native debug executable for testing canister code
+    "native/main.cpp",
+
+    # Use this to build the original console app of llama.cpp, without canister wrapper
+    # "src/llama_cpp_onicai_fork/examples/main/main.cpp",
+    # "src/llama_cpp_onicai_fork/common/console.cpp",
 ]
 cpp_include_dirs = [
     "src/llama_cpp_onicai_fork",
     "src/llama_cpp_onicai_fork/common",
 ]
-cpp_compile_flags = ["-fPIC"]
+cpp_compile_flags = []
 cpp_link_flags = []
 c_paths = []
 c_include_dirs = []
