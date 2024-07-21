@@ -1,14 +1,16 @@
 [![llama_cpp_canister](https://github.com/onicai/llama_cpp_canister/actions/workflows/cicd-mac.yml/badge.svg)](https://github.com/onicai/llama_cpp_canister/actions/workflows/cicd-mac.yml)
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
-[ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp) for the Internet Computer.
+
+
+# [ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp) for the Internet Computer.
 
 
 # Getting Started
 
 Currently, the canister can only be build on a `mac` !
 
-- Install the C++ development environment for the Internet Computer ([docs](https://docs.icpp.world/installation.html)):
+- Install  [icpp-pro](https://docs.icpp.world/installation.html), the C++ Canister Development Kit (CDK) for the Internet Computer
 
 - Clone the repo and it's children:
 
