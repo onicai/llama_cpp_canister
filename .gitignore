@@ -10,9 +10,6 @@ paths.txt
 secret
 .vscode/
 
-# llama models
-models
-
 # Windows
 .vs
 CppProperties.json

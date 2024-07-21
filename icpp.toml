@@ -17,7 +17,13 @@ cpp_include_dirs = [
     "src/llama_cpp_onicai_fork/common",
     "src/vendors/*",
 ]
-cpp_compile_flags = ["-fPIC"]
+# NOTE: Adding compile flag "-msimd128" might be too much. It will compile everything with simd
+#       Alternative is to add it at granular level in the code, like:
+#       // Function with SIMD128 enabled
+#       void __attribute__((target("simd128"))) simd_function() {
+#           // SIMD-specific code here
+#       }
+cpp_compile_flags = []
 cpp_link_flags = []
 c_paths = [
     "src/llama_cpp_onicai_fork/ggml.c",
@@ -29,7 +35,7 @@ c_include_dirs = [
     "src/llama_cpp_onicai_fork",
     "src/llama_cpp_onicai_fork/common",
 ]
-c_compile_flags = ["-fPIC"]
+c_compile_flags = []
 [build-native]
 cpp_paths = [
     # Use this to build native debug executable for testing canister code
@@ -43,7 +49,7 @@ cpp_include_dirs = [
     "src/llama_cpp_onicai_fork",
     "src/llama_cpp_onicai_fork/common",
 ]
-cpp_compile_flags = ["-fPIC"]
+cpp_compile_flags = []
 cpp_link_flags = []
 c_paths = []
 c_include_dirs = []

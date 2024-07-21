@@ -105,8 +105,10 @@ def main() -> int:
             pass
         elif DEBUG_VERBOSE == 1:
             print(
-                f"chunk size = {len(chunk)} bytes "
-                f"({offset+len(chunk) / len(file_bytes) * 100:.1f}%)"
+                f"chunk size = {len(chunk)} "
+                f"len(file_bytes) = {len(file_bytes)} " 
+                f"offset = {offset} bytes "
+                f"({((offset+len(chunk)) / len(file_bytes) * 100):.1f}%)"
             )
         else:
             print("+++++++++++++++++++++++++++++++++++++++++++++++++++++")
