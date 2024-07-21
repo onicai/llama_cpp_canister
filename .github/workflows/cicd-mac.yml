@@ -1,0 +1,113 @@
+name: cicd-mac
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/**"
+      - "native/**"
+      - "src/**"
+      - "test/**"
+      - "Makefile"
+      - ".github/trigger.txt"
+      - ".github/workflows/cicd-mac.yml"
+
+jobs:
+  all-mac:
+    name: all-mac
+    strategy:
+      matrix:
+        python-version: [3.8, 3.11]
+        os: [macos-latest]
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      # https://github.com/marketplace/actions/setup-miniconda
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # -------------------------------------------------------------------
+      # Checkout llama_cpp_canister & llama_cpp_onicai_fork as nested directory
+      - name: checkout llama_cpp_canister
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: checkout llama_cpp_onicai_fork
+        uses: actions/checkout@v4
+        with:
+          repository: onicai/llama_cpp_onicai_fork
+          ref: onicai  # Specify the branch name here
+          path: src/llama_cpp_onicai_fork
+          fetch-depth: 1 # Get just the last commit
+          submodules: 'recursive'
+      # -------------------------------------------------------------------
+
+      - name: install
+        shell: bash -l {0} # activates the default conda environment ('test')
+        run: |
+          echo "Installing tool chains & dependencies"
+          pwd
+          make summary
+          make install-dfx
+          make install-python
+          make install-homebrew-mac
+          make install-jp-mac
+
+      - name: versions
+        shell: bash -l {0}
+        run: |
+          echo "icpp --version: $(icpp --version)"
+          echo "clang++ --version: $(clang++ --version)"
+          echo "g++ --version: $(g++ --version)"
+          #echo "wasm2wat version: $(wasm2wat --version)"
+          echo "pip version     : $(pip --version)"
+          echo "python version  : $(python --version)"
+          echo "jp version      : $(jp --version)"
+          #echo "rustc version   : $(rustc --version)"
+          echo "dfx version    : $(dfx --version)"
+          echo "Ensure conda works properly"
+          conda info
+          which pip
+          which python
+          which icpp
+
+      - name: install-wasi-sdk
+        shell: bash -l {0}
+        run: |
+          echo "Installing wasi-sdk"
+          icpp install-wasi-sdk
+
+      - name: install-rust
+        shell: bash -l {0}
+        run: |
+          echo "Installing rust"
+          icpp install-rust
+
+      - name: build-info-cpp
+        shell: bash -l {0}
+        run: |
+          make build-info-cpp
+
+      - name: all-static
+        shell: bash -l {0}
+        run: |
+          make all-static
+
+      - name: test-llm-wasm
+        shell: bash -l {0}
+        run: |
+          make test-llm-wasm
+
+      - name: test-llm-native
+        shell: bash -l {0}
+        run: |
+          make test-llm-native
+
+      # TODO
+      # - name: all-tests
+      #   shell: bash -l {0}
+      #   run: |
+      #     make all-tests

@@ -15,7 +15,6 @@ cpp_paths = [
 cpp_include_dirs = [
     "src/llama_cpp_onicai_fork",
     "src/llama_cpp_onicai_fork/common",
-    "src/vendors/*",
 ]
 # NOTE: Adding compile flag "-msimd128" might be too much. It will compile everything with simd
 #       Alternative is to add it at granular level in the code, like:

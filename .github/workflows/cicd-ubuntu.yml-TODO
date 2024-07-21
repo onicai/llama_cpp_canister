@@ -1,33 +1,47 @@
-name: cicd
+name: cicd-ubuntu
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - "icpp_llama2/**"
+      - "scripts/**"
+      - "native/**"
+      - "src/**"
+      - "test/**"
       - "Makefile"
       - ".github/trigger.txt"
-      - ".github/workflows/cicd.yml"
-
-env:
-  PYTHON_VERSION: 3.11
+      - ".github/workflows/cicd-ubuntu.yml"
 
 jobs:
-  all:
-    name: all
-    runs-on: ubuntu-latest
+  all-ubuntu:
+    name: all-ubuntu
+    strategy:
+      matrix:
+        python-version: [3.8, 3.11]
+        os: [ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
+
     steps:
       # https://github.com/marketplace/actions/setup-miniconda
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ matrix.python-version }}
 
       # -------------------------------------------------------------------
-      # Checkout icpp-llm
-      - name: checkout icpp-llm
-        uses: actions/checkout@v3
+      # Checkout llama_cpp_canister & llama_cpp_onicai_fork as nested directory
+      - name: checkout llama_cpp_canister
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: checkout llama_cpp_onicai_fork
+        uses: actions/checkout@v4
+        with:
+          repository: onicai/llama_cpp_onicai_fork
+          path: src/llama_cpp_onicai_fork
+          fetch-depth: 0
+          submodules: 'recursive'
       # -------------------------------------------------------------------
 
       - name: install
@@ -41,7 +55,7 @@ jobs:
           make install-dfx
           make install-python
           make install-clang-ubuntu
-          make install-jp
+          make install-jp-ubuntu
 
       - name: versions
         shell: bash -l {0}
@@ -49,9 +63,11 @@ jobs:
           echo "icpp --version: $(icpp --version)"
           echo "clang++ --version: $(clang++ --version)"
           echo "g++ --version: $(g++ --version)"
+          #echo "wasm2wat version: $(wasm2wat --version)"
           echo "pip version     : $(pip --version)"
           echo "python version  : $(python --version)"
           echo "jp version      : $(jp --version)"
+          #echo "rustc version   : $(rustc --version)"
           echo "dfx version    : $(dfx --version)"
           echo "Ensure conda works properly"
           conda info
@@ -65,11 +81,11 @@ jobs:
           echo "Installing wasi-sdk"
           icpp install-wasi-sdk
 
-      - name: download models
+      - name: install-rust
         shell: bash -l {0}
         run: |
-          make icpp_llama2_get_stories15M
-          make icpp_llama2_get_stories260K
+          echo "Installing rust"
+          icpp install-rust
 
       - name: all-tests
         shell: bash -l {0}

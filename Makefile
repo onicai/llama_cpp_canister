@@ -47,22 +47,12 @@ CLANG_TIDY = $(ICPP_COMPILER_ROOT)/bin/clang-tidy
 # CI/CD - Phony Makefile targets
 #
 .PHONY: all-tests
-all-tests: all-static test-all-llms 
+all-tests: all-static test-llm-wasm test-llm-native 
 
-# TODO: change to gguf from llama_cpp_... of onicai's huggingface repo
-.PHONY: icpp_llama2_get_stories260K
-icpp_llama2_get_stories260K:
-	cd icpp_llama2 && \
-		mkdir -p stories260K && \
-		wget -P stories260K https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/stories260K.bin && \
-		wget -P stories260K https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/tok512.bin
-
-# TODO: change to gguf from llama_cpp_... of onicai's huggingface repo
-.PHONY: icpp_llama2_get_stories15M
-icpp_llama2_get_stories15M:
-	cd icpp_llama2 && \
-		mkdir -p models && \
-		wget -P models https://huggingface.co/karpathy/tinyllamas/resolve/main/stories15M.bin
+.PHONY: build-info-cpp
+build-info-cpp: 
+	echo "Creating src/llama_cpp_onicai_fork/common/build-info.cpp"
+	@sh src/llama_cpp_onicai_fork/scripts/build-info.sh clang > src/llama_cpp_onicai_fork/common/build-info.cpp
 
 .PHONY: summary
 summary:
@@ -75,19 +65,22 @@ summary:
 	@echo ICPP_COMPILER_ROOT=$(ICPP_COMPILER_ROOT)
 	@echo "-------------------------------------------------------------"
 
-# TODO: change to testing llama_cpp
-.PHONY: test-all-llms
-test-all-llms:
+.PHONY: test-llm-native
+test-llm-native:
 	dfx identity use default
-	@echo "#########################################"
-	@echo "####### testing icpp_llama2 #############"
-	@echo "#########################################"
-	cd icpp_llama2 && \
-		icpp build-native && \
-		./build-native/mockic.exe && \
-		./demo.sh && \
-		pytest && \
-		dfx stop
+	icpp build-native
+	./build-native/mockic.exe
+
+.PHONY: test-llm-wasm
+test-llm-wasm:
+	dfx identity use default
+	icpp build-wasm
+	dfx stop
+	dfx start --clean --background
+	dfx deploy
+	python -m scripts.upload models/stories260Ktok512.gguf
+	pytest -vv
+	dfx stop
 	
 .PHONY: all-static
 all-static: \
@@ -164,10 +157,17 @@ install-didc:
 	@echo "Installed successfully in:"
 	@echo /usr/local/bin/didc
 
-# TODO: update as in icpp-pro, for ubuntu & mac
-.PHONY: install-jp
-install-jp:
+.PHONY: install-jp-ubuntu
+install-jp-ubuntu:
 	sudo apt-get update && sudo apt-get install jp
+
+.PHONY: install-jp-mac
+install-jp-mac:
+	brew install jp
+
+.PHONY: install-homebrew-mac
+install-homebrew-mac:
+	/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 .PHONY: install-python
 install-python:

@@ -18,7 +18,7 @@ wsl dfx stop
 Write-Host " "
 Write-Host "--------------------------------------------------"
 Write-Host "Starting the local network in wsl as a PowerShell background job"
-$jobName = "greet"
+$jobName = "llama_cpp"
 
 # Stop the job if it already exist
 # Get a list of all the background jobs with a specific name
@@ -53,30 +53,34 @@ icpp build-wasm --to-compile all
 Write-Host " "
 Write-Host "--------------------------------------------------"
 Write-Host "Deploying the wasm to a canister on the local network"
-wsl --% dfx deploy
+wsl --% . ~/.local/share/dfx/env; dfx deploy
+
+#######################################################################
+echo " "
+echo "--------------------------------------------------"
+echo "Uploading the *.gguf model file"
+python -m scripts.upload models/stories260Ktok512.gguf
+# python -m scripts.upload models/stories15Mtok4096.gguf
+# python -m scripts.upload ../../repos_hf/Phi-3-mini-4k-instruct-gguf/Phi-3-mini-4k-instruct-q4.gguf --canister-file models/Phi-3-mini-4k-instruct-q4.gguf
 
 #######################################################################
 Write-Host " "
 Write-Host "--------------------------------------------------"
 Write-Host "Running some manual tests with dfx"
-wsl --% dfx canister call greet greet_0
-wsl --% dfx canister call greet greet_1
-wsl --% dfx canister call greet greet_2 '("C++ Developer")'
-wsl --% dfx canister call greet greet_3 '(record { "icpp version" = 1 : int; OS = "Linux" : text })'
-wsl --% dfx canister call greet greet_4 '(record { 6 = 42 : int; 9 = 43 : int }, record { 7 = 44 : int; 10 = 45 : int })'
-wsl --% dfx canister call greet greet_json '("{\"name\": \"AJ\"}")'
+wsl --% . ~/.local/share/dfx/env; dfx canister call llama_cpp run_query '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "25"; "--ctx-size"; "128"} })'
+wsl --% . ~/.local/share/dfx/env; dfx canister call llama_cpp run_update '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "25"; "--ctx-size"; "128"} })'
 
 #######################################################################
 Write-Host " "
 Write-Host "--------------------------------------------------"
 Write-Host "Running the full smoketests with pytest"
-pytest --network=local
+pytest -vv --network=local
 
 #######################################################################
 Write-Host " "
 Write-Host "--------------------------------------------------"
 Write-Host "Stopping the local network in wsl"
-wsl dfx stop
+wsl --% . ~/.local/share/dfx/env; dfx stop
 
 Native build on Windows is temporarily broken..
 #######################################################################

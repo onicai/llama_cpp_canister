@@ -33,9 +33,9 @@ void run(IC_API &ic_api) {
   int argc = args.size();
 
   // Construct argv
-  std::vector<char*> argv(argc);
+  std::vector<char *> argv(argc);
   for (int i = 0; i < argc; ++i) {
-      argv[i] = &args[i][0]; // Convert std::string to char*
+    argv[i] = &args[i][0]; // Convert std::string to char*
   }
 
   // Call main_, just like it is called in the console app
@@ -43,8 +43,9 @@ void run(IC_API &ic_api) {
 
   // Return output over the wire
   CandidTypeRecord r_out;
-  r_out.append("StatusCode", CandidTypeNat16{200}); // TODO: set the status code
-  r_out.append("output", CandidTypeText{"TODO: add output here.... "});
+  r_out.append("status", CandidTypeNat16{200}); // TODO: set the status code
+  r_out.append("output",
+               CandidTypeText{"TODO: we need to add some output here.... "});
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
 }
 
