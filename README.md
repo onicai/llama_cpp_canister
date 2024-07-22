@@ -143,14 +143,19 @@ We focus on two types of models:
 
    - [microsoft/phi-3](...), quantized with 4-bits
 
-## Optimizations
 
-In order to run the larger models, following optimizations are planned:
+In order to run the larger models:
 
-- Don't read model as part of `run_query` or `run_update`, but read it only once
-- Use SIMD, to reduce number of instructions required to generate a token
-- Use quantized models
-- ... other items as IC capabilities grow ...
+**Today - in progress, stay tuned:**
+- Reduce number of instructions & Increase speed:
+  - Read model only once and store in OP
+  - SIMD
+  - New wasm float handling
+  - Quantized models
+
+**Coming - once released as part of IC roadmap:**
+  - wasm64
+  - GPU
 
 
 ## Canister with sequence of update calls
