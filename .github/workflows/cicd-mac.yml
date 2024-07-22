@@ -86,10 +86,10 @@ jobs:
           echo "Installing rust"
           icpp install-rust
 
-      - name: build-info-cpp
+      - name: build-info-cpp-wasm
         shell: bash -l {0}
         run: |
-          make build-info-cpp
+          make build-info-cpp-wasm
 
       - name: all-static
         shell: bash -l {0}

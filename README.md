@@ -31,7 +31,7 @@ Currently, the canister can only be build on a `mac` !
 
 - Create the file src/llama_cpp_onicai_fork/common/build-info.cpp
   ```
-  make build-info-cpp
+  make build-info-cpp-wasm
   ```
   TODO: recipe for Windows.
 
