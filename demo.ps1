@@ -47,7 +47,7 @@ Write-Host " "
 Write-Host "--------------------------------------------------"
 Write-Host "Building the wasm with wasi-sdk"
 icpp build-wasm --to-compile all
-# icpp build-wasm --to-compile mine
+# icpp build-wasm --to-compile mine-no-lib
 
 #######################################################################
 Write-Host " "

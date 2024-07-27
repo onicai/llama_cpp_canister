@@ -94,9 +94,9 @@ Currently, the canister can only be build on a `mac` !
   - Generate 20 tokens, using the `run_query` or `run_update` call:
 
     ```bash
-    $ dfx canister call llama_cpp run_query '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"} })'
+    $ dfx canister call llama_cpp run_query '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"; "--verbose-prompt"} })'
     
-    $ dfx canister call llama_cpp run_update '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"} })'
+    $ dfx canister call llama_cpp run_update '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"; "--verbose-prompt"} })'
     
     -> See token generation in the dfx log window
 
@@ -222,3 +222,4 @@ All models are stored on [huggingface/onicai/llama_cpp_canister_models](https://
 ## study code and create implementation plan
 
 We dug deep into the code and studied it by stepping through it in the debugger with VS Code. We have gained sufficient understanding to create a solid implementation plan.
+

@@ -101,8 +101,10 @@ all-static: \
 	python-format python-lint python-type
 	
 CPP_AND_H_FILES = $(shell ls \
-src/*.cpp src/*.h \
-native/*.cpp native/*.h)
+	src/*.cpp src/*.h \
+	native/*.cpp native/*.h \
+	| grep -v "src/main_\.cpp")
+
 
 .PHONY: cpp-format
 cpp-format:

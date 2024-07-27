@@ -2,18 +2,24 @@
 canister = "llama_cpp"
 did_path = "src/llama_cpp.did"
 cpp_paths = [
-    "src/llama_cpp_onicai_fork/unicode-data.cpp",
-    "src/llama_cpp_onicai_fork/unicode.cpp",
+    "src/llama_cpp_onicai_fork/src/llama.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-vocab.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-grammar.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-sampling.cpp",
+    "src/llama_cpp_onicai_fork/src/unicode-data.cpp",
+    "src/llama_cpp_onicai_fork/src/unicode.cpp",
     "src/llama_cpp_onicai_fork/common/json-schema-to-grammar.cpp",
     "src/llama_cpp_onicai_fork/common/build-info.cpp",
     "src/llama_cpp_onicai_fork/common/grammar-parser.cpp",
     "src/llama_cpp_onicai_fork/common/sampling.cpp",
     "src/llama_cpp_onicai_fork/common/common.cpp",
-    "src/llama_cpp_onicai_fork/llama.cpp",
     "src/*.cpp",
 ]
 cpp_include_dirs = [
     "src/llama_cpp_onicai_fork",
+    "src/llama_cpp_onicai_fork/include",
+    "src/llama_cpp_onicai_fork/src",
+    "src/llama_cpp_onicai_fork/ggml/include",
     "src/llama_cpp_onicai_fork/common",
 ]
 # NOTE: Adding compile flag "-msimd128" might be too much. It will compile everything with simd
@@ -25,13 +31,17 @@ cpp_include_dirs = [
 cpp_compile_flags = []
 cpp_link_flags = []
 c_paths = [
-    "src/llama_cpp_onicai_fork/ggml.c",
-    "src/llama_cpp_onicai_fork/ggml-alloc.c",
-    "src/llama_cpp_onicai_fork/ggml-backend.c",
-    "src/llama_cpp_onicai_fork/ggml-quants.c",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml.c",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-alloc.c",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-backend.c",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-quants.c",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-aarch64.c",
 ]
 c_include_dirs = [
     "src/llama_cpp_onicai_fork",
+    "src/llama_cpp_onicai_fork/include",
+    "src/llama_cpp_onicai_fork/ggml/src",
+    "src/llama_cpp_onicai_fork/ggml/include",
     "src/llama_cpp_onicai_fork/common",
 ]
 c_compile_flags = []
@@ -44,10 +54,7 @@ cpp_paths = [
     # "src/llama_cpp_onicai_fork/examples/main/main.cpp",
     # "src/llama_cpp_onicai_fork/common/console.cpp",
 ]
-cpp_include_dirs = [
-    "src/llama_cpp_onicai_fork",
-    "src/llama_cpp_onicai_fork/common",
-]
+cpp_include_dirs = []
 cpp_compile_flags = []
 cpp_link_flags = []
 c_paths = []

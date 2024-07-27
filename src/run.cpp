@@ -2,6 +2,7 @@
 #include "main_.h"
 
 #include <string>
+#include <iostream>
 
 #include "ic_api.h"
 
@@ -18,7 +19,7 @@
 */
 
 void run(IC_API &ic_api) {
-
+  std::cout << "debug: run.cpp - run -01 " << std::endl;
   // Get the data from the wire
   std::vector<std::string> args;
 
@@ -38,6 +39,13 @@ void run(IC_API &ic_api) {
     argv[i] = &args[i][0]; // Convert std::string to char*
   }
 
+  std::cout << "debug: run.cpp - run -02 " << std::endl;
+  // Print argc and argv
+  std::cout << "argc: " << argc << std::endl;
+  for (int i = 0; i < argc; ++i) {
+      std::cout << "argv[" << i << "] = " << argv[i] << std::endl;
+  }
+
   // Call main_, just like it is called in the console app
   main_(argc, argv.data());
 
@@ -50,8 +58,11 @@ void run(IC_API &ic_api) {
 }
 
 void run_query() {
+  std::cout << "debug: run.cpp - run_query - 01 " << std::endl;
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
+  std::cout << "debug: run.cpp - run_query - 02 " << std::endl;
   run(ic_api);
+  std::cout << "debug: run.cpp - run_query - 03 " << std::endl;
 }
 void run_update() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
