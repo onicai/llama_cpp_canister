@@ -17,7 +17,7 @@ jobs:
     name: all-mac
     strategy:
       matrix:
-        python-version: [3.8, 3.11]
+        python-version: [3.11]
         os: [macos-latest]
 
     runs-on: ${{ matrix.os }}
