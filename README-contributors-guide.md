@@ -45,17 +45,17 @@ Follow steps of [llama_cpp_canister/README/Getting Started](https://github.com/o
 ## Sync fork
 In GitHub, `Sync fork` for master branch of https://github.com/onicai/llama_cpp_onicai_fork
 
-## Setup a local branch
+## llama_cpp_onicai_fork: setup a local branch
 Take following steps locally:
 - git fetch 
 
-- Copy `src/llama_cpp_onicai_fork` to `src/llama_cpp_onica_fork_<git-sha>`
+- Copy `src/llama_cpp_onicai_fork` to `<temp>/llama_cpp_onica_fork_<git-sha>`
 
   This is just as a reference. We will remove this folder once all done.
 
-- from master, create a new branch: `onicai-upgrade-<git-sha>`
+- from master, create a new branch: `onicai-<git-sha>`
 
-  For `git-sha`, use the commit sha from which we're branching.
+  For `git-sha`, use the short commit sha from which we're branching.
 
 ## Update all files
 
@@ -163,3 +163,14 @@ No updates needed for icpp-pro
 
 #### llama_cpp_onicai_fork/common/common.h
 - `#include <thread>`
+
+## llama_cpp_onicai_fork: replace `onicai` branch
+
+Do NOT merge the `onicai-<git-sha>` branch into the `onicai` branch, but replace it:
+
+```
+git branch -m onicai onicai-<old-git-sha>
+git branch -m onicai-<git-sha> onicai
+git push origin onicai:onicai
+git push origin onicai-<old-git-sha>:onicai-<old-git-sha>
+```
