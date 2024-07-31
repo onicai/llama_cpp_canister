@@ -1,4 +1,4 @@
-"""Uploads a file to the canister
+"""Uploads a file to the canister, and if file is a .gguf the canister will be initialized for inference
 
 Run with:
 
@@ -25,7 +25,7 @@ DEBUG_VERBOSE = 1
 
 
 def read_file_bytes(file_path: Path) -> bytes:
-    """Returns the stories15Mtok4096.bin file as a bytes array"""
+    """Returns the file as a bytes array"""
     file_bytes = b""
     try:
         with open(file_path, "rb") as file:
@@ -63,6 +63,8 @@ def main() -> int:
 
     dfx_json_path = ROOT_PATH / "dfx.json"
 
+    uploading_gguf = local_filename_path.suffix.lower() == '.gguf'
+
     print(
         f"Summary:"
         f"\n - canister_filename   = {canister_filename}"
@@ -73,6 +75,7 @@ def main() -> int:
         f"\n - canister_id         = {canister_id}"
         f"\n - dfx_json_path       = {dfx_json_path}"
         f"\n - candid_path         = {candid_path}"
+        f"\n - uploading_gguf      = {uploading_gguf}"
     )
 
     # ---------------------------------------------------------------------------
@@ -87,6 +90,21 @@ def main() -> int:
     else:
         print("Not OK, response is:")
         print(response)
+
+
+    # ---------------------------------------------------------------------------
+    # A little hacky, but we do something special if we're uploading a model
+    if uploading_gguf:
+        # Reset the model
+        print("--\nResetting the model (gguf) in canister")
+        response = canister_instance.reset_model()  # pylint: disable=no-member
+        if "Ok" in response[0].keys():
+            if DEBUG_VERBOSE >= 2:
+                print("OK!")
+        else:
+            print("Something went wrong:")
+            print(response)
+            sys.exit(1)
 
     # ---------------------------------------------------------------------------
     # UPLOAD FILE
@@ -136,9 +154,37 @@ def main() -> int:
         offset += len(chunk)
 
     # ---------------------------------------------------------------------------
-    print(
-        f"--\nCongratulations, the file {local_filename_path} was succesfully uploaded!"
-    )
+    # A little hacky, but we do something special if we're uploading a model
+    if uploading_gguf:
+        # Initialize the canister
+        print("--\nInitializing the canister, getting it ready for inference.")
+        response = canister_instance.initialize()
+        if "Ok" in response[0].keys():
+            if DEBUG_VERBOSE >= 2:
+                print("OK!")
+        else:
+            print("Something went wrong:")
+            print(response)
+            sys.exit(1)
+
+        # ---------------------------------------------------------------------------
+        # check readiness for inference
+        print("--\nChecking if the canister is ready for inference.")
+        response = canister_instance.ready()
+        if "Ok" in response[0].keys():
+            if DEBUG_VERBOSE >= 2:
+                print("OK!")
+        else:
+            print("Something went wrong:")
+            print(response)
+            sys.exit(1)
+
+        print(f"--\nCongratulations, canister {canister_name} is ready for inference!")
+    else:
+        print(
+            f"--\nCongratulations, the file {local_filename_path} was succesfully uploaded!"
+        )
+
     try:
         print("💯 🎉 🏁")
     except UnicodeEncodeError:

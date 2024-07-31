@@ -62,6 +62,11 @@ type FileUploadRecord = record {
 service : {
   // canister
   health : () -> (StatusCodeRecordResult) query;
+  ready : () -> (StatusCodeRecordResult) query;
+
+  // LLM initialization endpoints
+  reset_model : () -> (StatusCodeRecordResult);
+  initialize : () -> (StatusCodeRecordResult);
   
   // up & down load of files
   file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;
@@ -71,5 +76,7 @@ service : {
   "run_query" : (RunInputRecord) -> (RunOutputRecordResult) query;
   "run_update": (RunInputRecord) -> (RunOutputRecordResult);
 
+  // admin endpoints
+  whoami : () -> (text) query;
     
 }

@@ -1,5 +1,8 @@
 #include "upload.h"
 #include "utils.h"
+#include "ready.h"
+#include "http.h"
+#include "auth.h"
 
 #include <fstream>
 #include <iostream>
@@ -17,8 +20,25 @@ void print_file_upload_summary(const std::string &filename,
   std::cout << msg << std::endl;
 }
 
+void reset_model() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!is_caller_a_controller(ic_api)) return;
+
+  ready_for_inference = false;
+
+  // TODO: free & reset the global model pointers...
+  // Likely by calling main_ with a flag !
+  std::cout << std::string(__func__) << "TODO: implement reset of model" << std::endl;
+
+  CandidTypeRecord status_code_record;
+  status_code_record.append("status_code",
+                            CandidTypeNat16{Http::StatusCode::OK});
+  ic_api.to_wire(CandidTypeVariant{"Ok", status_code_record});
+}
+
 void file_upload_chunk() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!is_caller_a_controller(ic_api)) return;
 
   // Get filename and the chunk to write to it
   std::string filename{""};
