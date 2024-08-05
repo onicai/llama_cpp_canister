@@ -64,9 +64,9 @@ service : {
   health : () -> (StatusCodeRecordResult) query;
   ready : () -> (StatusCodeRecordResult) query;
 
-  // LLM initialization endpoints
+  // model endpoints
   reset_model : () -> (StatusCodeRecordResult);
-  initialize : () -> (StatusCodeRecordResult);
+  load_model : () -> (StatusCodeRecordResult);
   
   // up & down load of files
   file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;

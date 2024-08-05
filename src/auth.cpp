@@ -1,10 +1,9 @@
 // canister_init, and health & ready endpoints
 #include "canister.h"
 
-#include <string>
 #include "http.h"
 #include "ic_api.h"
-
+#include <string>
 
 // Checks if caller is controller of the canister and if not, optionally write an error to the wire
 bool is_caller_a_controller(IC_API &ic_api, bool err_to_wire) {

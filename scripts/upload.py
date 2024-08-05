@@ -1,4 +1,5 @@
-"""Uploads a file to the canister, and if file is a .gguf the canister will be initialized for inference
+"""Uploads a file to the canister
+   if file is a .gguf the canister will be initialized for inference
 
 Run with:
 
@@ -63,7 +64,7 @@ def main() -> int:
 
     dfx_json_path = ROOT_PATH / "dfx.json"
 
-    uploading_gguf = local_filename_path.suffix.lower() == '.gguf'
+    uploading_gguf = local_filename_path.suffix.lower() == ".gguf"
 
     print(
         f"Summary:"
@@ -90,7 +91,6 @@ def main() -> int:
     else:
         print("Not OK, response is:")
         print(response)
-
 
     # ---------------------------------------------------------------------------
     # A little hacky, but we do something special if we're uploading a model
@@ -156,9 +156,15 @@ def main() -> int:
     # ---------------------------------------------------------------------------
     # A little hacky, but we do something special if we're uploading a model
     if uploading_gguf:
-        # Initialize the canister
-        print("--\nInitializing the canister, getting it ready for inference.")
-        response = canister_instance.initialize()
+        # load the model inside the canister
+        print(
+            "--\nInstruct canister to load the model, getting it ready for inference."
+        )
+        response = canister_instance.load_model(
+            {
+                "args ": ["--model", canister_filename],
+            }
+        )
         if "Ok" in response[0].keys():
             if DEBUG_VERBOSE >= 2:
                 print("OK!")
@@ -181,9 +187,7 @@ def main() -> int:
 
         print(f"--\nCongratulations, canister {canister_name} is ready for inference!")
     else:
-        print(
-            f"--\nCongratulations, the file {local_filename_path} was succesfully uploaded!"
-        )
+        print(f"--\nCongratulations, the file {local_filename_path} was uploaded!")
 
     try:
         print("💯 🎉 🏁")

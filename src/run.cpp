@@ -1,8 +1,9 @@
 #include "run.h"
 #include "main_.h"
+#include "utils.h"
 
-#include <string>
 #include <iostream>
+#include <string>
 
 #include "ic_api.h"
 
@@ -19,34 +20,10 @@
 */
 
 void run(IC_API &ic_api) {
-  std::cout << "debug: run.cpp - run -01 " << std::endl;
-  // Get the data from the wire
-  std::vector<std::string> args;
+  // Get the data from the wire and prepare arguments for main_
+  auto [argc, argv, args] = get_args_for_main(ic_api);
 
-  CandidTypeRecord r_in;
-  r_in.append("args", CandidTypeVecText{&args});
-  ic_api.from_wire(r_in);
-
-  // The first argv is always the program name
-  args.insert(args.begin(), "llama_cpp_canister");
-
-  // Construct argc
-  int argc = args.size();
-
-  // Construct argv
-  std::vector<char *> argv(argc);
-  for (int i = 0; i < argc; ++i) {
-    argv[i] = &args[i][0]; // Convert std::string to char*
-  }
-
-  std::cout << "debug: run.cpp - run -02 " << std::endl;
-  // Print argc and argv
-  std::cout << "argc: " << argc << std::endl;
-  for (int i = 0; i < argc; ++i) {
-      std::cout << "argv[" << i << "] = " << argv[i] << std::endl;
-  }
-
-  // Call main_, just like it is called in the console app
+  // Call main_, just like it is called in the llama-cli app
   main_(argc, argv.data());
 
   // Return output over the wire

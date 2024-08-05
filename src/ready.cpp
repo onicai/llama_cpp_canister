@@ -13,8 +13,7 @@ void ready() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
 
   if (!ready_for_inference) {
-    std::string error_msg =
-        "Model not yet uploaded or initialize endpoint not yet called";
+    std::string error_msg = "Model not yet loaded";
     ic_api.to_wire(CandidTypeVariant{
         "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
     return;
