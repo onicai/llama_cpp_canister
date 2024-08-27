@@ -28,13 +28,17 @@ Follow steps of [llama_cpp_canister/README/Getting Started](https://github.com/o
               "cwd": "${workspaceFolder}",
               "args": [
                   "-m",
-                  "/Users/arjaan/onicai/repos_hf/llama_cpp_canister_models/stories260Ktok512.gguf",
-                  "-p",
-                  "Joe loves writing stories",
+                  "<PATH_TO>/llama_cpp_canister_models/stories260Ktok512.gguf",
+                  "--samplers",
+                  "top_p",
+                  "--temp",
+                  "0.1",
+                  "--top-p",
+                  "0.9",
                   "-n",
                   "600",
-                  "-c",
-                  "128"
+                  "-p",
+                  "Joe loves writing stories"
               ]
           }
       ]
@@ -87,10 +91,21 @@ We use `meld` for comparing the files.
   - `llama_tensor_quantize_internal`
   - `llama_model_quantize_internal`
 
+
 #### llama_cpp_onicai_fork/src/llama-vocab.cpp
 - add `#include "ic_api.h"`
 - replace `throw std::runtime_error(format` with `IC_API::trap(std::string("RUNTIME ERROR: ") + format`
 - outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
+- add a check on `llama_token_bos(model)`, else the llama2.c models never stop generating:
+  ```
+  bool llama_token_is_eog_impl(const struct llama_vocab & vocab, llama_token token) {
+      return token != -1 && (
+          token == llama_token_eos_impl(vocab) ||
+          token == llama_token_eot_impl(vocab) || 
+          token == llama_token_bos_impl(vocab) // ICPP-PATCH: the llama2.c model predicts bos without first predicting an eos
+      );
+  }
+  ```
 
 #### llama_cpp_onicai_fork/src/llama-grammar.cpp
 No changes needed
