@@ -162,7 +162,7 @@ def main() -> int:
         )
         response = canister_instance.load_model(
             {
-                "args ": ["--model", canister_filename],
+                "args": ["--model", canister_filename]
             }
         )
         if "Ok" in response[0].keys():

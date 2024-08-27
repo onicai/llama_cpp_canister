@@ -4,7 +4,7 @@
 type StatusCode = nat16;
 
 type RunInputRecord = record { 
-  "args" : vec text; // the CLI args of llama.cpp/examples/main, as a list of strings
+  args : vec text; // the CLI args of llama.cpp/examples/main, as a list of strings
 };
 
 type RunOutputRecord = record { status: StatusCode; output: text };
@@ -66,15 +66,15 @@ service : {
 
   // model endpoints
   reset_model : () -> (StatusCodeRecordResult);
-  load_model : () -> (StatusCodeRecordResult);
+  load_model : (RunInputRecord) -> (StatusCodeRecordResult);
   
   // up & down load of files
   file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;
   file_upload_chunk : (FileUploadInputRecord) -> (FileUploadRecordResult);
 
   // Inference endpoints
-  "run_query" : (RunInputRecord) -> (RunOutputRecordResult) query;
-  "run_update": (RunInputRecord) -> (RunOutputRecordResult);
+  run_query : (RunInputRecord) -> (RunOutputRecordResult) query;
+  run_update: (RunInputRecord) -> (RunOutputRecordResult);
 
   // admin endpoints
   whoami : () -> (text) query;

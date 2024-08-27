@@ -86,17 +86,25 @@ Currently, the canister can only be build on a `mac` !
   - Upload the 260K parameter model:
     _(We included this fine-tuned model in the repo)_
     ```bash
-    python -m scripts.upload --network local --canister llama_cpp models/stories260Ktok512.gguf
+    python -m scripts.upload --network local --canister llama_cpp --canister-filename models/stories260Ktok512.gguf models/stories260Ktok512.gguf
     ```
+
+    Note: More test models in gguf format can be found on Huggingface: 
+          [llama_cpp_canister_models](https://huggingface.co/onicai/llama_cpp_canister_models)
 
 - Test it with dfx.
 
-  - Generate 20 tokens, using the `run_query` or `run_update` call:
+  - Load the model (If needed. This is typically done only once, and already done by scripts.upload above)
+    ```bash
+    dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/stories260Ktok512.gguf";} })'
+    ```
+
+  - Generate tokens:
 
     ```bash
-    $ dfx canister call llama_cpp run_query '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"; "--verbose-prompt"} })'
+    $ dfx canister call llama_cpp run_update '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "60"; "-p"; "Joe loves writing stories"} })'
+    $ dfx canister call llama_cpp run_query  '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "60"; "-p"; "Joe loves writing stories"} })'
     
-    $ dfx canister call llama_cpp run_update '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"; "--verbose-prompt"} })'
     
     -> See token generation in the dfx log window
 

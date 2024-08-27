@@ -7,6 +7,7 @@ Follow steps of [llama_cpp_canister/README/Getting Started](https://github.com/o
 # How to debug original llama.cpp
 
 - clone ggerganov/llama.cpp
+- checkout the proper commit used as root of the onicai branch in llama_cpp_onicai_fork
 - run these commands:
   ```
   make clean
