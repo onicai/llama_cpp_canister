@@ -83,6 +83,10 @@ Currently, the canister can only be build on a `mac` !
     $ dfx canister call llama_cpp health
     (variant { Ok = record { status_code = 200 : nat16 } })
     ```
+  
+
+- Test TinyStories model
+
   - Upload the 260K parameter model:
     _(We included this fine-tuned model in the repo)_
     ```bash
@@ -92,22 +96,76 @@ Currently, the canister can only be build on a `mac` !
     Note: More test models in gguf format can be found on Huggingface: 
           [llama_cpp_canister_models](https://huggingface.co/onicai/llama_cpp_canister_models)
 
-- Test it with dfx.
-
-  - Load the model (If needed. This is typically done only once, and already done by scripts.upload above)
+  - Load the model into OP memory (Do once, and note that it is already done by scripts.upload above)
     ```bash
     dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/stories260Ktok512.gguf";} })'
     ```
 
-  - Generate tokens:
+  - Ensure the canister is ready for Inference, with the model loaded
+    ```bash
+    dfx canister call llama_cpp ready
+    ```
+
+  - Chat with the LLM:
 
     ```bash
-    $ dfx canister call llama_cpp run_update '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "60"; "-p"; "Joe loves writing stories"} })'
-    $ dfx canister call llama_cpp run_query  '(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "60"; "-p"; "Joe loves writing stories"} })'
-    
-    
-    -> See token generation in the dfx log window
+    # Start a new chat - this resets the prompt-cache for this conversation
+    dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "my_cache/story.cache"} })'
 
+    # Create 60 tokens from a prompt, with caching
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/story.cache"; "--prompt-cache-all";"--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "60"; "-p"; "Joe loves writing stories"} })'
+
+    # Create another 60 tokens, using the cache - just continue, no new prompt provided
+    # Repeat until the LLM says it is done...
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/story.cache"; "--prompt-cache-all";"--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "60";} })'
+    
+
+    ###############################
+    # Tip. Add this to the args vec if you want to see how many tokens the canister can generate before it hits the instruction limit
+    #   "--print-token-count"; "1"
+    ###############################
+
+- Test Phi-3-mini-4k-instruct-q4.gguf
+  - Download the model from huggingface: https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf
+    
+
+  - Upload the 260K parameter model:
+    _(We included this fine-tuned model in the repo)_
+    ```bash
+    python -m scripts.upload --network local --canister llama_cpp --canister-filename models/Phi-3-mini-4k-instruct-q4.gguf models/Phi-3-mini-4k-instruct-q4.gguf
+    ```
+
+    Note: More test models in gguf format can be found on Huggingface: 
+          [llama_cpp_canister_models](https://huggingface.co/onicai/llama_cpp_canister_models)
+
+  - Load the model into OP memory (Do once, and note that it is already done by scripts.upload above)
+    ```bash
+    dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/Phi-3-mini-4k-instruct-q4.gguf";} })'
+    ```
+
+  - Ensure the canister is ready for Inference, with the model loaded
+    ```bash
+    dfx canister call llama_cpp ready
+    ```
+
+  - Chat with the LLM:
+
+    ```bash
+    # Start a new chat - this resets the prompt-cache for this conversation
+    dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "my_cache/story.cache"} })'
+
+    # Create 60 tokens from a prompt, with caching
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/story.cache"; "--prompt-cache-all";"--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "60"; "-p"; "Joe loves writing stories"} })'
+
+    # Create another 60 tokens, using the cache - just continue, no new prompt provided
+    # Repeat until the LLM says it is done...
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/story.cache"; "--prompt-cache-all";"--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "60";} })'
+    
+
+    ###############################
+    # Tip. Add this to the args vec if you want to see how many tokens the canister can generate before it hits the instruction limit
+    #   "--print-token-count"; "1"
+    ###############################
 
 # Models
 

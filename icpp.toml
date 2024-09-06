@@ -45,6 +45,8 @@ c_include_dirs = [
     "src/llama_cpp_onicai_fork/common",
 ]
 c_compile_flags = ["-DNDEBUG"]
+post_wasm_function = "scripts.optimize_wasm.main"
+
 [build-native]
 cpp_paths = [
     # Use this to build native debug executable for testing canister code

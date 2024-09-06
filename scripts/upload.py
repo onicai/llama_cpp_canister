@@ -93,18 +93,18 @@ def main() -> int:
         print(response)
 
     # ---------------------------------------------------------------------------
-    # A little hacky, but we do something special if we're uploading a model
-    if uploading_gguf:
-        # Reset the model
-        print("--\nResetting the model (gguf) in canister")
-        response = canister_instance.reset_model()  # pylint: disable=no-member
-        if "Ok" in response[0].keys():
-            if DEBUG_VERBOSE >= 2:
-                print("OK!")
-        else:
-            print("Something went wrong:")
-            print(response)
-            sys.exit(1)
+    # # A little hacky, but we do something special if we're uploading a model
+    # if uploading_gguf:
+    #     # Reset the model
+    #     print("--\nResetting the model (gguf) in canister")
+    #     response = canister_instance.reset_model()  # pylint: disable=no-member
+    #     if "Ok" in response[0].keys():
+    #         if DEBUG_VERBOSE >= 2:
+    #             print("OK!")
+    #     else:
+    #         print("Something went wrong:")
+    #         print(response)
+    #         sys.exit(1)
 
     # ---------------------------------------------------------------------------
     # UPLOAD FILE
