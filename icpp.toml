@@ -44,7 +44,7 @@ c_include_dirs = [
     "src/llama_cpp_onicai_fork/ggml/include",
     "src/llama_cpp_onicai_fork/common",
 ]
-c_compile_flags = ["-DNDEBUG"]
+c_compile_flags = ["-DNDEBUG", "-msimd128"]
 post_wasm_function = "scripts.optimize_wasm.main"
 
 [build-native]
