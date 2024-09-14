@@ -7,7 +7,12 @@ type InputRecord = record {
   args : vec text; // the CLI args of llama.cpp/examples/main, as a list of strings
 };
 
-type RunOutputRecord = record { status: StatusCode; output: text };
+type RunOutputRecord = record { 
+  status: StatusCode; 
+  input: text; 
+  output: text; 
+  error: text 
+};
 type OutputRecordResult = variant {
   Ok : RunOutputRecord;
   Err : RunOutputRecord;
@@ -65,7 +70,7 @@ service : {
   ready : () -> (StatusCodeRecordResult) query;
 
   // model endpoints
-  load_model : (InputRecord) -> (StatusCodeRecordResult);
+  load_model : (InputRecord) -> (OutputRecordResult);
   
   // up & down load of files
   file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;

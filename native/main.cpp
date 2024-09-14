@@ -73,7 +73,7 @@ int main() {
     mockIC.run_test(
         "load_model - " + model, load_model,
         candid_in,
-        "4449444c026c019aa1b2f90c7a6b01bc8a0100010100c800", silent_on_trap,
+        "4449444c026c04b2ceef2f7a819e846471c897a79907718a88f7f00b716b01bc8a0100010100c800254d6f64656c2073756363657366756c6c79206c6f6164656420696e746f206d656d6f72792e0000", silent_on_trap,
         my_principal);
 
     // -----------------------------------------------------------------------------
@@ -88,11 +88,11 @@ int main() {
         // -----------------------------------------------------------------------------
         // Start a new chat, which will remove the prompt-cache file if it exists
         // '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"} })' ->
-        // '(variant { Ok = record { status_code = 200 : nat16; output = "Cache .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/my_cache/prompt.cache not found. Nothing to delete." } })'
+        // '(variant { Ok = record { status_code = 200 : nat16; output = "Ready to start a new chat for cache file .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/my_cache/prompt.cache"; input = ""; error="" } })'
         mockIC.run_test(
             "new_chat " + std::to_string(i) + " - " + model, new_chat,
             "4449444c026c01dd9ad28304016d710100020e2d2d70726f6d70742d6361636865156d795f63616368652f70726f6d70742e6361636865",
-            "4449444c026c02b2ceef2f7a819e8464716b01bc8a0100010100c8008e01526561647920746f2073746172742061206e6577206368617420666f722063616368652066696c65202e63616e69737465725f63616368652f6578706d742d67747873772d696e66746a2d747461626a2d71687035732d6e6f7a75702d6e3362626f2d6b377a766e2d64673468652d6b6e6163332d6c61652f6d795f63616368652f70726f6d70742e6361636865", silent_on_trap, my_principal);
+            "4449444c026c04b2ceef2f7a819e846471c897a79907718a88f7f00b716b01bc8a0100010100c8008e01526561647920746f2073746172742061206e6577206368617420666f722063616368652066696c65202e63616e69737465725f63616368652f6578706d742d67747873772d696e66746a2d747461626a2d71687035732d6e6f7a75702d6e3362626f2d6b377a766e2d64673468652d6b6e6163332d6c61652f6d795f63616368652f70726f6d70742e63616368650000", silent_on_trap, my_principal);
 
         // -----------------------------------------------------------------------------
         // Generate tokens from prompt while saving everything to cache, 

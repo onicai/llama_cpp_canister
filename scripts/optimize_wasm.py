@@ -93,7 +93,7 @@ def main() -> None:
     wasm_path = (build_path / f"{icpp_toml.build_wasm['canister']}.wasm").resolve()
 
     # save the original version
-    wasm_path_orig = wasm_path.with_stem(wasm_path.stem + "_before_opt").resolve()
+    wasm_path_orig = wasm_path.with_name(wasm_path.stem + "_before_opt" + wasm_path.suffix).resolve()
     shutil.copy(wasm_path, wasm_path_orig)
 
     # optimize the wasm

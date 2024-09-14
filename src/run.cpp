@@ -2,6 +2,7 @@
 #include "main_.h"
 #include "utils.h"
 #include "common.h"
+#include "http.h"
 
 #include <iostream>
 #include <string>
@@ -85,9 +86,14 @@ void new_chat() {
             msg = "Cache file " + path_session + " deleted successfully";
         } else {
             msg = "Error deleting cache file " + path_session;
-            ic_api.to_wire(CandidTypeVariant{
-              "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +
-                                                                ": " + msg}}});
+
+            // Return output over the wire
+            CandidTypeRecord r_out;
+            r_out.append("status", CandidTypeNat16{Http::StatusCode::InternalServerError}); // 500
+            r_out.append("input", CandidTypeText{""});
+            r_out.append("output", CandidTypeText{""});
+            r_out.append("error", CandidTypeText{msg});
+            ic_api.to_wire(CandidTypeVariant{"Err", r_out});
             return;
         }
     } else {
@@ -101,8 +107,10 @@ void new_chat() {
 
   // Return output over the wire
   CandidTypeRecord r_out;
-  r_out.append("status", CandidTypeNat16{200});
+  r_out.append("status", CandidTypeNat16{Http::StatusCode::OK}); // 200
+  r_out.append("input", CandidTypeText{""});
   r_out.append("output", CandidTypeText{msg});
+  r_out.append("error", CandidTypeText{""});
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
 }
 
@@ -115,13 +123,29 @@ void run(IC_API &ic_api) {
   auto [argc, argv, args] = get_args_for_main(ic_api);
 
   // Call main_, just like it is called in the llama-cli app
-  main_(argc, argv.data(), principal_id);
+  std::string icpp_error_msg;
+  std::ostringstream input_ss;  // input tokens (from prompt or session cache)
+  std::ostringstream output_ss; // output tokens (generated during this call)
+  bool load_model_only = false;
+  int result = main_(argc, argv.data(), principal_id, load_model_only, icpp_error_msg, input_ss, output_ss);
+
+  // Exit if there was an error
+  if (result !=0) {
+    CandidTypeRecord r_out;
+    r_out.append("status", CandidTypeNat16{Http::StatusCode::InternalServerError}); // 500
+    r_out.append("input", CandidTypeText{input_ss.str()});
+    r_out.append("output", CandidTypeText{output_ss.str()});
+    r_out.append("error", CandidTypeText{icpp_error_msg});
+    ic_api.to_wire(CandidTypeVariant{"Err", r_out});
+    return;
+  }
 
   // Return output over the wire
   CandidTypeRecord r_out;
-  r_out.append("status", CandidTypeNat16{200}); // TODO: set the status code
-  r_out.append("output",
-               CandidTypeText{"TODO: we need to add some output here.... "});
+  r_out.append("status", CandidTypeNat16{Http::StatusCode::OK}); // 200
+  r_out.append("input", CandidTypeText{input_ss.str()});
+  r_out.append("output", CandidTypeText{output_ss.str()});
+  r_out.append("error", CandidTypeText{""});
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
 }
 

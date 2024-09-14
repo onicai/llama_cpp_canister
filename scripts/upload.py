@@ -93,20 +93,6 @@ def main() -> int:
         print(response)
 
     # ---------------------------------------------------------------------------
-    # # A little hacky, but we do something special if we're uploading a model
-    # if uploading_gguf:
-    #     # Reset the model
-    #     print("--\nResetting the model (gguf) in canister")
-    #     response = canister_instance.reset_model()  # pylint: disable=no-member
-    #     if "Ok" in response[0].keys():
-    #         if DEBUG_VERBOSE >= 2:
-    #             print("OK!")
-    #     else:
-    #         print("Something went wrong:")
-    #         print(response)
-    #         sys.exit(1)
-
-    # ---------------------------------------------------------------------------
     # UPLOAD FILE
 
     print(f"--\nUploading the file: {local_filename_path}")
@@ -154,9 +140,9 @@ def main() -> int:
         offset += len(chunk)
 
     # ---------------------------------------------------------------------------
-    # A little hacky, but we do something special if we're uploading a model
+    # Do something special if we're uploading a llama_cpp_canister model (gguf)
     if uploading_gguf:
-        # load the model inside the canister
+        # load the model inside the canister into Orthogonal Persisted memory
         print(
             "--\nInstruct canister to load the model, getting it ready for inference."
         )

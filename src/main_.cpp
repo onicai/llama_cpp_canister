@@ -136,13 +136,16 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
     return formatted;
 }
 
-int main_(int argc, char ** argv, std::string principal_id) {
+int main_(int argc, char ** argv, std::string principal_id, bool load_model_only, std::string &icpp_error_msg, std::ostringstream &input_ss, std::ostringstream &output_ss) {
     gpt_params params;
 
     g_params = &params;
 
     if (!gpt_params_parse(argc, argv, params)) {
         gpt_params_print_usage(argc, argv, params);
+        // ICPP-PATCH-START
+        icpp_error_msg = "Error in gpt_params_print_usage.";
+        // ICPP-PATCH-END
         return 1;
     }
 
@@ -222,18 +225,32 @@ int main_(int argc, char ** argv, std::string principal_id) {
 
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
+    std::cout << __func__ << ": icpp-debug 1 " << std::endl;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    std::cout << __func__ << ": icpp-debug 2 " << std::endl;
     if (sparams.cfg_scale > 1.f) {
+        std::cout << __func__ << ": icpp-debug 3 " << std::endl;
         struct llama_context_params lparams = llama_context_params_from_gpt_params(params);
+        std::cout << __func__ << ": icpp-debug 4 " << std::endl;
         ctx_guidance = llama_new_context_with_model(model, lparams);
+        std::cout << __func__ << ": icpp-debug 5 " << std::endl;
     }
+    std::cout << __func__ << ": icpp-debug 6 " << std::endl;
 
     if (model == NULL) {
         LOG_TEE("%s: error: unable to load model\n", __func__);
+        // ICPP-PATCH-START
+        icpp_error_msg = std::format("{}: error: unable to load model)", __func__);
+        // ICPP-PATCH-END
         return 1;
     }
     // ICPP-PATCH-START
     // Skip loading the model if the --model parameter is not provided
+    }
+    
+    // And return if we are asked to ONLY load the model
+    if (load_model_only) {
+        return 0;
     }
     // ICPP-PATCH-END
 
@@ -270,19 +287,27 @@ int main_(int argc, char ** argv, std::string principal_id) {
 
     if (!path_session.empty()) {    
         LOG_TEE("%s: attempting to load saved session from '%s'\n", __func__, path_session.c_str());
+        std::cout << __func__ << ": icpp-debug A 1 " << std::endl;
         if (!file_exists(path_session)) {
             LOG_TEE("%s: session file does not exist, will create.\n", __func__);
         } else if (file_is_empty(path_session)) {
             LOG_TEE("%s: The session file is empty. A new session will be initialized.\n", __func__);
         } else {
             // The file exists and is not empty
+            std::cout << __func__ << ": icpp-debug A 2 " << std::endl;
             session_tokens.resize(n_ctx);
             size_t n_token_count_out = 0;
+            std::cout << __func__ << ": icpp-debug A 3 " << std::endl;
             if (!llama_state_load_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.capacity(), &n_token_count_out)) {
                 LOG_TEE("%s: error: failed to load session file '%s'\n", __func__, path_session.c_str());
+                // ICPP-PATCH-START
+                icpp_error_msg = std::format("{}: error: failed to load session file '{}')", __func__, path_session.c_str());
+                // ICPP-PATCH-END
                 return 1;
             }
+            std::cout << __func__ << ": icpp-debug A 4 " << std::endl;
             session_tokens.resize(n_token_count_out);
+            std::cout << __func__ << ": icpp-debug A 5 " << std::endl;
             LOG_TEE("%s: loaded a session with prompt size of %d tokens\n", __func__, (int)session_tokens.size());
         }
     }
@@ -343,7 +368,10 @@ int main_(int argc, char ** argv, std::string principal_id) {
 
     if ((int) embd_inp.size() > n_ctx - 4) {
         LOG_TEE("%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int) embd_inp.size(), n_ctx - 4);
-        return 1; // ICPP-PATCH - TODO - HANDLE THIS
+        // ICPP-PATCH-START
+        icpp_error_msg = std::format("{}: error: prompt is too long ({} tokens, max {})", __func__, (int) embd_inp.size(), n_ctx - 4);
+        // ICPP-PATCH-END
+        return 1; 
     }
 
     // debug message about similarity of saved session, if applicable
@@ -535,8 +563,11 @@ int main_(int argc, char ** argv, std::string principal_id) {
 
     std::vector<int>   input_tokens;  g_input_tokens  = &input_tokens;
     std::vector<int>   output_tokens; g_output_tokens = &output_tokens;
-    std::ostringstream output_ss;     g_output_ss     = &output_ss;
+    // std::ostringstream output_ss;     g_output_ss     = &output_ss;
+    g_output_ss     = &output_ss; // ICPP-PATCH: we pass this in via argument, 
+                                  //             so we can return it to canister caller
     std::ostringstream assistant_ss; // for storing current assistant message, used in conversation mode
+
 
     // the first thing we will do is to output the prompt, so set color accordingly
     // console::set_display(console::prompt);
@@ -565,6 +596,9 @@ int main_(int argc, char ** argv, std::string principal_id) {
 
         if (llama_encode(ctx, llama_batch_get_one(enc_input_buf, enc_input_size, 0, 0))) {
             LOG_TEE("%s : failed to eval\n", __func__);
+            // ICPP-PATCH-START
+            icpp_error_msg = std::format("{}: error: failed to eval (-1-)", __func__);
+            // ICPP-PATCH-END
             return 1;
         }
 
@@ -707,6 +741,9 @@ int main_(int argc, char ** argv, std::string principal_id) {
                     int n_eval = std::min(input_size - i, params.n_batch);
                     if (llama_decode(ctx_guidance, llama_batch_get_one(input_buf + i, n_eval, n_past_guidance, 0))) {
                         LOG_TEE("%s : failed to eval\n", __func__);
+                        // ICPP-PATCH-START
+                        icpp_error_msg = std::format("{}: error: failed to eval (-2-)", __func__);
+                        // ICPP-PATCH-END
                         return 1;
                     }
 
@@ -724,6 +761,9 @@ int main_(int argc, char ** argv, std::string principal_id) {
 
                 if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, n_past, 0))) {
                     LOG_TEE("%s : failed to eval\n", __func__);
+                    // ICPP-PATCH-START
+                    icpp_error_msg = std::format("{}: error: failed to eval (-3-)", __func__);
+                    // ICPP-PATCH-END
                     return 1;
                 }
 
@@ -799,6 +839,9 @@ int main_(int argc, char ** argv, std::string principal_id) {
                 if (embd.size() > 1) {
                     // Incoming Requested Tokens
                     input_tokens.push_back(id);
+                    // ICPP-PATCH-START
+                    input_ss << token_str;
+                    // ICPP-PATCH-END
                 } else {
                     // Outgoing Generated Tokens
                     output_tokens.push_back(id);
@@ -995,6 +1038,15 @@ int main_(int argc, char ** argv, std::string principal_id) {
             is_interacting = true;
         }
     }
+
+    // ICPP-PATCH-START
+    // The last token is not yet stored in session_tokens
+    if (!embd.empty() && !path_session.empty()) {
+        session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
+        n_session_consumed = session_tokens.size();
+    }
+
+    // ICPP-PATCH-END
 
     if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {
         LOG_TEE("\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
