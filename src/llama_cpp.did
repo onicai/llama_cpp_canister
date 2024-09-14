@@ -1,14 +1,19 @@
-// TODO: use ApiError for RunOutputRecordResult
+// TODO: use ApiError for OutputRecordResult
 
 // Always return a single record wrapped in a variant
 type StatusCode = nat16;
 
-type RunInputRecord = record { 
-  "args" : vec text; // the CLI args of llama.cpp/examples/main, as a list of strings
+type InputRecord = record { 
+  args : vec text; // the CLI args of llama.cpp/examples/main, as a list of strings
 };
 
-type RunOutputRecord = record { status: StatusCode; output: text };
-type RunOutputRecordResult = variant {
+type RunOutputRecord = record { 
+  status: StatusCode; 
+  input: text; 
+  output: text; 
+  error: text 
+};
+type OutputRecordResult = variant {
   Ok : RunOutputRecord;
   Err : RunOutputRecord;
 };
@@ -62,14 +67,21 @@ type FileUploadRecord = record {
 service : {
   // canister
   health : () -> (StatusCodeRecordResult) query;
+  ready : () -> (StatusCodeRecordResult) query;
+
+  // model endpoints
+  load_model : (InputRecord) -> (OutputRecordResult);
   
   // up & down load of files
   file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;
   file_upload_chunk : (FileUploadInputRecord) -> (FileUploadRecordResult);
 
   // Inference endpoints
-  "run_query" : (RunInputRecord) -> (RunOutputRecordResult) query;
-  "run_update": (RunInputRecord) -> (RunOutputRecordResult);
+  new_chat : (InputRecord) -> (OutputRecordResult);
+  run_query : (InputRecord) -> (OutputRecordResult) query;
+  run_update: (InputRecord) -> (OutputRecordResult);
 
+  // admin endpoints
+  whoami : () -> (text) query;
     
 }

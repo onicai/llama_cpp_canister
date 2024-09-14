@@ -9,6 +9,8 @@ paths.txt
 .DS_Store
 secret
 .vscode/
+models/
+.canister_cache
 
 # Windows
 .vs

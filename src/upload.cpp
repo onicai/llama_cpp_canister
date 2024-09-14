@@ -1,4 +1,7 @@
 #include "upload.h"
+#include "auth.h"
+#include "http.h"
+#include "ready.h"
 #include "utils.h"
 
 #include <fstream>
@@ -19,6 +22,7 @@ void print_file_upload_summary(const std::string &filename,
 
 void file_upload_chunk() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!is_caller_a_controller(ic_api)) return;
 
   // Get filename and the chunk to write to it
   std::string filename{""};

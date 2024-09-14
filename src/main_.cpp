@@ -1,6 +1,10 @@
+// ICPP-PATCH-START
 // Internet Computer SmartContract version of: examples/main/main.cpp
 // See: https://github.com/onicai/llama_cpp_onicai_fork/tree/master/examples/main/README.md
 #include "ic_api.h"
+#include "run.h"
+#include "main_.h"
+// ICPP-PATCH-END
 
 #include "common.h"
 
@@ -132,29 +136,18 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
     return formatted;
 }
 
-int main_(int argc, char ** argv) {
-    std::cout << "icpp-debug: main_ - 01" << std::endl;
-    // Print argc and argv
-    std::cout << "argc: " << argc << std::endl;
-    for (int i = 0; i < argc; ++i) {
-        std::cout << "icpp-debug: main_ argv[" << i << "] = " << argv[i] << std::endl;
-    }
-
-    std::cout << "icpp-debug: main_ - 02" << std::endl;
-
+int main_(int argc, char ** argv, std::string principal_id, bool load_model_only, std::string &icpp_error_msg, std::ostringstream &input_ss, std::ostringstream &output_ss) {
     gpt_params params;
 
-    std::cout << "icpp-debug: main_ - 03" << std::endl;
     g_params = &params;
 
-    std::cout << "icpp-debug: main_ - 04" << std::endl;
     if (!gpt_params_parse(argc, argv, params)) {
-        std::cout << "icpp-debug: main_ - 05" << std::endl;
         gpt_params_print_usage(argc, argv, params);
+        // ICPP-PATCH-START
+        icpp_error_msg = "Error in gpt_params_print_usage.";
+        // ICPP-PATCH-END
         return 1;
     }
-
-    std::cout << "icpp-debug: main_ - 06" << std::endl;
 
     llama_sampling_params & sparams = params.sparams;
 
@@ -202,8 +195,6 @@ int main_(int argc, char ** argv) {
         LOG_TEE("%s: warning: scaling RoPE frequency by %g.\n", __func__, params.rope_freq_scale);
     }
 
-    std::cout << "icpp-debug: main_ - 07" << std::endl;
-
     LOG_TEE("%s: build = %d (%s)\n",      __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
     LOG_TEE("%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);
 
@@ -214,39 +205,54 @@ int main_(int argc, char ** argv) {
     LOG_TEE("%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
-    std::cout << "icpp-debug: main_ - 08" << std::endl;
 
     LOG("%s: llama backend init\n", __func__);
     llama_backend_init();
-    std::cout << "icpp-debug: main_ - 09" << std::endl;
     llama_numa_init(params.numa);
-    std::cout << "icpp-debug: main_ - 10" << std::endl;
 
-    llama_model * model;
-    llama_context * ctx;
+    static llama_model * model; // ICPP-PATCH: use static to preserve accross calls
+    static llama_context * ctx; // ICPP-PATCH: use static to preserve accross calls
     llama_context * ctx_guidance = NULL;
     std::vector<llama_chat_msg> chat_msgs;
+
+    // ICPP-PATCH-START
+    // Skip loading the model if the --model parameter is not provided
+    if (!params.model.empty()) {
+    // ICPP-PATCH-END
+
     g_model = &model;
     g_ctx = &ctx;
 
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
-    std::cout << "icpp-debug: main_ - 10a" << std::endl;
+    std::cout << __func__ << ": icpp-debug 1 " << std::endl;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
-    std::cout << "icpp-debug: main_ - 10b" << std::endl;
+    std::cout << __func__ << ": icpp-debug 2 " << std::endl;
     if (sparams.cfg_scale > 1.f) {
-        std::cout << "icpp-debug: main_ - 10c" << std::endl;
+        std::cout << __func__ << ": icpp-debug 3 " << std::endl;
         struct llama_context_params lparams = llama_context_params_from_gpt_params(params);
-        std::cout << "icpp-debug: main_ - 10d" << std::endl;
+        std::cout << __func__ << ": icpp-debug 4 " << std::endl;
         ctx_guidance = llama_new_context_with_model(model, lparams);
-        std::cout << "icpp-debug: main_ - 10e" << std::endl;
+        std::cout << __func__ << ": icpp-debug 5 " << std::endl;
     }
-    std::cout << "icpp-debug: main_ - 11" << std::endl;
+    std::cout << __func__ << ": icpp-debug 6 " << std::endl;
 
     if (model == NULL) {
         LOG_TEE("%s: error: unable to load model\n", __func__);
+        // ICPP-PATCH-START
+        icpp_error_msg = std::format("{}: error: unable to load model)", __func__);
+        // ICPP-PATCH-END
         return 1;
     }
+    // ICPP-PATCH-START
+    // Skip loading the model if the --model parameter is not provided
+    }
+    
+    // And return if we are asked to ONLY load the model
+    if (load_model_only) {
+        return 0;
+    }
+    // ICPP-PATCH-END
 
     const int n_ctx_train = llama_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
@@ -273,28 +279,38 @@ int main_(int argc, char ** argv) {
     }
 
     std::string path_session = params.path_prompt_cache;
+    // ICPP-PATCH-START
+    // Each principal has their own cache folder
+    path_session = canister_path_session(path_session, principal_id);
+    // ICPP-PATCH-END
     std::vector<llama_token> session_tokens;
-    std::cout << "icpp-debug: main_ - 12" << std::endl;
 
-    if (!path_session.empty()) {
+    if (!path_session.empty()) {    
         LOG_TEE("%s: attempting to load saved session from '%s'\n", __func__, path_session.c_str());
+        std::cout << __func__ << ": icpp-debug A 1 " << std::endl;
         if (!file_exists(path_session)) {
             LOG_TEE("%s: session file does not exist, will create.\n", __func__);
         } else if (file_is_empty(path_session)) {
             LOG_TEE("%s: The session file is empty. A new session will be initialized.\n", __func__);
         } else {
             // The file exists and is not empty
+            std::cout << __func__ << ": icpp-debug A 2 " << std::endl;
             session_tokens.resize(n_ctx);
             size_t n_token_count_out = 0;
+            std::cout << __func__ << ": icpp-debug A 3 " << std::endl;
             if (!llama_state_load_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.capacity(), &n_token_count_out)) {
                 LOG_TEE("%s: error: failed to load session file '%s'\n", __func__, path_session.c_str());
+                // ICPP-PATCH-START
+                icpp_error_msg = std::format("{}: error: failed to load session file '{}')", __func__, path_session.c_str());
+                // ICPP-PATCH-END
                 return 1;
             }
+            std::cout << __func__ << ": icpp-debug A 4 " << std::endl;
             session_tokens.resize(n_token_count_out);
+            std::cout << __func__ << ": icpp-debug A 5 " << std::endl;
             LOG_TEE("%s: loaded a session with prompt size of %d tokens\n", __func__, (int)session_tokens.size());
         }
     }
-    std::cout << "icpp-debug: main_ - 13" << std::endl;
 
     const bool add_bos = llama_should_add_bos_token(model);
     if (!llama_model_has_encoder(model)) {
@@ -319,7 +335,6 @@ int main_(int argc, char ** argv) {
         LOG("prompt: \"%s\"\n", log_tostr(prompt));
         LOG("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
     }
-    std::cout << "icpp-debug: main_ - 14" << std::endl;
 
     // Should not run without any tokens
     if (embd_inp.empty()) {
@@ -331,7 +346,6 @@ int main_(int argc, char ** argv) {
             return -1;
         }
     }
-    std::cout << "icpp-debug: main_ - 15" << std::endl;
 
     // Tokenize negative prompt
     std::vector<llama_token> guidance_inp;
@@ -351,13 +365,14 @@ int main_(int argc, char ** argv) {
         LOG("original_prompt_len: %s", log_tostr(original_prompt_len));
         LOG("guidance_offset:     %s", log_tostr(guidance_offset));
     }
-    std::cout << "icpp-debug: main_ - 16" << std::endl;
 
     if ((int) embd_inp.size() > n_ctx - 4) {
         LOG_TEE("%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int) embd_inp.size(), n_ctx - 4);
-        return 1;
+        // ICPP-PATCH-START
+        icpp_error_msg = std::format("{}: error: prompt is too long ({} tokens, max {})", __func__, (int) embd_inp.size(), n_ctx - 4);
+        // ICPP-PATCH-END
+        return 1; 
     }
-    std::cout << "icpp-debug: main_ - 17" << std::endl;
 
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
@@ -383,7 +398,6 @@ int main_(int argc, char ** argv) {
         // remove any "future" tokens that we might have inherited from the previous session
         llama_kv_cache_seq_rm(ctx, -1, n_matching_session_tokens, -1);
     }
-    std::cout << "icpp-debug: main_ - 18" << std::endl;
 
     LOGLN(
             "recalculate the cached logits (check): embd_inp.empty() %s, n_matching_session_tokens %zu, embd_inp.size() %zu, session_tokens.size() %zu, embd_inp.size() %zu",
@@ -396,7 +410,6 @@ int main_(int argc, char ** argv) {
 
         session_tokens.resize(embd_inp.size() - 1);
     }
-    std::cout << "icpp-debug: main_ - 19" << std::endl;
 
     // number of tokens to keep when resetting context
     if (params.n_keep < 0 || params.n_keep > (int) embd_inp.size()) {
@@ -413,7 +426,6 @@ int main_(int argc, char ** argv) {
     if (params.interactive_first) {
         params.interactive = true;
     }
-    std::cout << "icpp-debug: main_ - 20" << std::endl;
 
     if (params.verbose_prompt) {
         LOG_TEE("\n");
@@ -551,8 +563,11 @@ int main_(int argc, char ** argv) {
 
     std::vector<int>   input_tokens;  g_input_tokens  = &input_tokens;
     std::vector<int>   output_tokens; g_output_tokens = &output_tokens;
-    std::ostringstream output_ss;     g_output_ss     = &output_ss;
+    // std::ostringstream output_ss;     g_output_ss     = &output_ss;
+    g_output_ss     = &output_ss; // ICPP-PATCH: we pass this in via argument, 
+                                  //             so we can return it to canister caller
     std::ostringstream assistant_ss; // for storing current assistant message, used in conversation mode
+
 
     // the first thing we will do is to output the prompt, so set color accordingly
     // console::set_display(console::prompt);
@@ -581,6 +596,9 @@ int main_(int argc, char ** argv) {
 
         if (llama_encode(ctx, llama_batch_get_one(enc_input_buf, enc_input_size, 0, 0))) {
             LOG_TEE("%s : failed to eval\n", __func__);
+            // ICPP-PATCH-START
+            icpp_error_msg = std::format("{}: error: failed to eval (-1-)", __func__);
+            // ICPP-PATCH-END
             return 1;
         }
 
@@ -723,6 +741,9 @@ int main_(int argc, char ** argv) {
                     int n_eval = std::min(input_size - i, params.n_batch);
                     if (llama_decode(ctx_guidance, llama_batch_get_one(input_buf + i, n_eval, n_past_guidance, 0))) {
                         LOG_TEE("%s : failed to eval\n", __func__);
+                        // ICPP-PATCH-START
+                        icpp_error_msg = std::format("{}: error: failed to eval (-2-)", __func__);
+                        // ICPP-PATCH-END
                         return 1;
                     }
 
@@ -740,6 +761,9 @@ int main_(int argc, char ** argv) {
 
                 if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, n_past, 0))) {
                     LOG_TEE("%s : failed to eval\n", __func__);
+                    // ICPP-PATCH-START
+                    icpp_error_msg = std::format("{}: error: failed to eval (-3-)", __func__);
+                    // ICPP-PATCH-END
                     return 1;
                 }
 
@@ -815,6 +839,9 @@ int main_(int argc, char ** argv) {
                 if (embd.size() > 1) {
                     // Incoming Requested Tokens
                     input_tokens.push_back(id);
+                    // ICPP-PATCH-START
+                    input_ss << token_str;
+                    // ICPP-PATCH-END
                 } else {
                     // Outgoing Generated Tokens
                     output_tokens.push_back(id);
@@ -1012,6 +1039,15 @@ int main_(int argc, char ** argv) {
         }
     }
 
+    // ICPP-PATCH-START
+    // The last token is not yet stored in session_tokens
+    if (!embd.empty() && !path_session.empty()) {
+        session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
+        n_session_consumed = session_tokens.size();
+    }
+
+    // ICPP-PATCH-END
+
     if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {
         LOG_TEE("\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
         llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
@@ -1021,8 +1057,19 @@ int main_(int argc, char ** argv) {
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
     if (ctx_guidance) { llama_free(ctx_guidance); }
-    llama_free(ctx);
-    llama_free_model(model);
+
+    // ICPP-PATCH-START
+
+    // Do NOT free ctx & model storage
+    // -> we made `ctx` & `model` data static, so they are maintained across calls to the LLM
+    // -> we do NOT reset g_ctx & g_model
+    // -> we moved this into a free_model function, which can be called by canister's load_model
+    // llama_free(ctx);
+    // llama_free_model(model);
+
+    // Do reset all other static memory
+    reset_static_memory();
+    // ICPP-PATCH-END
 
     llama_sampling_free(ctx_sampling);
     llama_backend_free();
@@ -1033,3 +1080,35 @@ int main_(int argc, char ** argv) {
 
     return 0;
 }
+
+// ICPP-PATCH-START: 
+// functions added for running on IC
+void free_model() {
+    if (g_ctx && *g_ctx) {
+        llama_free(*g_ctx);
+        *g_ctx = nullptr;
+        g_ctx = nullptr;
+    }
+    if (g_model && *g_model) {
+        llama_free_model(*g_model);
+        *g_model = nullptr;
+        g_model = nullptr;
+    }
+}
+void reset_static_memory() {
+    // Tip: to find what must be reset, use a native debug build and stop here 
+    //      in vscode. Then check the static memory section in VARIABLES.
+
+    // Avoid dangling pointers in static memory
+    // -> The data pointed to is re-created each call
+    // -> The data pointed to is cleared automatic, because it is non-static
+    g_output_tokens = nullptr;
+    g_params = nullptr;
+    g_input_tokens = nullptr;
+    g_output_ss = nullptr;
+
+    // Do not carry over any other values in static memory
+    is_interacting = false;
+    need_insert_eot = false;
+}
+// ICPP-PATCH-END

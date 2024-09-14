@@ -28,7 +28,7 @@ cpp_include_dirs = [
 #       void __attribute__((target("simd128"))) simd_function() {
 #           // SIMD-specific code here
 #       }
-cpp_compile_flags = []
+cpp_compile_flags = ["-DNDEBUG"]
 cpp_link_flags = []
 c_paths = [
     "src/llama_cpp_onicai_fork/ggml/src/ggml.c",
@@ -44,7 +44,9 @@ c_include_dirs = [
     "src/llama_cpp_onicai_fork/ggml/include",
     "src/llama_cpp_onicai_fork/common",
 ]
-c_compile_flags = []
+c_compile_flags = ["-DNDEBUG", "-msimd128"]
+post_wasm_function = "scripts.optimize_wasm.main"
+
 [build-native]
 cpp_paths = [
     # Use this to build native debug executable for testing canister code
@@ -55,8 +57,8 @@ cpp_paths = [
     # "src/llama_cpp_onicai_fork/common/console.cpp",
 ]
 cpp_include_dirs = []
-cpp_compile_flags = []
+cpp_compile_flags = ["-DNDEBUG"]
 cpp_link_flags = []
 c_paths = []
 c_include_dirs = []
-c_compile_flags = []
+c_compile_flags = ["-DNDEBUG"]
