@@ -206,27 +206,20 @@ WARNING: Currently, the canister can only be build on a `mac` !
     #      ;"--print-token-count"; "1"     #
     ########################################
 
----
----
-# APPENDIX A: WORK IN PROGRESS
+## qwen2-0_5b-instruct-q8_0.gguf (531 Mb; ~14 tokens max)
 
-We have not yet been able to successfully use the following models in the canister.
-Working on it...
+  - Download the model from huggingface: https://huggingface.co/Qwen/Qwen2-0.5B-Instruct-GGUF
 
-## gpt2.Q8_0.gguf (176Mb)
-
-  - Download the model from huggingface: https://huggingface.co/igorbkz/gpt2-Q8_0-GGUF
-    
-    Store it in: `models/gpt2.Q8_0.gguf`
+    Store it in: `models/Qwen/Qwen2-0.5B-Instruct-GGUF/qwen2-0_5b-instruct-q8_0.gguf`
     
   - Upload the model:
     ```bash
-    python -m scripts.upload --network local --canister llama_cpp --canister-filename models/gpt2.Q8_0.gguf models/gpt2.Q8_0.gguf
+    python -m scripts.upload --network local --canister llama_cpp --canister-filename models/qwen2-0_5b-instruct-q8_0.gguf models/Qwen/Qwen2-0.5B-Instruct-GGUF/qwen2-0_5b-instruct-q8_0.gguf
     ```
 
-  - Load the model into OP memory
+  - Load the model into OP memory (Do once, and note that it is already done by scripts.upload above)
     ```bash
-    dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/gpt2.Q8_0.gguf";} })'
+    dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/qwen2-0_5b-instruct-q8_0.gguf";} })'
     ```
 
   - Ensure the canister is ready for Inference, with the model loaded
@@ -236,113 +229,47 @@ Working on it...
 
   - Chat with the LLM:
 
-    Max context = max generated tokens = 1024
+    Different ways to use this model with llama.cpp:
+    https://qwen.readthedocs.io/en/latest/run_locally/llama.cpp.html
 
     ```bash
     # Start a new chat - this resets the prompt-cache for this conversation
     dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"} })'
 
-    # Generate 1 tokens from a prompt, with caching
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-n"; "1"; "-p"; "Write a python script calculating 1+1."} })'
+    # This is how you would do it if there was no instructions limit...
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "512" } })' 
 
-    # Generate another 50 tokens, using the cache - just continue, no new prompt provided
-    # Repeat until the LLM says it is done...
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all";"-n"; "50";} })'
+    # But... This model can generate 14 tokens, including initial prompt, before hitting the instruction limit
+    # So, split it up...
+    # TODO: build the initial prompt in multiple steps... 
+    # For now, skip this step, so, NO system instructions
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nExplain Large Language Models.<|im_end|>\n"; "-n"; "1" } })'
+    # And for now, just start here. 
+    # The user prompt:
+    # (-) sandwiched in between:  
+    #     <|im_start|>user\n ... <|im_end|>\n
+    # Tell the LLM that next up is the assistant to generate tokens:
+    #     <|im_start|>assistant\n
+    # (-) generate 1 token, which is NOT stored in the cache...:
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "1" } })'
     
-    ########################################
-    # Tip. Add this to the args vec if you #
-    #      want to see how many tokens the #
-    #      canister can generate before it #
-    #      hits the instruction limit      #
-    #                                      #
-    #      ;"--print-token-count"; "1"     #
-    ########################################
-
-## InstructLM-500M.Q8_0.gguf (604Mb)
-
-  - Download the model from huggingface: https://huggingface.co/DevQuasar/InstructLM-500M-GGUF
+    # Continue generating, 10 tokens at a time
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "10" } })'
     
-    Store it in: `models/InstructLM-500M.Q8_0.gguf`
-    
-  - Upload the model:
-    ```bash
-    python -m scripts.upload --network local --canister llama_cpp --canister-filename models/InstructLM-500M.Q8_0.gguf models/InstructLM-500M.Q8_0.gguf
+    # At some point, you will get an <|im_end|> special section back, which indicates the end of the assistant token generation:
     ```
-
-  - Load the model into OP memory
-    ```bash
-    dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/InstructLM-500M.Q8_0.gguf";} })'
+    % dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "10" } })'
+    (
+      variant {
+        Ok = record {
+          status = 200 : nat16;
+          output = " and recommendation systems.<|im_end|>";
+          error = "";
+          input = "<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\nLarge Language Models (LLMs) are artificial intelligence models that can generate human-like text or answer questions based on large amounts of text data. They are commonly used in natural language processing (NLP) tasks such as question answering, text summarization, and natural language generation. LLMs can be trained on large amounts of text data, making them highly efficient and scalable for a wide range of applications. They can also be trained on unstructured or semi-structured data, making them useful for tasks such as sentiment analysis, topic modeling,";
+        }
+      },
+    )
     ```
-
-  - Ensure the canister is ready for Inference, with the model loaded
-    ```bash
-    dfx canister call llama_cpp ready
-    ```
-
-  - Chat with the LLM:
-
-    Max context = max generated tokens = 2048
-
-    ```bash
-    # Start a new chat - this resets the prompt-cache for this conversation
-    dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"} })'
-
-    # Generate 1 tokens from a prompt, with caching
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-n"; "1"; "-p"; "Tell me about the Internet Computer."} })'
-
-    # Generate another 20 tokens, using the cache - just continue, no new prompt provided
-    # Repeat until the LLM says it is done...
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all";"-n"; "20";} })'
-    
-    ########################################
-    # Tip. Add this to the args vec if you #
-    #      want to see how many tokens the #
-    #      canister can generate before it #
-    #      hits the instruction limit      #
-    #                                      #
-    #      ;"--print-token-count"; "1"     #
-    ########################################
-
-
-## tinyllama-1.1b-chat-v1.0.Q8_0.gguf (1.17 Gb)
-  - Download the model from huggingface: https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF
-    
-  - Upload the model:
-    ```bash
-    python -m scripts.upload --network local --canister llama_cpp --canister-filename models/tinyllama-1.1b-chat-v1.0.Q8_0.gguf models/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q8_0.gguf
-    ```
-
-  - Load the model into OP memory (Do once, and note that it is already done by scripts.upload above)
-    ```bash
-    dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/tinyllama-1.1b-chat-v1.0.Q8_0.gguf";} })'
-    ```
-
-  - Ensure the canister is ready for Inference, with the model loaded
-    ```bash
-    dfx canister call llama_cpp ready
-    ```
-
-  - Chat with the LLM in Chat (conversation) mode:
-
-    ```bash
-    # Start a new chat - this resets the prompt-cache for this conversation
-    dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "my_cache/tl11b-chats.cache"} })'
-
-    # Provide the system prompt, with caching
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/tl11b-chats.cache"; "--prompt-cache-all"; "-p"; "<|system|>"; "--print-token-count"; "1"} })' 
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/tl11b-chats.cache"; "--prompt-cache-all"; "-p"; "You are a "; "--print-token-count"; "1"} })'
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/tl11b-chats.cache"; "--prompt-cache-all"; "-p"; "You are a helpful assistant<|endoftext|>"; "--print-token-count"; "1"} })' 
-
-    ## NOTE: This is too long
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/tl11b-chats.cache"; "--prompt-cache-all"; "-p"; "<|system|>You are a helpful assistant<|endoftext|>"; "--print-token-count"; "1"} })'          
-
-    ... this does not work. YOu can not go into -cnv mode using the canister
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/tl11b-chats.cache"; "--prompt-cache-all"; "-p"; "You are a helpful assistant"; "-cnv"; "--print-token-count"; "1"} })' 
-
-    # Create another 60 tokens, using the cache - just continue, no new prompt provided
-    # Repeat until the LLM says it is done...
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/tl11b-chats.cache"; "--prompt-cache-all";"--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "20";} })'
-    
 
     ########################################
     # Tip. Add this to the args vec if you #
@@ -352,26 +279,3 @@ Working on it...
     #                                      #
     #      ;"--print-token-count"; "1"     #
     ########################################
-
-
-## Phi-3-mini-4k-instruct-q4.gguf (2.39 Gb)
-
-  NOTE: THIS MODEL CAN NOT BE LOADED INTO MEMORY. Will require wasm64.
-
-  - Download the model from huggingface: https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf
-    
-  - Upload the model:
-    ```bash
-    python -m scripts.upload --network local --canister llama_cpp --canister-filename models/Phi-3-mini-4k-instruct-q4.gguf models/Phi-3-mini-4k-instruct-q4.gguf
-    ```
-
-  - Load the model into OP memory (Do once, and note that it is already done by scripts.upload above)
-     (TOO BIG. CAN UPLOAD, BUT NOT LOAD INTO MEMORY)
-    ```bash
-    dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/Phi-3-mini-4k-instruct-q4.gguf";} })'
-
-    Error: Failed update call.
-Caused by: The replica returned a rejection error: reject code CanisterError, reject message Error from Canister bkyz2-fmaaa-aaaaa-qaaaq-cai: Canister called `ic0.trap` with message: RUNTIME ERROR: ftell error: Value too large for data type.
-Consider gracefully handling failures from this canister or altering the canister to handle exceptions. See documentation: http://internetcomputer.org/docs/current/references/execution-errors#trapped-explicitly, error code None
-    ```
-    The above error is when llama.cpp is trying to determine the file size using `ftell`, and the size does not fit in a `long`

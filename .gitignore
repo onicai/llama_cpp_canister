@@ -11,6 +11,7 @@ secret
 .vscode/
 models/
 .canister_cache
+README-WIP.md
 
 # Windows
 .vs

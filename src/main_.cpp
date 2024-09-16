@@ -1041,10 +1041,11 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
 
     // ICPP-PATCH-START
     // The last token is not yet stored in session_tokens
-    if (!embd.empty() && !path_session.empty()) {
-        session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
-        n_session_consumed = session_tokens.size();
-    }
+    // Don't do this in general... Revisit when building:w a prompt in multiple steps..
+    // if (!embd.empty() && !path_session.empty()) {
+    //     session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
+    //     n_session_consumed = session_tokens.size();
+    // }
 
     // ICPP-PATCH-END
 
