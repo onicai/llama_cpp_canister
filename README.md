@@ -188,7 +188,7 @@ WARNING: Currently, the canister can only be build on a `mac` !
     (
       variant {
         Ok = record {
-          status = 200 : nat16;
+          status_code = 200 : nat16;
           output = "";
           error = "";
           input = " Dominic loves writing stories. He wanted to share his love with others, so he built a fun website on the Internet Computer. With his ckBTC, he bought a cool new book with new characters. Every night before bed, Dominic read his favorite stories with his favorite characters. The end.";
@@ -206,7 +206,94 @@ WARNING: Currently, the canister can only be build on a `mac` !
     #      ;"--print-token-count"; "1"     #
     ########################################
 
-## qwen2-0_5b-instruct-q8_0.gguf (531 Mb; ~14 tokens max)
+## qwen2.5-0,5b-instruct-q8_0.gguf (676 Mb; ~14 tokens max)
+
+  - Download the model from huggingface: https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF
+
+    Store it in: `models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf`
+    
+  - Upload the model:
+    ```bash
+    python -m scripts.upload --network local --canister llama_cpp --canister-filename models/qwen2.5-0.5b-instruct-q8_0.gguf models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf
+    ```
+  
+  - Load the model into OP memory (Do once, and note that it is already done by scripts.upload above)
+    ```bash
+    dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/qwen2.5-0.5b-instruct-q8_0.gguf";} })'
+    ```
+
+  - Set the max_tokens for this model, to avoid it hits the IC's instruction limit
+    ```
+    dfx canister call llama_cpp set_max_tokens '(record { max_tokens_query = 12 : nat64; max_tokens_update = 12 : nat64 })'
+
+    dfx canister call llama_cpp get_max_tokens
+    ```
+
+  - Ensure the canister is ready for Inference, with the model loaded
+    ```bash
+    dfx canister call llama_cpp ready
+    ```
+
+  - Chat with the LLM:
+
+    Different ways to use this model with llama.cpp:
+    https://qwen.readthedocs.io/en/latest/run_locally/llama.cpp.html
+
+    ```bash
+    # Start a new chat - this resets the prompt-cache for this conversation
+    dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"} })'
+
+    # Next, in a sequence of update calls, process the equivalent of this llama-cli command:
+    # Note though that the canister is not a GPU, so the -fa and -ngl are not passed to the canister
+    ./llama-cli -m /models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf -sp -p "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"  -fa -ngl 80 -n 512 --prompt-cache prompt.cache --prompt-cache-all
+
+    # First call, which will ingest the prompt up to max_tokens_update, which was set above
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "512" } })' 
+
+
+    # But... This model can generate 14 tokens, including initial prompt, before hitting the instruction limit
+    # So, split it up...
+    # TODO: build the initial prompt in multiple steps... 
+    # For now, skip this step, so, NO system instructions
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"; "-n"; "1" } })'
+    # And for now, just start here. 
+    # The user prompt:
+    # (-) sandwiched in between:  
+    #     <|im_start|>user\n ... <|im_end|>\n
+    # Tell the LLM that next up is the assistant to generate tokens:
+    #     <|im_start|>assistant\n
+    # (-) generate 1 token, which is NOT stored in the cache...:
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "1" } })'
+    
+    # Continue generating, 10 tokens at a time
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "10" } })'
+    
+    # At some point, you will get an <|im_end|> special section back, which indicates the end of the assistant token generation:
+    ```
+    % dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "10" } })'
+    (
+      variant {
+        Ok = record {
+          status_code = 200 : nat16;
+          output = " and recommendation systems.<|im_end|>";
+          error = "";
+          input = "<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\nLarge Language Models (LLMs) are artificial intelligence models that can generate human-like text or answer questions based on large amounts of text data. They are commonly used in natural language processing (NLP) tasks such as question answering, text summarization, and natural language generation. LLMs can be trained on large amounts of text data, making them highly efficient and scalable for a wide range of applications. They can also be trained on unstructured or semi-structured data, making them useful for tasks such as sentiment analysis, topic modeling,";
+        }
+      },
+    )
+    ```
+
+    ########################################
+    # Tip. Add this to the args vec if you #
+    #      want to see how many tokens the #
+    #      canister can generate before it #
+    #      hits the instruction limit      #
+    #                                      #
+    #      ;"--print-token-count"; "1"     #
+    ########################################
+
+
+## TODO: REMOVE IF 2.5 WORKS OUT... qwen2-0_5b-instruct-q8_0.gguf (531 Mb; ~14 tokens max)
 
   - Download the model from huggingface: https://huggingface.co/Qwen/Qwen2-0.5B-Instruct-GGUF
 
@@ -239,11 +326,14 @@ WARNING: Currently, the canister can only be build on a `mac` !
     # This is how you would do it if there was no instructions limit...
     dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "512" } })' 
 
+    # NOTE: Equivalent direct call to llama-cli
+    ./llama-cli -m /models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf -sp -p "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"  -fa -ngl 80 -n 512 --prompt-cache prompt.cache --prompt-cache-all
+
     # But... This model can generate 14 tokens, including initial prompt, before hitting the instruction limit
     # So, split it up...
     # TODO: build the initial prompt in multiple steps... 
     # For now, skip this step, so, NO system instructions
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nExplain Large Language Models.<|im_end|>\n"; "-n"; "1" } })'
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"; "-n"; "1" } })'
     # And for now, just start here. 
     # The user prompt:
     # (-) sandwiched in between:  
@@ -262,7 +352,7 @@ WARNING: Currently, the canister can only be build on a `mac` !
     (
       variant {
         Ok = record {
-          status = 200 : nat16;
+          status_code = 200 : nat16;
           output = " and recommendation systems.<|im_end|>";
           error = "";
           input = "<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\nLarge Language Models (LLMs) are artificial intelligence models that can generate human-like text or answer questions based on large amounts of text data. They are commonly used in natural language processing (NLP) tasks such as question answering, text summarization, and natural language generation. LLMs can be trained on large amounts of text data, making them highly efficient and scalable for a wide range of applications. They can also be trained on unstructured or semi-structured data, making them useful for tasks such as sentiment analysis, topic modeling,";

@@ -325,10 +325,16 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
             ? chat_add_and_format(model, chat_msgs, "system", params.prompt) // format the system prompt in conversation mode
             : params.prompt;
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
-            LOG("tokenize the prompt\n");
+            LOG_TEE("tokenize the prompt\n");
             embd_inp = ::llama_tokenize(ctx, prompt, true, true);
+            // ICPP-PATCH-START
+            // if (!session_tokens.empty()){
+            //     LOG_TEE("ICPP LOGIC: concatenating session + prompt tokens\n");
+            //     embd_inp.insert(embd_inp.begin(), session_tokens.begin(), session_tokens.end());
+            // }
+            // ICPP-PATCH-END
         } else {
-            LOG("use session tokens\n");
+            LOG_TEE("use session tokens\n");
             embd_inp = session_tokens;
         }
 

@@ -147,9 +147,7 @@ def main() -> int:
             "--\nInstruct canister to load the model, getting it ready for inference."
         )
         response = canister_instance.load_model(
-            {
-                "args": ["--model", canister_filename]
-            }
+            {"args": ["--model", canister_filename]}
         )
         if "Ok" in response[0].keys():
             if DEBUG_VERBOSE >= 2:

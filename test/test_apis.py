@@ -38,7 +38,7 @@ def test__run_query(network: str) -> None:
         canister_argument='(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"} })',
         network=network,
     )
-    expected_response = '(variant { Ok = record { status = 200 : nat16; output = "TODO: we need to add some output here.... ";} })'
+    expected_response = '(variant { Ok = record { status_code = 200 : nat16; output = "TODO: we need to add some output here.... ";} })'
     assert response == expected_response
 
 def test__run_update(network: str) -> None:
@@ -49,5 +49,5 @@ def test__run_update(network: str) -> None:
         canister_argument='(record { args = vec {"--model"; "models/stories260Ktok512.gguf"; "--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"} })',
         network=network,
     )
-    expected_response = '(variant { Ok = record { status = 200 : nat16; output = "TODO: we need to add some output here.... ";} })'
+    expected_response = '(variant { Ok = record { status_code = 200 : nat16; output = "TODO: we need to add some output here.... ";} })'
     assert response == expected_response

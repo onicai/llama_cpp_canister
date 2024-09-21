@@ -50,7 +50,7 @@ post_wasm_function = "scripts.optimize_wasm.main"
 [build-native]
 cpp_paths = [
     # Use this to build native debug executable for testing canister code
-    "native/main.cpp",
+    "native/*.cpp",
 
     # Use this to build the original console app of llama.cpp, without canister wrapper
     # "src/llama_cpp_onicai_fork/examples/main/main.cpp",
