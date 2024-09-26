@@ -221,6 +221,9 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     std::vector<llama_chat_msg> chat_msgs;
 
     // ICPP-PATCH-START
+    // Don't give error if embd_inp = session_tokens. All is OK to just keep going
+    bool embd_inp_is_session_tokens = false;
+
     // Keep track of the prompt portion not yet processed
     prompt_remaining.clear();
 
@@ -233,17 +236,11 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
 
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
-    std::cout << __func__ << ": icpp-debug 1 " << std::endl;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
-    std::cout << __func__ << ": icpp-debug 2 " << std::endl;
     if (sparams.cfg_scale > 1.f) {
-        std::cout << __func__ << ": icpp-debug 3 " << std::endl;
         struct llama_context_params lparams = llama_context_params_from_gpt_params(params);
-        std::cout << __func__ << ": icpp-debug 4 " << std::endl;
         ctx_guidance = llama_new_context_with_model(model, lparams);
-        std::cout << __func__ << ": icpp-debug 5 " << std::endl;
     }
-    std::cout << __func__ << ": icpp-debug 6 " << std::endl;
 
     if (model == NULL) {
         LOG_TEE("%s: error: unable to load model\n", __func__);
@@ -295,17 +292,14 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
 
     if (!path_session.empty()) {    
         LOG_TEE("%s: attempting to load saved session from '%s'\n", __func__, path_session.c_str());
-        std::cout << __func__ << ": icpp-debug A 1 " << std::endl;
         if (!file_exists(path_session)) {
             LOG_TEE("%s: session file does not exist, will create.\n", __func__);
         } else if (file_is_empty(path_session)) {
             LOG_TEE("%s: The session file is empty. A new session will be initialized.\n", __func__);
         } else {
             // The file exists and is not empty
-            std::cout << __func__ << ": icpp-debug A 2 " << std::endl;
             session_tokens.resize(n_ctx);
             size_t n_token_count_out = 0;
-            std::cout << __func__ << ": icpp-debug A 3 " << std::endl;
             if (!llama_state_load_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.capacity(), &n_token_count_out)) {
                 LOG_TEE("%s: error: failed to load session file '%s'\n", __func__, path_session.c_str());
                 // ICPP-PATCH-START
@@ -313,9 +307,7 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                 // ICPP-PATCH-END
                 return 1;
             }
-            std::cout << __func__ << ": icpp-debug A 4 " << std::endl;
             session_tokens.resize(n_token_count_out);
-            std::cout << __func__ << ": icpp-debug A 5 " << std::endl;
             LOG_TEE("%s: loaded a session with prompt size of %d tokens\n", __func__, (int)session_tokens.size());
         }
     }
@@ -338,6 +330,9 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
         } else {
             LOG_TEE("use session tokens\n");
             embd_inp = session_tokens;
+            // ICPP-PATCH-START
+            embd_inp_is_session_tokens = true;
+            // ICPP-PATCH-END
         }
 
         // ICPP-PATCH-START
@@ -381,6 +376,10 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
         LOG("guidance_offset:     %s", log_tostr(guidance_offset));
     }
 
+    // ICPP-PATCH-START
+    // when the prompt is empty, then embd_inp = session_tokens, and all is OK to just keep going.
+    if (!embd_inp_is_session_tokens) {
+    // ICPP-PATCH-END
     if ((int) embd_inp.size() > n_ctx - 4) {
         LOG_TEE("%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int) embd_inp.size(), n_ctx - 4);
         // ICPP-PATCH-START
@@ -388,6 +387,10 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
         // ICPP-PATCH-END
         return 1; 
     }
+    // ICPP-PATCH-START
+    }
+    // ICPP-PATCH-END
+    
 
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
