@@ -4,10 +4,10 @@
 #include "auth.h"
 #include "http.h"
 #include "main_.h"
+#include "max_tokens.h"
 #include "ready.h"
 #include "upload.h"
 #include "utils.h"
-#include "max_tokens.h"
 
 #include <iostream>
 #include <string>
@@ -38,7 +38,8 @@ void load_model() {
   std::string prompt_remaining;
   bool generated_eog = false;
   int result = main_(argc, argv.data(), principal_id, load_model_only,
-                     icpp_error_msg, conversation_ss, output_ss, max_tokens_update, prompt_remaining, generated_eog);
+                     icpp_error_msg, conversation_ss, output_ss,
+                     max_tokens_update, prompt_remaining, generated_eog);
 
   // Exit if there was an error
   if (result != 0) {

@@ -9,7 +9,7 @@ Run with:
 
 """
 
-# pylint: disable=invalid-name, too-few-public-methods, no-member, too-many-statements
+# pylint: disable=invalid-name, too-few-public-methods, no-member, too-many-statements, broad-except
 
 import sys
 import time
@@ -123,23 +123,9 @@ def main() -> int:
             print(f"- chunk[0]  = {chunk[0]}")
             print(f"- chunk[-1] = {chunk[-1]}")
 
-        """Handle exceptions in case the Ingress is busy and it throws this message:
-        Traceback (most recent call last):
-        File "<frozen runpy>", line 198, in _run_module_as_main
-        File "<frozen runpy>", line 88, in _run_code
-        File "llama_cpp_canister/scripts/upload.py", line 186, in <module>
-            sys.exit(main())
-                    ^^^^^^
-        File "llama_cpp_canister/scripts/upload.py", line 125, in main
-            response = canister_instance.file_upload_chunk(
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        File ".../miniconda3/envs/icpp_pro_w_llama_cpp_canister/lib/python3.11/site-packages/ic/canister.py", line 65, in __call__
-            res = self.agent.update_raw(
-                ^^^^^^^^^^^^^^^^^^^^^^
-        File ".../miniconda3/envs/icpp_pro_w_llama_cpp_canister/lib/python3.11/site-packages/ic/agent.py", line 116, in update_raw
-            raise Exception('Rejected: ' + result.decode())
-        Exception: Rejected: Ingress message 0x33efc6c16bb217df26b8940c5ae4f3f7beaa795a252227923f77b711f4b61fe3 timed out waiting to start executing.
-        """
+        # Handle exceptions in case the Ingress is busy and it throws this message:
+        # Ingress message ... timed out waiting to start executing.
+
         max_retries = 5
         retry_delay = 2  # seconds
         for attempt in range(1, max_retries + 1):
@@ -157,10 +143,12 @@ def main() -> int:
                 print(f"Attempt {attempt} failed: {e}")
                 if attempt == max_retries:
                     print("Max retries reached. Failing.")
-                    raise  # Re-raise the exception if max retries are reached, which will exit the program
-                else:
-                    print(f"Retrying in {retry_delay} seconds...")
-                    time.sleep(retry_delay)  # Wait before retrying
+                    # Re-raise the exception if max retries are reached,
+                    # which will exit the program
+                    raise
+
+                print(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)  # Wait before retrying
 
         if "Ok" in response[0].keys():
             print(f"OK! filesize = {response[0]['Ok']['filesize']}")

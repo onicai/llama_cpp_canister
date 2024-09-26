@@ -2,8 +2,8 @@
 #include "common.h"
 #include "http.h"
 #include "main_.h"
-#include "utils.h"
 #include "max_tokens.h"
+#include "utils.h"
 
 #include <filesystem>
 #include <iostream>
@@ -132,13 +132,17 @@ void run(IC_API &ic_api, const uint64_t &max_tokens) {
 
   // Call main_, just like it is called in the llama-cli app
   std::string icpp_error_msg;
-  std::ostringstream conversation_ss;   // input tokens (from session cache + prompt)
-  std::ostringstream output_ss;  // output tokens (generated during this call)
-  std::string prompt_remaining;  // part of the prompt not processed due to max_tokens
-  bool generated_eog = false; // this is set to true if llama.cpp is generating new tokens, and it generated an eog (End Of Generation)
+  std::ostringstream
+      conversation_ss;          // input tokens (from session cache + prompt)
+  std::ostringstream output_ss; // output tokens (generated during this call)
+  std::string
+      prompt_remaining; // part of the prompt not processed due to max_tokens
+  bool generated_eog =
+      false; // this is set to true if llama.cpp is generating new tokens, and it generated an eog (End Of Generation)
   bool load_model_only = false;
   int result = main_(argc, argv.data(), principal_id, load_model_only,
-                     icpp_error_msg, conversation_ss, output_ss, max_tokens, prompt_remaining, generated_eog);
+                     icpp_error_msg, conversation_ss, output_ss, max_tokens,
+                     prompt_remaining, generated_eog);
 
   // Exit if there was an error
   if (result != 0) {

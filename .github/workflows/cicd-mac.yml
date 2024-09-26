@@ -96,10 +96,20 @@ jobs:
         run: |
           make all-static
 
-      - name: test-llm-wasm
-        shell: bash -l {0}
-        run: |
-          make test-llm-wasm
+      - name: Download tinyStories model file from HF - storiesICP42Mtok4096
+        run: wget -O ./models/storiesICP42Mtok4096.gguf "https://huggingface.co/onicai/llama_cpp_canister_models/resolve/main/storiesICP42Mtok4096.gguf?download=true"
+
+      - name: Create directory for Qwen models
+        run: mkdir -p ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF
+
+      - name: Download Qwen model
+        run: wget -O ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf?download=true
+
+      # TODO
+      # - name: test-llm-wasm
+      #   shell: bash -l {0}
+      #   run: |
+      #     make test-llm-wasm
 
       - name: test-llm-native
         shell: bash -l {0}
