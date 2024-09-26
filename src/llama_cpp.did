@@ -15,11 +15,12 @@ type MaxTokensRecord = record {
 };
 
 type RunOutputRecord = record { 
-  status_code: StatusCode; 
-  input: text; 
+  status_code: StatusCode;  
+  output: text;
+  conversation: text;
+  error: text;
   prompt_remaining: text;
-  output: text; 
-  error: text 
+  generated_eog: bool;
 };
 type OutputRecordResult = variant {
   Ok : RunOutputRecord;
@@ -80,7 +81,7 @@ service : {
   // model endpoints
   load_model : (InputRecord) -> (OutputRecordResult);
   set_max_tokens : (MaxTokensRecord) -> (StatusCodeRecordResult);
-  get_max_tokens : () -> (MaxTokensRecord);
+  get_max_tokens : () -> (MaxTokensRecord) query;
   
   // up & down load of files
   file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;

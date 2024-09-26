@@ -22,8 +22,8 @@ int main() {
   bool exit_on_fail = true;
   MockIC mockIC(exit_on_fail);
 
-  test_qwen2(mockIC);
   test_canister_functions(mockIC);
+  test_qwen2(mockIC);
   test_tiny_stories(mockIC);
 
   // returns 1 if any tests failed

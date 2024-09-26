@@ -136,7 +136,12 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
     return formatted;
 }
 
-int main_(int argc, char ** argv, std::string principal_id, bool load_model_only, std::string &icpp_error_msg, std::ostringstream &input_ss, std::ostringstream &output_ss) {
+int main_(int argc, char ** argv, std::string principal_id, bool load_model_only, std::string &icpp_error_msg, std::ostringstream &conversation_ss, std::ostringstream &output_ss, const uint64_t &max_tokens, std::string &prompt_remaining, bool &generated_eog) {
+    std::cout << std::string(__func__) << " Called with following arguments: " << std::endl;
+    std::cout << "- principal_id    = " << principal_id << std::endl;
+    std::cout << "- load_model_only = " << load_model_only << std::endl;
+    std::cout << "- max_tokens      = " << max_tokens << std::endl;
+
     gpt_params params;
 
     g_params = &params;
@@ -216,6 +221,9 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     std::vector<llama_chat_msg> chat_msgs;
 
     // ICPP-PATCH-START
+    // Keep track of the prompt portion not yet processed
+    prompt_remaining.clear();
+
     // Skip loading the model if the --model parameter is not provided
     if (!params.model.empty()) {
     // ICPP-PATCH-END
@@ -327,19 +335,20 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
             LOG_TEE("tokenize the prompt\n");
             embd_inp = ::llama_tokenize(ctx, prompt, true, true);
-            // ICPP-PATCH-START
-            // if (!session_tokens.empty()){
-            //     LOG_TEE("ICPP LOGIC: concatenating session + prompt tokens\n");
-            //     embd_inp.insert(embd_inp.begin(), session_tokens.begin(), session_tokens.end());
-            // }
-            // ICPP-PATCH-END
         } else {
             LOG_TEE("use session tokens\n");
             embd_inp = session_tokens;
         }
 
-        LOG("prompt: \"%s\"\n", log_tostr(prompt));
-        LOG("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
+        // ICPP-PATCH-START
+        if (prompt.size() > 0) {
+            prompt_remaining = prompt;
+        }
+        // ICPP-PATCH-END
+
+        LOG_TEE("prompt: \"%s\"\n", log_tostr(prompt));
+        LOG_TEE("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
+        LOG_TEE("# tokens: %s\n", std::to_string(embd_inp.size()).c_str());
     }
 
     // Should not run without any tokens
@@ -567,9 +576,20 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     int n_session_consumed = 0;
     int n_past_guidance    = 0;
 
+    // ICPP-PATCH-START
+    // We can only handle max_tokens evaluations per call
+    int n_eval_total = 0;
+    // We break out of the while loop below a little bit different at end of generation
+    // we actually first go back one more time, to store the eog token in the conversation & cache,
+    // while llama.cpp does not do that
+    // We do want to break the while loop cleanly, to go through the memory cleanup at the end
+    generated_eog = false;
+    bool break_while_loop = false;
+    // ICPP-PATCH-END
+
     std::vector<int>   input_tokens;  g_input_tokens  = &input_tokens;
     std::vector<int>   output_tokens; g_output_tokens = &output_tokens;
-    // std::ostringstream output_ss;     g_output_ss     = &output_ss;
+    // std::ostringstream output_ss;     g_output_ss     = &output_ss; // ICPP_PATCH
     g_output_ss     = &output_ss; // ICPP-PATCH: we pass this in via argument, 
                                   //             so we can return it to canister caller
     std::ostringstream assistant_ss; // for storing current assistant message, used in conversation mode
@@ -704,6 +724,17 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                     n_past++;
                     n_session_consumed++;
 
+                    // ICPP-PATCH-START
+                    // Keep track of the processed conversation tokens and the remaining prompt
+                    int id = embd[i];
+                    const std::string token_str = llama_token_to_piece(ctx, id, params.special);
+                    conversation_ss << token_str;
+
+                    if (prompt_remaining.find(token_str) == 0) {
+                        prompt_remaining.erase(0, token_str.length());
+                    }
+                    // ICPP-PATCH-END
+
                     if (n_session_consumed >= (int) session_tokens.size()) {
                         ++i;
                         break;
@@ -763,6 +794,13 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                     n_eval = params.n_batch;
                 }
 
+                // ICPP-PATCH-START
+                // We must process the predictions in multiple calls due to IC's instruction limit
+                if (max_tokens > 0 && n_eval >= max_tokens) {
+                    n_eval = max_tokens;
+                }
+                // ICPP-PATCH-END
+
                 LOG("eval: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd).c_str());
 
                 if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, n_past, 0))) {
@@ -780,13 +818,50 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                 if (params.n_print > 0 && n_past % params.n_print == 0) {
                     LOG_TEE("\n\033[31mTokens consumed so far = %d / %d \033[0m\n", n_past, n_ctx);
                 }
+
+                // ICPP-PATCH-START
+                // Keep track of the processed conversation tokens and the remaining prompt
+                for (int j=0; j<n_eval; ++j){
+                    int id = embd[i+j];
+                    const std::string token_str = llama_token_to_piece(ctx, id, params.special);
+                    conversation_ss << token_str;
+
+                    if (prompt_remaining.find(token_str) == 0) {
+                        prompt_remaining.erase(0, token_str.length());
+                    }
+                }
+
+                // We break out of the while loop:
+                // (-) if the last token was generated and it was eog
+                // (-) if we generated max_tokens, to avoid running into IC's instruction limit
+                //
+                n_eval_total += n_eval;
+                if (generated_eog || (max_tokens > 0 && n_eval_total >= max_tokens)) {
+                    if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {
+                        session_tokens.insert(session_tokens.end(), embd.begin(), embd.begin() + n_eval);
+                        n_session_consumed = session_tokens.size();
+                    }
+                    break_while_loop = true;
+                    break;
+                }
+                // ICPP-PATCH-END
             }
+            // ICPP-PATCH-START
+            if (break_while_loop) {
+                break;
+            }
+            // ICPP-PATCH-END
 
             if (!embd.empty() && !path_session.empty()) {
                 session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
                 n_session_consumed = session_tokens.size();
             }
         }
+        // ICPP-PATCH-START
+        if (break_while_loop) {
+            break;
+        }
+        // ICPP-PATCH-END
 
         embd.clear();
         embd_guidance.clear();
@@ -794,6 +869,9 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
             // optionally save the session on first sample (for faster prompt loading next time)
             if (!path_session.empty() && need_to_save_session && !params.prompt_cache_ro) {
+                // ICPP-PATCH-START
+                std::cout << "saving " << std::to_string(session_tokens.size()) << " tokens to session file " << path_session << std::endl;
+                // ICPP-PATCH-END
                 need_to_save_session = false;
                 llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
 
@@ -817,7 +895,7 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
             LOG("n_remain: %d\n", n_remain);
         } else {
             // some user input remains from prompt or interaction, forward it to processing
-            LOG("embd_inp.size(): %d, n_consumed: %d\n", (int) embd_inp.size(), n_consumed);
+            LOG_TEE("embd_inp.size(): %d, n_consumed: %d\n", (int) embd_inp.size(), n_consumed);
             while ((int) embd_inp.size() > n_consumed) {
                 embd.push_back(embd_inp[n_consumed]);
 
@@ -845,9 +923,6 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                 if (embd.size() > 1) {
                     // Incoming Requested Tokens
                     input_tokens.push_back(id);
-                    // ICPP-PATCH-START
-                    input_ss << token_str;
-                    // ICPP-PATCH-END
                 } else {
                     // Outgoing Generated Tokens
                     output_tokens.push_back(id);
@@ -1034,7 +1109,11 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
         // end of generation
         if (!embd.empty() && llama_token_is_eog(model, embd.back()) && !(params.interactive)) {
             LOG_TEE(" [end of text]\n");
-            break;
+            // break;  // we do not break the loop here, but we do it above
+            //           once the eog token has been decoded and added to conversation_ss & session_tokens
+            // ICPP-PATCH-START 
+            generated_eog = true;
+            // ICPP-PATCH-END
         }
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
@@ -1045,17 +1124,10 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
         }
     }
 
-    // ICPP-PATCH-START
-    // The last token is not yet stored in session_tokens
-    // Don't do this in general... Revisit when building:w a prompt in multiple steps..
-    // if (!embd.empty() && !path_session.empty()) {
-    //     session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
-    //     n_session_consumed = session_tokens.size();
-    // }
-
-    // ICPP-PATCH-END
-
     if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {
+        // ICPP-PATCH-START
+        std::cout << "\nSaving " << std::to_string(session_tokens.size()) << " tokens to session file " << path_session << std::endl;
+        // ICPP-PATCH-END
         LOG_TEE("\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
         llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }

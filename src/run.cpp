@@ -3,6 +3,7 @@
 #include "http.h"
 #include "main_.h"
 #include "utils.h"
+#include "max_tokens.h"
 
 #include <filesystem>
 #include <iostream>
@@ -94,10 +95,11 @@ void new_chat() {
         r_out.append(
             "status_code",
             CandidTypeNat16{Http::StatusCode::InternalServerError}); // 500
-        r_out.append("input", CandidTypeText{""});
-        r_out.append("prompt_remaining", CandidTypeText{""});
+        r_out.append("conversation", CandidTypeText{""});
         r_out.append("output", CandidTypeText{""});
         r_out.append("error", CandidTypeText{msg});
+        r_out.append("prompt_remaining", CandidTypeText{""});
+        r_out.append("generated_eog", CandidTypeBool{false});
         ic_api.to_wire(CandidTypeVariant{"Err", r_out});
         return;
       }
@@ -113,14 +115,15 @@ void new_chat() {
   // Return output over the wire
   CandidTypeRecord r_out;
   r_out.append("status_code", CandidTypeNat16{Http::StatusCode::OK}); // 200
-  r_out.append("input", CandidTypeText{""});
-  r_out.append("prompt_remaining", CandidTypeText{""});
+  r_out.append("conversation", CandidTypeText{""});
   r_out.append("output", CandidTypeText{msg});
   r_out.append("error", CandidTypeText{""});
+  r_out.append("prompt_remaining", CandidTypeText{""});
+  r_out.append("generated_eog", CandidTypeBool{false});
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
 }
 
-void run(IC_API &ic_api) {
+void run(IC_API &ic_api, const uint64_t &max_tokens) {
   CandidTypePrincipal caller = ic_api.get_caller();
   std::string principal_id = caller.get_text();
 
@@ -129,20 +132,24 @@ void run(IC_API &ic_api) {
 
   // Call main_, just like it is called in the llama-cli app
   std::string icpp_error_msg;
-  std::ostringstream input_ss;  // input tokens (from prompt or session cache)
-  std::ostringstream output_ss; // output tokens (generated during this call)
+  std::ostringstream conversation_ss;   // input tokens (from session cache + prompt)
+  std::ostringstream output_ss;  // output tokens (generated during this call)
+  std::string prompt_remaining;  // part of the prompt not processed due to max_tokens
+  bool generated_eog = false; // this is set to true if llama.cpp is generating new tokens, and it generated an eog (End Of Generation)
   bool load_model_only = false;
   int result = main_(argc, argv.data(), principal_id, load_model_only,
-                     icpp_error_msg, input_ss, output_ss);
+                     icpp_error_msg, conversation_ss, output_ss, max_tokens, prompt_remaining, generated_eog);
 
   // Exit if there was an error
   if (result != 0) {
     CandidTypeRecord r_out;
     r_out.append("status_code",
                  CandidTypeNat16{Http::StatusCode::InternalServerError}); // 500
-    r_out.append("input", CandidTypeText{input_ss.str()});
+    r_out.append("conversation", CandidTypeText{conversation_ss.str()});
     r_out.append("output", CandidTypeText{output_ss.str()});
     r_out.append("error", CandidTypeText{icpp_error_msg});
+    r_out.append("prompt_remaining", CandidTypeText{prompt_remaining});
+    r_out.append("generated_eog", CandidTypeBool{generated_eog});
     ic_api.to_wire(CandidTypeVariant{"Err", r_out});
     return;
   }
@@ -150,18 +157,19 @@ void run(IC_API &ic_api) {
   // Return output over the wire
   CandidTypeRecord r_out;
   r_out.append("status_code", CandidTypeNat16{Http::StatusCode::OK}); // 200
-  r_out.append("input", CandidTypeText{input_ss.str()});
-  r_out.append("prompt_remaining", CandidTypeText{"--TODO--"});
+  r_out.append("conversation", CandidTypeText{conversation_ss.str()});
   r_out.append("output", CandidTypeText{output_ss.str()});
   r_out.append("error", CandidTypeText{""});
+  r_out.append("prompt_remaining", CandidTypeText{prompt_remaining});
+  r_out.append("generated_eog", CandidTypeBool{generated_eog});
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
 }
 
 void run_query() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  run(ic_api);
+  run(ic_api, max_tokens_query);
 }
 void run_update() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  run(ic_api);
+  run(ic_api, max_tokens_update);
 }
