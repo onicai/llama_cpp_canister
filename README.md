@@ -238,9 +238,7 @@ WARNING: Currently, the canister can only be build on a `mac` !
     dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all";"--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "50"; "-p"; "Dominic loves writing stories"} })'
 
     # Create another 50 tokens, using the cache - just continue, no new prompt provided
-    # Repeat until the LLM says it is done or until you hit the context limit with the error:
-    #    `main_: error: prompt is too long`
-    #
+    # Repeat until the LLM says it is done
     dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all";"--samplers"; "top_p"; "--temp"; "0.1"; "--top-p"; "0.9"; "-n"; "50";} })'
 
     # After a couple of calls, you will get something like this as output, unless you hit the context limit error:
