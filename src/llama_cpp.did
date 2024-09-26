@@ -7,11 +7,20 @@ type InputRecord = record {
   args : vec text; // the CLI args of llama.cpp/examples/main, as a list of strings
 };
 
+// to avoid hitting the IC's instructions limit
+// 0 = no limit (default)
+type MaxTokensRecord = record { 
+  max_tokens_update : nat64;
+  max_tokens_query : nat64;
+};
+
 type RunOutputRecord = record { 
-  status: StatusCode; 
-  input: text; 
-  output: text; 
-  error: text 
+  status_code: StatusCode;  
+  output: text;
+  conversation: text;
+  error: text;
+  prompt_remaining: text;
+  generated_eog: bool;
 };
 type OutputRecordResult = variant {
   Ok : RunOutputRecord;
@@ -71,6 +80,8 @@ service : {
 
   // model endpoints
   load_model : (InputRecord) -> (OutputRecordResult);
+  set_max_tokens : (MaxTokensRecord) -> (StatusCodeRecordResult);
+  get_max_tokens : () -> (MaxTokensRecord) query;
   
   // up & down load of files
   file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;
