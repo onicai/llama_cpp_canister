@@ -87,13 +87,7 @@ test-llm-native:
 .PHONY: test-llm-wasm
 test-llm-wasm:
 	dfx identity use default
-	icpp build-wasm
-	dfx stop
-	dfx start --clean --background
-	dfx deploy
-	python -m scripts.upload models/stories260Ktok512.gguf
-	pytest -vv
-	dfx stop
+	python -m scripts.qa_deploy_and_pytest
 	
 .PHONY: all-static
 all-static: \

@@ -68,7 +68,7 @@ void test_qwen2(MockIC &mockIC) {
   test_name = std::string(__func__) + ": " + "get_max_tokens - " + model;
   // '()'
   candid_in = "4449444c0000";
-  // '(record { max_tokens_query = 12 : nat64; max_tokens_update = 12 : nat64 })'
+  // '(record { max_tokens_query = 12 : nat64; max_tokens_update = 12 : nat64;})'
   candid_out =
       "4449444c016c02deb5daad0478f3a29d8e077801000c000000000000000c00000000000000";
 
