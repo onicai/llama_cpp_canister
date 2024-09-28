@@ -170,12 +170,8 @@ WARNING: Currently, the canister can only be build on a `mac` !
       },
     )
 
-    ########################################################
     # NOTE: This is the equivalent llama-cli call, when running llama.cpp locally
     ./llama-cli -m /models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf -sp -p "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"  -fa -ngl 80 -n 512 --prompt-cache prompt.cache --prompt-cache-all
-
-
-    ```
 
     ########################################
     # Tip. Add this to the args vec if you #
@@ -185,6 +181,9 @@ WARNING: Currently, the canister can only be build on a `mac` !
     #                                      #
     #      ;"--print-token-count"; "1"     #
     ########################################
+
+    ```
+
 
   - Deployed to mainnet at canister: 6uwoh-vaaaa-aaaag-amema-cai
 
@@ -271,3 +270,4 @@ WARNING: Currently, the canister can only be build on a `mac` !
     #                                      #
     #      ;"--print-token-count"; "1"     #
     ########################################
+    ```

@@ -78,7 +78,7 @@ def test__run_update_1(network: str) -> None:
         canister_argument='(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
         network=network,
     )
-    expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>"; error = ""; status_code = 200 : nat16; prompt_remaining = "user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"; generated_eog = false;} })'
+    expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>"; error = ""; status_code = 200 : nat16; prompt_remaining = "user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\n"; generated_eog = false;} })'
     assert expected_response == response
 
 def test__run_update_2(network: str) -> None:
@@ -89,7 +89,7 @@ def test__run_update_2(network: str) -> None:
         canister_argument='(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
         network=network,
     )
-    expected_response = '(variant { Ok = record { status_code = 200 : nat16; error = ""; output = ""; input = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant"; prompt_remaining = "\n";} generated_eog=false : bool})'
+    expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant"; error = ""; status_code = 200 : nat16; prompt_remaining = "\\n"; generated_eog = false;} })'
     assert expected_response == response
 
 def test__run_update_3(network: str) -> None:
