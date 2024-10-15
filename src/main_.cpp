@@ -1138,6 +1138,12 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
             }
         }
 
+        // ICPP-PATCH-START : do not set end-of-text with generated_eog if we're still processing inputs
+        //                    the token might be an eog token like <im-end>, but it was just part of the prompt
+        // if not currently processing queued inputs;
+        if ((int) embd_inp.size() <= n_consumed) {
+        // ICPP-PATCH-END
+
         // end of generation
         if (!embd.empty() && llama_token_is_eog(model, embd.back()) && !(params.interactive)) {
             LOG_TEE(" [end of text]\n");
@@ -1147,6 +1153,10 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
             generated_eog = true;
             // ICPP-PATCH-END
         }
+
+        // ICPP-PATCH-START : do not set end-of-text with generated_eog if we're still processing inputs
+        }
+        // ICPP-PATCH-END
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
         // We skip this logic when n_predict == -1 (infinite) or -2 (stop at context size).
