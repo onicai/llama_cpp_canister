@@ -126,7 +126,7 @@ WARNING: Currently, the canister can only be build on a `mac` !
 
   - Set the max_tokens for this model, to avoid it hits the IC's instruction limit
     ```
-    dfx canister call llama_cpp set_max_tokens '(record { max_tokens_query = 12 : nat64; max_tokens_update = 12 : nat64 })'
+    dfx canister call llama_cpp set_max_tokens '(record { max_tokens_query = 10 : nat64; max_tokens_update = 10 : nat64 })'
 
     dfx canister call llama_cpp get_max_tokens
     ```
@@ -149,7 +149,7 @@ WARNING: Currently, the canister can only be build on a `mac` !
     dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "512" } })' 
     ...
 
-    # Once prompt_remaining is empty, repeat this call, with an empty prompt, until the `generated_eog=true`:
+    # Once prompt_remaining is empty, repeat this call, with an empty prompt, until `generated_eog=true`:
     dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; ""; "-n"; "512" } })'
 
     ...

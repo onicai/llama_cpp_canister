@@ -733,9 +733,9 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                     const std::string token_str = llama_token_to_piece(ctx, id, params.special);
                     conversation_ss << token_str;
 
-                    if (prompt_remaining.find(token_str) == 0) {
-                        prompt_remaining.erase(0, token_str.length());
-                    }
+                    // if (prompt_remaining.find(token_str) == 0) {
+                    //     prompt_remaining.erase(0, token_str.length());
+                    // }
                     // ICPP-PATCH-END
 
                     if (n_session_consumed >= (int) session_tokens.size()) {
@@ -829,9 +829,9 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                     const std::string token_str = llama_token_to_piece(ctx, id, params.special);
                     conversation_ss << token_str;
 
-                    if (prompt_remaining.find(token_str) == 0) {
-                        prompt_remaining.erase(0, token_str.length());
-                    }
+                    // if (prompt_remaining.find(token_str) == 0) {
+                    //     prompt_remaining.erase(0, token_str.length());
+                    // }
                 }
 
                 // We break out of the while loop:
@@ -910,8 +910,37 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                 if ((int) embd.size() >= params.n_batch) {
                     break;
                 }
+
+                // ICPP-PATCH-START
+                if (max_tokens > 0 && n_consumed >= n_matching_session_tokens + max_tokens) {
+                    std::cout << "ICPP is breaking the while loop -2- !" << std::endl;
+                    std::cout << "- max_tokens                   = " << std::to_string(max_tokens) << std::endl;
+                    std::cout << "- n_consumed                   = " << std::to_string(n_consumed) << std::endl;
+                    std::cout << "- n_matching_session_tokens    = " << std::to_string(n_matching_session_tokens) << std::endl;
+                    break;
+                }
+                // ICPP-PATCH-END
             }
         }
+
+        // ICPP-PATCH-START
+        std::string prompt_consumed = "";
+        prompt_remaining.clear();
+        int n_prompt_tokens_remaining = 0;
+        size_t iii = 0;
+        for (auto id : embd_inp) {
+            const std::string token_str = llama_token_to_piece(ctx, id, true); // include special tokens
+            if (iii < n_consumed) {
+                prompt_consumed += token_str;
+            } else {
+                ++n_prompt_tokens_remaining;
+                prompt_remaining += token_str;
+            }
+            ++iii;
+        }
+        std::cout << "prompt_consumed (" << n_consumed << " tokens) = " << prompt_consumed << std::endl;
+        std::cout << "prompt_remaining (" << n_prompt_tokens_remaining << " tokens) = "<< prompt_remaining << std::endl;
+        // ICPP-PATCH-END
 
         // display text
         if (input_echo && display) {
