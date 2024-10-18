@@ -5,24 +5,33 @@
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
 
-This repo allows you to deploy [ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp) as a Smart Contract on the Internet Computer.
+`llama_cpp_canister` allows you to deploy [ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp) as a Smart Contract on the Internet Computer.
+
+- MIT open source 🧑‍💻
+- Well documented 📝
+- Fully QA'd via CI/CD ✅
+- Easy to build, test & deploy 🚧
+- Smoke testing framework using pytest 🚬
+
 
 # Try it out
 
 You can try out a deployed version at https://icgpt.icpp.world/
 
-# WARNING ⚠️
+# Need help?
 
-This repo is under heavy development. 🚧
+If you decide to use llama_cpp_canister in your ICP dApp, we want to help you.
 
-- Important limitation is that you can only build the canister on a `Mac`. (Windows & Linux is coming soon)
-- Everything is moving fast, so refresh your local clone frequently. ⏰ 
-- The canister endpoint APIs are not yet fixed. Expect breaking changes ❗❗❗
-
-
-# Questions & Discussions ❓
+We do NOT consider llama_cpp_canister "our IP". It is for the broad benefit of DeAI on ICP, and we hope many of you will try it out and use it.
 
 Please join our [OpenChat C++ community](https://oc.app/community/cklkv-3aaaa-aaaar-ar7uq-cai/?ref=6e3y2-4yaaa-aaaaf-araya-cai) for any questions, discussions or feedback. ❤️
+
+# Limitations ⚠️
+
+- Important limitation is that you can only build the canister on a `Mac`. (Windows & Linux is coming soon)
+- The IC supports 32bit canisters only, which limits the size of deployable LLMs to ~0.5B parameters
+- Everything is moving fast, so refresh your local clone frequently. ⏰ 
+- The canister endpoint APIs are not yet 100% fixed. We might introduce breaking changes ❗❗❗
 
 
 # Set up
