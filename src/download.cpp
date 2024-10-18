@@ -1,4 +1,5 @@
 #include "download.h"
+#include "auth.h"
 #include "utils.h"
 
 #include <fstream>
