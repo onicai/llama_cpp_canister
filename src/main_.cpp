@@ -40,7 +40,8 @@
 #endif
 
 static llama_context           ** g_ctx;
-static llama_model             ** g_model;
+// static llama_model             ** g_model; // Make this a global variable, accessible from common.cpp
+llama_model             ** g_model;
 static gpt_params               * g_params;
 static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
@@ -228,7 +229,11 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     prompt_remaining.clear();
 
     // Skip loading the model if the --model parameter is not provided
+    // if (!params.model.empty()) {  // TODO: REMOVE THIS: WE MOVED THIS CHECK INTO llama_init_from_gpt_params
+    free_ctx();
     if (!params.model.empty()) {
+        free_model();
+    }
     // ICPP-PATCH-END
 
     g_model = &model;
@@ -251,7 +256,7 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     }
     // ICPP-PATCH-START
     // Skip loading the model if the --model parameter is not provided
-    }
+    // } // TODO: REMOVE THIS: WE MOVED THIS CHECK INTO llama_init_from_gpt_params
     
     // And return if we are asked to ONLY load the model
     if (load_model_only) {
@@ -733,9 +738,9 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                     const std::string token_str = llama_token_to_piece(ctx, id, params.special);
                     conversation_ss << token_str;
 
-                    if (prompt_remaining.find(token_str) == 0) {
-                        prompt_remaining.erase(0, token_str.length());
-                    }
+                    // if (prompt_remaining.find(token_str) == 0) {
+                    //     prompt_remaining.erase(0, token_str.length());
+                    // }
                     // ICPP-PATCH-END
 
                     if (n_session_consumed >= (int) session_tokens.size()) {
@@ -829,9 +834,9 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                     const std::string token_str = llama_token_to_piece(ctx, id, params.special);
                     conversation_ss << token_str;
 
-                    if (prompt_remaining.find(token_str) == 0) {
-                        prompt_remaining.erase(0, token_str.length());
-                    }
+                    // if (prompt_remaining.find(token_str) == 0) {
+                    //     prompt_remaining.erase(0, token_str.length());
+                    // }
                 }
 
                 // We break out of the while loop:
@@ -910,8 +915,37 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                 if ((int) embd.size() >= params.n_batch) {
                     break;
                 }
+
+                // ICPP-PATCH-START
+                if (max_tokens > 0 && n_consumed >= n_matching_session_tokens + max_tokens) {
+                    std::cout << "ICPP is breaking the while loop -2- !" << std::endl;
+                    std::cout << "- max_tokens                   = " << std::to_string(max_tokens) << std::endl;
+                    std::cout << "- n_consumed                   = " << std::to_string(n_consumed) << std::endl;
+                    std::cout << "- n_matching_session_tokens    = " << std::to_string(n_matching_session_tokens) << std::endl;
+                    break;
+                }
+                // ICPP-PATCH-END
             }
         }
+
+        // ICPP-PATCH-START
+        std::string prompt_consumed = "";
+        prompt_remaining.clear();
+        int n_prompt_tokens_remaining = 0;
+        size_t iii = 0;
+        for (auto id : embd_inp) {
+            const std::string token_str = llama_token_to_piece(ctx, id, true); // include special tokens
+            if (iii < n_consumed) {
+                prompt_consumed += token_str;
+            } else {
+                ++n_prompt_tokens_remaining;
+                prompt_remaining += token_str;
+            }
+            ++iii;
+        }
+        std::cout << "prompt_consumed (" << n_consumed << " tokens) = " << prompt_consumed << std::endl;
+        std::cout << "prompt_remaining (" << n_prompt_tokens_remaining << " tokens) = "<< prompt_remaining << std::endl;
+        // ICPP-PATCH-END
 
         // display text
         if (input_echo && display) {
@@ -1109,6 +1143,12 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
             }
         }
 
+        // ICPP-PATCH-START : do not set end-of-text with generated_eog if we're still processing inputs
+        //                    the token might be an eog token like <im-end>, but it was just part of the prompt
+        // if not currently processing queued inputs;
+        if ((int) embd_inp.size() <= n_consumed) {
+        // ICPP-PATCH-END
+
         // end of generation
         if (!embd.empty() && llama_token_is_eog(model, embd.back()) && !(params.interactive)) {
             LOG_TEE(" [end of text]\n");
@@ -1118,6 +1158,10 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
             generated_eog = true;
             // ICPP-PATCH-END
         }
+
+        // ICPP-PATCH-START : do not set end-of-text with generated_eog if we're still processing inputs
+        }
+        // ICPP-PATCH-END
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
         // We skip this logic when n_predict == -1 (infinite) or -2 (stop at context size).
@@ -1165,12 +1209,14 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
 
 // ICPP-PATCH-START: 
 // functions added for running on IC
-void free_model() {
+void free_ctx() {
     if (g_ctx && *g_ctx) {
         llama_free(*g_ctx);
         *g_ctx = nullptr;
         g_ctx = nullptr;
     }
+}
+void free_model() {
     if (g_model && *g_model) {
         llama_free_model(*g_model);
         *g_model = nullptr;

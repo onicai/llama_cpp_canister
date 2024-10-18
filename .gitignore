@@ -12,6 +12,8 @@ secret
 models/
 .canister_cache
 README-WIP.md
+Makefile-WIP
+main*.log
 
 # Windows
 .vs

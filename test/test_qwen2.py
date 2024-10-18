@@ -23,7 +23,7 @@ def test__load_model(network: str) -> None:
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
         canister_method="load_model",
-        canister_argument='(record { args = vec {"--model"; "models/qwen2.5-0.5b-instruct-q8_0.gguf";} })',
+        canister_argument='(record { args = vec {"--model"; "models/model.gguf";} })',
         network=network,
     )
     assert "(variant { Ok" in response
@@ -33,7 +33,7 @@ def test__set_max_tokens(network: str) -> None:
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
         canister_method="set_max_tokens",
-        canister_argument='(record { max_tokens_query = 12 : nat64; max_tokens_update = 12 : nat64 })',
+        canister_argument='(record { max_tokens_query = 10 : nat64; max_tokens_update = 10 : nat64 })',
         network=network,
     )
     assert "(variant { Ok" in response
@@ -46,7 +46,7 @@ def test__get_max_tokens(network: str) -> None:
         canister_argument='()',
         network=network,
     )
-    expected_response = '(record { max_tokens_query = 12 : nat64; max_tokens_update = 12 : nat64;})'
+    expected_response = '(record { max_tokens_query = 10 : nat64; max_tokens_update = 10 : nat64;})'
     assert expected_response == response
 
 def test__ready(network: str) -> None:
@@ -78,7 +78,7 @@ def test__run_update_1(network: str) -> None:
         canister_argument='(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
         network=network,
     )
-    expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>"; error = ""; status_code = 200 : nat16; prompt_remaining = "user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\n"; generated_eog = false;} })'
+    expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>"; error = ""; status_code = 200 : nat16; prompt_remaining = "\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\n"; generated_eog = false;} })'
     assert expected_response == response
 
 def test__run_update_2(network: str) -> None:
@@ -89,7 +89,7 @@ def test__run_update_2(network: str) -> None:
         canister_argument='(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
         network=network,
     )
-    expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant"; error = ""; status_code = 200 : nat16; prompt_remaining = "\\n"; generated_eog = false;} })'
+    expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models."; error = ""; status_code = 200 : nat16; prompt_remaining = "<|im_end|>\\n<|im_start|>assistant\\n"; generated_eog = false;} })'
     assert expected_response == response
 
 def test__run_update_3(network: str) -> None:

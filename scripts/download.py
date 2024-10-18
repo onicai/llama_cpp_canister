@@ -77,7 +77,7 @@ def main() -> int:
 
     done = False
     offset = 0
-    with open(local_filename_path, "ab") as f:
+    with open(local_filename_path, "wb") as f:
         while not done:
             response = canister_instance.file_download_chunk(
                 {
