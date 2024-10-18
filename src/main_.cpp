@@ -40,7 +40,8 @@
 #endif
 
 static llama_context           ** g_ctx;
-static llama_model             ** g_model;
+// static llama_model             ** g_model; // Make this a global variable, accessible from common.cpp
+llama_model             ** g_model;
 static gpt_params               * g_params;
 static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
@@ -228,7 +229,11 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     prompt_remaining.clear();
 
     // Skip loading the model if the --model parameter is not provided
+    // if (!params.model.empty()) {  // TODO: REMOVE THIS: WE MOVED THIS CHECK INTO llama_init_from_gpt_params
+    free_ctx();
     if (!params.model.empty()) {
+        free_model();
+    }
     // ICPP-PATCH-END
 
     g_model = &model;
@@ -251,7 +256,7 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     }
     // ICPP-PATCH-START
     // Skip loading the model if the --model parameter is not provided
-    }
+    // } // TODO: REMOVE THIS: WE MOVED THIS CHECK INTO llama_init_from_gpt_params
     
     // And return if we are asked to ONLY load the model
     if (load_model_only) {
@@ -1204,12 +1209,14 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
 
 // ICPP-PATCH-START: 
 // functions added for running on IC
-void free_model() {
+void free_ctx() {
     if (g_ctx && *g_ctx) {
         llama_free(*g_ctx);
         *g_ctx = nullptr;
         g_ctx = nullptr;
     }
+}
+void free_model() {
     if (g_model && *g_model) {
         llama_free_model(*g_model);
         *g_model = nullptr;
