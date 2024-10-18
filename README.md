@@ -5,7 +5,7 @@
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
 
-This repo allows you to deploy [ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp) as a Smart Contract to the Internet Computer.
+This repo allows you to deploy [ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp) as a Smart Contract on the Internet Computer.
 
 # Try it out
 
@@ -15,7 +15,7 @@ You can try out a deployed version at https://icgpt.icpp.world/
 
 This repo is under heavy development. 🚧
 
-- Important limitation is that it only works on a `Mac`. (Windows & Linux is coming soon)
+- Important limitation is that you can only build the canister on a `Mac`. (Windows & Linux is coming soon)
 - Everything is moving fast, so refresh your local clone frequently. ⏰ 
 - The canister endpoint APIs are not yet fixed. Expect breaking changes ❗❗❗
 
@@ -27,9 +27,7 @@ Please join our [OpenChat C++ community](https://oc.app/community/cklkv-3aaaa-aa
 
 # Set up
 
-WARNING: Currently, the canister can only be build on a `mac` ! 
-
-- VERY IMPORTANT: Use Python 3.11 ❗❗❗
+WARNING: Currently, the canister can only be build on a `Mac` ! 
 
 - Clone the repo and it's children:
 
@@ -54,9 +52,13 @@ WARNING: Currently, the canister can only be build on a `mac` !
   ```
 
 - Create a Python environment with dependencies installed
+  
+  ❗❗❗ Use Python 3.11 ❗❗❗
+  
+  _(This is needed for binaryen.py dependency)_
 
    ```bash
-   # We use MiniConda (Use Python 3.11 ❗❗❗)
+   # We use MiniConda
    conda create --name llama_cpp_canister python=3.11
    conda activate llama_cpp_canister
 
@@ -94,6 +96,9 @@ WARNING: Currently, the canister can only be build on a `mac` !
   - Deploy the wasm to a canister on the local network:
     ```bash
     dfx deploy
+
+    # When upgrading the code in the canister, use:
+    dfx deploy -m upgrade
     ```
 
   - Check the health endpoint of the `llama_cpp` canister:
@@ -204,4 +209,20 @@ WARNING: Currently, the canister can only be build on a `mac` !
 - You can download the `main.log` file from the canister with:
   ```
   python -m scripts.download --network local --canister llama_cpp --local-filename main.log main.log
+  ```
+
+## Smoke testing the deployed LLM
+
+You can run a smoketest on the deployed LLM:
+
+- Deploy Qwen2.5 model as described above
+
+- Run the smoketests for the Qwen2.5 LLM deployed to your local IC network:
+
+  ```
+  # First test the canister functions, like 'health'
+  pytest -vv test/test_canister_functions.py
+
+  # Then run the inference tests
+  pytest -vv test/test_qwen2.py
   ```

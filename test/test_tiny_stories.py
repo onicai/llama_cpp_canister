@@ -23,7 +23,7 @@ def test__load_model(network: str) -> None:
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
         canister_method="load_model",
-        canister_argument='(record { args = vec {"--model"; "models/stories260Ktok512.gguf";} })',
+        canister_argument='(record { args = vec {"--model"; "models/model.gguf";} })',
         network=network,
     )
     assert "(variant { Ok" in response

@@ -36,13 +36,13 @@ def main() -> int:
             tests = [
                 {
                     "filename": "models/stories260Ktok512.gguf",
-                    "canister_filename": "models/stories260Ktok512.gguf",
+                    "canister_filename": "models/model.gguf",
                     "test_path_model": "test/test_tiny_stories.py",
                 },
                 # This times out in Github action. Can only be run locally.
                 # {
                 #     "filename": "models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf",  # pylint: disable=line-too-long
-                #     "canister_filename": "models/qwen2.5-0.5b-instruct-q8_0.gguf",
+                #     "canister_filename": "models/model.gguf",
                 #     "test_path_model": "test/test_qwen2.py",
                 # },
             ]
