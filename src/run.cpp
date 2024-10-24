@@ -1,5 +1,6 @@
 #include "run.h"
 #include "common.h"
+#include "db_chats.h"
 #include "http.h"
 #include "main_.h"
 #include "max_tokens.h"
@@ -8,6 +9,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <system_error>
 
 #include "ic_api.h"
 
@@ -23,40 +25,6 @@
   (-) run_update
 */
 
-std::string canister_path_session(std::string path_session,
-                                  const std::string &principal_id) {
-  // We store the prompt-cache files in a folder named with the principal id of the caller
-  //
-  // Note: to save multiple conversations per user, the front end can simply assign
-  //       a unique prompt-cache file per conversation, and that will do the job !
-  //
-  std::string canister_path_session;
-
-  if (!path_session.empty()) {
-    // Remove all leading '/'
-    size_t pos = path_session.find_first_not_of('/');
-    if (pos != std::string::npos) {
-      path_session.erase(0, pos);
-    } else {
-      // If the string only contains slashes, clear it
-      path_session.clear();
-    }
-
-    // The cache file will be stored in ".cache/<principal_id>/<path_session-with_/replaced-by-_>"
-    canister_path_session =
-        ".canister_cache/" + principal_id + "/" + path_session;
-
-    // Make sure that the cache directory exists, else llama.cpp cannot create the file
-    std::filesystem::path file_path(canister_path_session);
-    std::filesystem::path dir_path = file_path.parent_path();
-    if (!dir_path.empty() && !std::filesystem::exists(dir_path)) {
-      std::filesystem::create_directories(dir_path);
-    }
-  }
-
-  return canister_path_session;
-}
-
 void new_chat() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   CandidTypePrincipal caller = ic_api.get_caller();
@@ -64,20 +32,38 @@ void new_chat() {
 
   auto [argc, argv, args] = get_args_for_main(ic_api);
 
+  std::string error_msg;
+
   // Create/reset a prompt-cache file to zero length, will reset the LLM state for that conversation
   // Get the cache filename from --prompt-cache in args
   gpt_params params;
   if (!gpt_params_parse(argc, argv.data(), params)) {
-    std::string msg = "Cannot parse args.";
-    ic_api.to_wire(CandidTypeVariant{
-        "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +
-                                                         ": " + msg}}});
+    error_msg = "Cannot parse args.";
+    send_output_record_result_error_to_wire(ic_api, error_msg);
+    return;
+  }
+
+  // Create a new file to save this chat for this prinicipal
+  if (!db_chats_new(principal_id, error_msg)) {
+    send_output_record_result_error_to_wire(ic_api, error_msg);
+    return;
+  }
+
+  // Each principal can only save N chats
+  if (!db_chats_clean(principal_id, error_msg)) {
+    send_output_record_result_error_to_wire(ic_api, error_msg);
     return;
   }
 
   // Each principal has their own cache folder
   std::string path_session = params.path_prompt_cache;
-  path_session = canister_path_session(path_session, principal_id);
+  std::string canister_path_session;
+  if (!get_canister_path_session(path_session, principal_id,
+                                 canister_path_session, error_msg)) {
+    send_output_record_result_error_to_wire(ic_api, error_msg);
+    return;
+  }
+  path_session = canister_path_session;
 
   std::string msg;
   if (!path_session.empty()) {
@@ -88,19 +74,8 @@ void new_chat() {
       if (success) {
         msg = "Cache file " + path_session + " deleted successfully";
       } else {
-        msg = "Error deleting cache file " + path_session;
-
-        // Return output over the wire
-        CandidTypeRecord r_out;
-        r_out.append(
-            "status_code",
-            CandidTypeNat16{Http::StatusCode::InternalServerError}); // 500
-        r_out.append("conversation", CandidTypeText{""});
-        r_out.append("output", CandidTypeText{""});
-        r_out.append("error", CandidTypeText{msg});
-        r_out.append("prompt_remaining", CandidTypeText{""});
-        r_out.append("generated_eog", CandidTypeBool{false});
-        ic_api.to_wire(CandidTypeVariant{"Err", r_out});
+        error_msg = "Error deleting cache file " + path_session;
+        send_output_record_result_error_to_wire(ic_api, error_msg);
         return;
       }
     } else {
@@ -155,6 +130,13 @@ void run(IC_API &ic_api, const uint64_t &max_tokens) {
     r_out.append("prompt_remaining", CandidTypeText{prompt_remaining});
     r_out.append("generated_eog", CandidTypeBool{generated_eog});
     ic_api.to_wire(CandidTypeVariant{"Err", r_out});
+    return;
+  }
+
+  // Append output to latest chat file for this prinicipal
+  if (!db_chats_save_conversation(conversation_ss.str(), principal_id,
+                                  icpp_error_msg)) {
+    send_output_record_result_error_to_wire(ic_api, icpp_error_msg);
     return;
   }
 
