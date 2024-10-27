@@ -39,19 +39,22 @@ void new_chat() {
   gpt_params params;
   if (!gpt_params_parse(argc, argv.data(), params)) {
     error_msg = "Cannot parse args.";
-    send_output_record_result_error_to_wire(ic_api, error_msg);
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
 
   // Create a new file to save this chat for this prinicipal
   if (!db_chats_new(principal_id, error_msg)) {
-    send_output_record_result_error_to_wire(ic_api, error_msg);
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
 
   // Each principal can only save N chats
   if (!db_chats_clean(principal_id, error_msg)) {
-    send_output_record_result_error_to_wire(ic_api, error_msg);
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
 
@@ -60,7 +63,8 @@ void new_chat() {
   std::string canister_path_session;
   if (!get_canister_path_session(path_session, principal_id,
                                  canister_path_session, error_msg)) {
-    send_output_record_result_error_to_wire(ic_api, error_msg);
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
   path_session = canister_path_session;
@@ -75,7 +79,8 @@ void new_chat() {
         msg = "Cache file " + path_session + " deleted successfully";
       } else {
         error_msg = "Error deleting cache file " + path_session;
-        send_output_record_result_error_to_wire(ic_api, error_msg);
+        send_output_record_result_error_to_wire(
+            ic_api, Http::StatusCode::InternalServerError, error_msg);
         return;
       }
     } else {
@@ -101,6 +106,14 @@ void new_chat() {
 void run(IC_API &ic_api, const uint64_t &max_tokens) {
   CandidTypePrincipal caller = ic_api.get_caller();
   std::string principal_id = caller.get_text();
+
+  // User must be logged in
+  if (caller.is_anonymous()) {
+    std::string error_msg = "You are not logged in.";
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::Unauthorized, error_msg);
+    return;
+  }
 
   // Get the data from the wire and prepare arguments for main_
   auto [argc, argv, args] = get_args_for_main(ic_api);
@@ -136,7 +149,8 @@ void run(IC_API &ic_api, const uint64_t &max_tokens) {
   // Append output to latest chat file for this prinicipal
   if (!db_chats_save_conversation(conversation_ss.str(), principal_id,
                                   icpp_error_msg)) {
-    send_output_record_result_error_to_wire(ic_api, icpp_error_msg);
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, icpp_error_msg);
     return;
   }
 

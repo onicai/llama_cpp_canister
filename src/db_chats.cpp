@@ -1,3 +1,4 @@
+#include "db_chats.h"
 #include "common.h"
 #include "http.h"
 #include "main_.h"
@@ -195,4 +196,103 @@ bool db_chats_save_conversation(const std::string &conversation,
     return false;
   }
   return true;
+}
+
+// Canister API to retrieve saved chats for authenticated caller
+void get_chats() {
+  IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
+  CandidTypePrincipal caller = ic_api.get_caller();
+  // User must be logged in
+  if (caller.is_anonymous()) {
+    std::string msg = "Unauthorized: You are not logged in.";
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +
+                                                         ": " + msg}}});
+    return;
+  }
+
+  // Get the principal ID as a string
+  std::string principal_id = caller.get_text();
+
+  // Directory where chats are stored for this principal
+  std::string saved_chats_dir;
+  std::string error_msg;
+  if (!get_saved_chats_dir(principal_id, saved_chats_dir, error_msg)) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +
+                                                         ": " + error_msg}}});
+    return;
+  }
+
+  // Vectors to store the chats read from file
+  std::vector<std::string> timestamps;
+  std::vector<std::string> chats;
+  std::error_code ec;
+
+  // Iterate through the directory and collect all regular files
+  for (const auto &entry :
+       std::filesystem::directory_iterator(saved_chats_dir, ec)) {
+    if (ec) {
+      std::string msg = "Error reading directory: " + ec.message();
+      ic_api.to_wire(CandidTypeVariant{
+          "Err",
+          CandidTypeVariant{
+              "Other", CandidTypeText{std::string(__func__) + ": " + msg}}});
+      return;
+    }
+
+    if (std::filesystem::is_regular_file(entry, ec) && !ec) {
+      std::ifstream ifs(entry.path());
+      if (!ifs.is_open()) {
+        std::string msg = "Failed to open file: " + entry.path().string();
+        ic_api.to_wire(CandidTypeVariant{
+            "Err",
+            CandidTypeVariant{
+                "Other", CandidTypeText{std::string(__func__) + ": " + msg}}});
+        return;
+      }
+
+      // Read the principal ID from the file (first line)
+      std::string file_principal_id;
+      std::getline(ifs, file_principal_id);
+
+      // Verify the file's principal ID matches the caller's principal ID
+      if (file_principal_id != principal_id) {
+        std::string msg =
+            "Principal id not correct in file: " + entry.path().string();
+        ic_api.to_wire(CandidTypeVariant{
+            "Err",
+            CandidTypeVariant{
+                "Other", CandidTypeText{std::string(__func__) + ": " + msg}}});
+        return;
+      }
+
+      // Read the rest of the file as the chat
+      std::string chat((std::istreambuf_iterator<char>(ifs)),
+                       std::istreambuf_iterator<char>());
+
+      // Extract the timestamp from the filename (assuming it's formatted as in db_chats_new)
+      std::string timestamp = entry.path().filename().string();
+
+      // Add the data to the vectors
+      timestamps.emplace_back(timestamp);
+      chats.emplace_back(chat);
+    }
+  }
+
+  // ---------------------------------------------------
+  // Return data in Candid format specified in llama_cpp.did
+  //
+  // Create the 'chats' vec of records
+  CandidTypeRecord r_out;
+  r_out.append("timestamp", CandidTypeVecText{&timestamps});
+  r_out.append("chat", CandidTypeVecText{&chats});
+  CandidTypeVecRecord vr_out{r_out};
+
+  // GetChatsRecord
+  CandidTypeRecord get_chats_record;
+  get_chats_record.append("chats", vr_out);
+
+  // Wrap it into a Variant: GetChatsRecordResult
+  ic_api.to_wire(CandidTypeVariant{"Ok", get_chats_record});
 }

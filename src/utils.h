@@ -19,6 +19,7 @@ bool my_create_directory(const std::filesystem::path &dir_path,
                          std::string &error_msg);
 
 void send_output_record_result_error_to_wire(IC_API &ic_api,
+                                             uint16_t http_status_code,
                                              const std::string &error_msg);
 
 bool get_canister_path_session(const std::string &path_session,

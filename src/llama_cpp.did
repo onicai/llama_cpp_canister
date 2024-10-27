@@ -73,6 +73,20 @@ type FileUploadRecord = record {
   filesize : nat64;   // the total filesize in bytes after writing chunk at offset
 };
 
+// -----------------------------------------------------
+type GetChatsRecordResult = variant {
+  Err : ApiError;
+  Ok : GetChatsRecord;
+};
+type GetChatsRecord = record {
+  chats : vec record {
+    timestamp: text;
+    chat: text;
+  };
+};
+
+// -----------------------------------------------------
+// The endpoint services of our canister
 service : {
   // canister
   health : () -> (StatusCodeRecordResult) query;
@@ -91,6 +105,9 @@ service : {
   new_chat : (InputRecord) -> (OutputRecordResult);
   run_query : (InputRecord) -> (OutputRecordResult) query;
   run_update: (InputRecord) -> (OutputRecordResult);
+
+  // Chats retrieval
+  get_chats : () -> (GetChatsRecordResult) query;
 
   // admin endpoints
   whoami : () -> (text) query;
