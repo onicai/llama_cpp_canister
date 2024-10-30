@@ -2,7 +2,7 @@
 // Internet Computer SmartContract version of: examples/main/main.cpp
 // See: https://github.com/onicai/llama_cpp_onicai_fork/tree/master/examples/main/README.md
 #include "ic_api.h"
-#include "run.h"
+#include "utils.h"
 #include "main_.h"
 // ICPP-PATCH-END
 
@@ -291,7 +291,11 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     std::string path_session = params.path_prompt_cache;
     // ICPP-PATCH-START
     // Each principal has their own cache folder
-    path_session = canister_path_session(path_session, principal_id);
+    std::string canister_path_session;
+    if (!get_canister_path_session(path_session, principal_id, canister_path_session, icpp_error_msg)){
+        return 1;
+    }
+    path_session = canister_path_session;
     // ICPP-PATCH-END
     std::vector<llama_token> session_tokens;
 
@@ -943,8 +947,8 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
             }
             ++iii;
         }
-        std::cout << "prompt_consumed (" << n_consumed << " tokens) = " << prompt_consumed << std::endl;
-        std::cout << "prompt_remaining (" << n_prompt_tokens_remaining << " tokens) = "<< prompt_remaining << std::endl;
+        // std::cout << "prompt_consumed (" << n_consumed << " tokens) = " << prompt_consumed << std::endl;
+        // std::cout << "prompt_remaining (" << n_prompt_tokens_remaining << " tokens) = "<< prompt_remaining << std::endl;
         // ICPP-PATCH-END
 
         // display text

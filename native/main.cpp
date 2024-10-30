@@ -23,8 +23,8 @@ int main() {
   MockIC mockIC(exit_on_fail);
 
   test_canister_functions(mockIC);
-  test_tiny_stories(mockIC);
   test_qwen2(mockIC);
+  test_tiny_stories(mockIC);
 
   // returns 1 if any tests failed
   return mockIC.test_summary();

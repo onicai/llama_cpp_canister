@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include "../src/db_chats.h"
 #include "../src/health.h"
 #include "../src/max_tokens.h"
 #include "../src/model.h"
@@ -77,7 +78,8 @@ void test_qwen2(MockIC &mockIC) {
   // -----------------------------------------------------------------------------
   // Check readiness
   // '()' -> '(variant { Ok = record { status_code = 200 : nat16; } })'
-  mockIC.run_test("ready OK - " + model, ready, "4449444c0000",
+  mockIC.run_test(std::string(__func__) + ": " + "ready OK - " + model, ready,
+                  "4449444c0000",
                   "4449444c026c019aa1b2f90c7a6b01bc8a0100010100c800",
                   silent_on_trap, anonymous_principal);
 
@@ -86,13 +88,13 @@ void test_qwen2(MockIC &mockIC) {
     // -----------------------------------------------------------------------------
     // Start a new chat, which will remove the prompt-cache file if it exists
     // '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"} })' ->
-    // '(variant { Ok = record { status_code = 200 : nat16; output = "Ready to start a new chat for cache file .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/my_cache/prompt.cache"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
+    // '(variant { Ok = record { status_code = 200 : nat16; output = "Ready to start a new chat for cache file .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/sessions/my_cache/prompt.cache"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
     mockIC.run_test(
         std::string(__func__) + ": " + "new_chat " + std::to_string(i) + " - " +
             model,
         new_chat,
         "4449444c026c01dd9ad28304016d710100020e2d2d70726f6d70742d6361636865156d795f63616368652f70726f6d70742e6361636865",
-        "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a01000101008e01526561647920746f2073746172742061206e6577206368617420666f722063616368652066696c65202e63616e69737465725f63616368652f6578706d742d67747873772d696e66746a2d747461626a2d71687035732d6e6f7a75702d6e3362626f2d6b377a766e2d64673468652d6b6e6163332d6c61652f6d795f63616368652f70726f6d70742e63616368650000c8000000",
+        "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a01000101009701526561647920746f2073746172742061206e6577206368617420666f722063616368652066696c65202e63616e69737465725f63616368652f6578706d742d67747873772d696e66746a2d747461626a2d71687035732d6e6f7a75702d6e3362626f2d6b377a766e2d64673468652d6b6e6163332d6c61652f73657373696f6e732f6d795f63616368652f70726f6d70742e63616368650000c8000000",
         silent_on_trap, my_principal);
 
     // -----------------------------------------------------------------------------
@@ -140,4 +142,12 @@ void test_qwen2(MockIC &mockIC) {
         "4449444c026c01dd9ad28304016d710100080e2d2d70726f6d70742d6361636865156d795f63616368652f70726f6d70742e6361636865122d2d70726f6d70742d63616368652d616c6c032d7370022d6e03353132022d7000",
         "", silent_on_trap, my_principal);
   }
+
+  // -----------------------------------------------------------------------------
+  // Retrieve the saved chats
+  // '()' -> '(variant { Ok = record { chats = vec {record { id="id1"; chat="chat1";}; record { id="id2"; chat="chat2";}; } } })'
+  // Cannot test it because values of chat are non-deterministic
+  // Note that the pytest is verifying it in more detail
+  mockIC.run_test(std::string(__func__) + ": " + "get_chats - " + model,
+                  get_chats, "4449444c0000", "", silent_on_trap, my_principal);
 }
