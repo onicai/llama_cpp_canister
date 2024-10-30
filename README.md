@@ -214,6 +214,15 @@ WARNING: Currently, the canister can only be build on a `Mac` !
     In above command, the `-fa -ngl 80` arguments are useful only on GPU. We do not use them when calling the IC, because
     the canister has a CPU only.
 
+  - Retrieving saved chats
+
+    Up to 3 chats per principal are saved.
+    The `get_chats` method retrieves them for the principal of the caller.
+
+    ```
+    dfx canister call llama_cpp get_chats
+    ```
+
 
 - You can download the `main.log` file from the canister with:
   ```
