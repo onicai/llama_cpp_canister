@@ -16,7 +16,7 @@
 
 # Try it out
 
-You can try out a deployed version at https://icgpt.icpp.world/
+You can try out a deployed version at https://icgpt.onicai.com
 
 # Need help?
 
