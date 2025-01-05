@@ -105,7 +105,6 @@ def main() -> int:
     # Iterate over all chunks
     offset = 0
     for i, chunk in enumerate(generate_chunks(file_bytes, chunksize)):
-
         if DEBUG_VERBOSE == 0:
             pass
         elif DEBUG_VERBOSE == 1:

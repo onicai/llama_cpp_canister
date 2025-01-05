@@ -28,7 +28,7 @@ Please join our [OpenChat C++ community](https://oc.app/community/cklkv-3aaaa-aa
 
 # Limitations ⚠️
 
-- Important limitation is that you can only build the canister on a `Mac`. (Windows & Linux is coming soon)
+- Important limitation is that you can only build the canister on a `Mac`. (Linux is coming soon)
 - The IC supports 32bit canisters only, which limits the size of deployable LLMs to ~0.5B parameters
 - Everything is moving fast, so refresh your local clone frequently. ⏰ 
 - The canister endpoint APIs are not yet 100% fixed. We might introduce breaking changes ❗❗❗
@@ -57,6 +57,7 @@ WARNING: Currently, the canister can only be build on a `Mac` !
 
 - Create the file src/llama_cpp_onicai_fork/common/build-info.cpp
   ```
+  # from ./llama_cpp_canister folder
   make build-info-cpp-wasm
   ```
 
