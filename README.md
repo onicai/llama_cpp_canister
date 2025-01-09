@@ -26,12 +26,10 @@ We do NOT consider llama_cpp_canister "our IP". It is for the broad benefit of D
 
 Please join our [OpenChat C++ community](https://oc.app/community/cklkv-3aaaa-aaaar-ar7uq-cai/?ref=6e3y2-4yaaa-aaaaf-araya-cai) for any questions, discussions or feedback. ❤️
 
-# Limitations ⚠️
+# Capabilities 🔥
 
-- Important limitation is that you can only build the canister on a `Mac`. (Linux is coming soon)
-- The IC supports 32bit canisters only, which limits the size of deployable LLMs to ~0.5B parameters
-- Everything is moving fast, so refresh your local clone frequently. ⏰ 
-- The canister endpoint APIs are not yet 100% fixed. We might introduce breaking changes ❗❗❗
+- You can deploy LLMs up to ~0.5B parameters.
+- The full context window of the LLM is used. (128K tokens for the Qwen2.5 example below.) 
 
 
 # Set up
