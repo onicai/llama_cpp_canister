@@ -1,4 +1,5 @@
 #include "db_chats.h"
+#include "auth.h"
 #include "common.h"
 #include "http.h"
 #include "main_.h"
@@ -201,15 +202,9 @@ bool db_chats_save_conversation(const std::string &conversation,
 // Canister API to retrieve saved chats for authenticated caller
 void get_chats() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
+  if (!is_caller_whitelisted(ic_api)) return;
+
   CandidTypePrincipal caller = ic_api.get_caller();
-  // User must be logged in
-  if (caller.is_anonymous()) {
-    std::string msg = "Unauthorized: You are not logged in.";
-    ic_api.to_wire(CandidTypeVariant{
-        "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +
-                                                         ": " + msg}}});
-    return;
-  }
 
   // Get the principal ID as a string
   std::string principal_id = caller.get_text();

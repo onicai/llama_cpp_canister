@@ -1,4 +1,5 @@
 #include "run.h"
+#include "auth.h"
 #include "common.h"
 #include "db_chats.h"
 #include "http.h"
@@ -27,12 +28,18 @@
 
 void new_chat() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  std::string error_msg;
+  if (!is_caller_whitelisted(ic_api, false)) {
+    error_msg = "Access Denied.";
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::Unauthorized, error_msg);
+    return;
+  }
+
   CandidTypePrincipal caller = ic_api.get_caller();
   std::string principal_id = caller.get_text();
 
   auto [argc, argv, args] = get_args_for_main(ic_api);
-
-  std::string error_msg;
 
   // Create/reset a prompt-cache file to zero length, will reset the LLM state for that conversation
   // Get the cache filename from --prompt-cache in args
@@ -104,16 +111,16 @@ void new_chat() {
 }
 
 void run(IC_API &ic_api, const uint64_t &max_tokens) {
-  CandidTypePrincipal caller = ic_api.get_caller();
-  std::string principal_id = caller.get_text();
-
-  // User must be logged in
-  if (caller.is_anonymous()) {
-    std::string error_msg = "You are not logged in.";
+  std::string error_msg;
+  if (!is_caller_whitelisted(ic_api, false)) {
+    error_msg = "Access Denied.";
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::Unauthorized, error_msg);
     return;
   }
+
+  CandidTypePrincipal caller = ic_api.get_caller();
+  std::string principal_id = caller.get_text();
 
   // Get the data from the wire and prepare arguments for main_
   auto [argc, argv, args] = get_args_for_main(ic_api);

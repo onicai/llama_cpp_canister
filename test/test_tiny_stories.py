@@ -60,6 +60,20 @@ def test__ready(network: str) -> None:
     expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
     assert response == expected_response
 
+def test__new_chat_err(identity_anonymous: Dict[str, str], network: str) -> None:
+    # double check the identity_anonymous fixture worked
+    assert identity_anonymous["identity"] == "anonymous"
+    assert identity_anonymous["principal"] == "2vxsx-fae"
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="new_chat",
+        canister_argument='(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"} })',
+        network=network,
+    )
+    assert "(variant { Err" in response
+
 def test__new_chat(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
@@ -69,6 +83,20 @@ def test__new_chat(network: str) -> None:
         network=network,
     )
     assert "(variant { Ok" in response
+
+def test__run_update_err(identity_anonymous: Dict[str, str], network: str) -> None:
+    # double check the identity_anonymous fixture worked
+    assert identity_anonymous["identity"] == "anonymous"
+    assert identity_anonymous["principal"] == "2vxsx-fae"
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="run_update",
+        canister_argument='(record { args = vec {"--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"} })',
+        network=network,
+    )
+    assert "(variant { Err" in response
 
 def test__run_update(network: str) -> None:
     response = call_canister_api(
@@ -81,6 +109,20 @@ def test__run_update(network: str) -> None:
     assert "(variant { Ok" in response
 
 # -----------
+def test__run_query_err(identity_anonymous: Dict[str, str], network: str) -> None:
+    # double check the identity_anonymous fixture worked
+    assert identity_anonymous["identity"] == "anonymous"
+    assert identity_anonymous["principal"] == "2vxsx-fae"
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="run_query",
+        canister_argument='(record { args = vec {"--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"} })',
+        network=network,
+    )
+    assert "(variant { Err" in response
+
 def test__run_query(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
