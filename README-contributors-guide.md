@@ -4,16 +4,30 @@
 
 Follow steps of [llama_cpp_canister/README/Getting Started](https://github.com/onicai/llama_cpp_canister/blob/main/README.md#getting-started)
 
-# How to debug original llama.cpp
+# How to run & debug original llama.cpp
 
-- clone ggerganov/llama.cpp
-- checkout the proper commit used as root of the onicai branch in llama_cpp_onicai_fork
-- run these commands:
+- Clone ggerganov/llama.cpp  (Do NOT initialize submodules...)
+  ```
+  # Clone it as a sibling repo of llama_cpp_canister
+  git clone https://github.com/ggerganov/llama.cpp.git
+  ```
+- Checkout the proper commit used as root of the onicai branch in llama_cpp_onicai_fork
+  ```
+  git checkout b841d0
+  ```
+- Build with these commands:
   ```
   make clean
   make LLAMA_DEBUG=1 llama-cli
   ```
-- Then, debug using this `.vscode/launch.json`
+- Run with this command:
+  ```
+  ./llama-cli -m ../llama_cpp_canister/models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf --prompt-cache prompt.cache --prompt-cache-all -sp -p "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n" -n 512 -fa -ngl 80
+  ```
+  In above command, the `-fa -ngl 80` arguments are useful only on GPU. We do not use them when calling the IC, because
+  the canister has a CPU only.
+  
+- Debug using this `.vscode/launch.json`
   ```json
   {
       // Use IntelliSense to learn about possible attributes.
@@ -49,6 +63,27 @@ Follow steps of [llama_cpp_canister/README/Getting Started](https://github.com/o
 
 ## Sync fork
 In GitHub, `Sync fork` for master branch of https://github.com/onicai/llama_cpp_onicai_fork
+
+## Fetch the tags from upstream repo
+
+`llama.cpp` continously creates new releases, named `bxxxx`
+
+You can fetch the tags from these releases and add them to our forked repo:
+
+After cloning the `llama_cpp_onicai_fork` repo to you local computer:
+
+```
+# From llama_cpp_onicai_fork
+git remote add upstream https://github.com/ggerganov/llama.cpp.git
+
+# after this, the tags will apear locally
+git fetch upstream --tags
+
+# after this, the tags will appear in GitHub
+git push origin --tags
+
+
+```
 
 ## llama_cpp_onicai_fork: setup a local branch
 Take following steps locally:
