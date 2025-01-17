@@ -126,6 +126,7 @@ service : {
   // Access level
   set_access : (AccessInputRecord) -> (AccessRecordResult);
   get_access : () -> (AccessRecordResult) query;
+  check_access : () -> (StatusCodeRecordResult) query;
 
   // Other admin endpoints
   whoami : () -> (text) query;

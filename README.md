@@ -244,7 +244,7 @@ You can run a smoketest on the deployed LLM:
   pytest -vv test/test_qwen2.py
   ```
 
-## Securing your LLM
+## Access control
 
 By default, only a controller can call the inference endpoints:
 - new_chat
@@ -261,4 +261,7 @@ dfx canister call llama_cpp set_access '(record {level = 1 : nat16})'
 
 # Verify it worked
 dfx canister call llama_cpp get_access
+
+# A caller can check it's access rights with
+dfx canister call llama_cpp check_access
 ```

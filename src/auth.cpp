@@ -50,17 +50,6 @@ std::string get_explanation_() {
   return access_levels[0];
 }
 
-void get_access() {
-  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
-
-  // Return the status over the wire
-  CandidTypeRecord access_record;
-  access_record.append("level", CandidTypeNat16{access_level});
-  access_record.append("explanation", CandidTypeText{get_explanation_()});
-  ic_api.to_wire(CandidTypeVariant{"Ok", CandidTypeRecord{access_record}});
-}
-
 void set_access() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   if (!is_caller_a_controller(ic_api)) return;
@@ -85,4 +74,25 @@ void set_access() {
   access_record.append("level", CandidTypeNat16{access_level});
   access_record.append("explanation", CandidTypeText{get_explanation_()});
   ic_api.to_wire(CandidTypeVariant{"Ok", CandidTypeRecord{access_record}});
+}
+
+void get_access() {
+  IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
+  if (!is_caller_a_controller(ic_api)) return;
+
+  // Return the status over the wire
+  CandidTypeRecord access_record;
+  access_record.append("level", CandidTypeNat16{access_level});
+  access_record.append("explanation", CandidTypeText{get_explanation_()});
+  ic_api.to_wire(CandidTypeVariant{"Ok", CandidTypeRecord{access_record}});
+}
+
+void check_access() {
+  IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
+  if (!is_caller_whitelisted(ic_api)) return;
+
+  CandidTypeRecord status_code_record;
+  status_code_record.append("status_code",
+                            CandidTypeNat16{Http::StatusCode::OK});
+  ic_api.to_wire(CandidTypeVariant{"Ok", status_code_record});
 }
