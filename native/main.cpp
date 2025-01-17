@@ -8,6 +8,7 @@
 
 #include <iostream>
 
+#include "../src/auth.h"
 #include "../src/health.h"
 #include "../src/model.h"
 #include "../src/ready.h"
@@ -23,8 +24,8 @@ int main() {
   MockIC mockIC(exit_on_fail);
 
   test_canister_functions(mockIC);
-  test_qwen2(mockIC);
   test_tiny_stories(mockIC);
+  test_qwen2(mockIC);
 
   // returns 1 if any tests failed
   return mockIC.test_summary();

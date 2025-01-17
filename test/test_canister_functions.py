@@ -29,3 +29,77 @@ def test__health(network: str) -> None:
     )
     expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
     assert response == expected_response
+
+def test__set_access_err(identity_anonymous: Dict[str, str], network: str) -> None:
+    # double check the identity_anonymous fixture worked
+    assert identity_anonymous["identity"] == "anonymous"
+    assert identity_anonymous["principal"] == "2vxsx-fae"
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="set_access",
+        canister_argument='(record { level = 0 : nat16 })',
+        network=network,
+    )
+    expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
+    assert response == expected_response
+
+def test__get_access_err(identity_anonymous: Dict[str, str], network: str) -> None:
+    # double check the identity_anonymous fixture worked
+    assert identity_anonymous["identity"] == "anonymous"
+    assert identity_anonymous["principal"] == "2vxsx-fae"
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_access",
+        canister_argument='(record { level = 0 : nat16 })',
+        network=network,
+    )
+    expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
+    assert response == expected_response
+
+def test__set_access_0(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="set_access",
+        canister_argument='(record { level = 0 : nat16 })',
+        network=network,
+    )
+    expected_response = '(variant { Ok = record { explanation = "Only controllers"; level = 0 : nat16;} })'
+    assert response == expected_response
+
+def test__get_access_0(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_access",
+        canister_argument='(record { level = 0 : nat16 })',
+        network=network,
+    )
+    expected_response = '(variant { Ok = record { explanation = "Only controllers"; level = 0 : nat16;} })'
+    assert response == expected_response
+
+def test__set_access_1(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="set_access",
+        canister_argument='(record { level = 1 : nat16 })',
+        network=network,
+    )
+    expected_response = '(variant { Ok = record { explanation = "All except anonymous"; level = 1 : nat16;} })'
+    assert response == expected_response
+
+def test__get_access_1(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_access",
+        canister_argument='(record { level = 1 : nat16 })',
+        network=network,
+    )
+    expected_response = '(variant { Ok = record { explanation = "All except anonymous"; level = 1 : nat16;} })'
+    assert response == expected_response
