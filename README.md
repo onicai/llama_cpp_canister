@@ -119,7 +119,7 @@ WARNING: Currently, the canister can only be build on a `Mac` !
 - Upload gguf file
 
   The canister is now up & running, and ready to be loaded with a gguf file. In
-  this example we use the powerful qwen2.5-0.5b-instruct-q8_0.gguf model.
+  this example we use the powerful `qwen2.5-0.5b-instruct-q8_0.gguf` model.
 
   - Download the model from huggingface: https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF
 
