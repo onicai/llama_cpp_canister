@@ -30,6 +30,10 @@ The solution is to hide the VARIABLES section in the debug window, and rely on t
   make clean
   make LLAMA_DEBUG=1 llama-cli
   ```
+- Run with Notebook
+
+  File: scripts/prompt-design.ipynb
+
 - Run with this command:
   ```
   ./llama-cli -m ../llama_cpp_canister/models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf --prompt-cache prompt.cache --prompt-cache-all -sp -p "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n" -n 512 -fa -ngl 80
