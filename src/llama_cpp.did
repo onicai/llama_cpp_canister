@@ -1,24 +1,24 @@
 // Always return a single record wrapped in a variant
 type StatusCode = nat16;
 
-type InputRecord = record { 
+type InputRecord = record {
   args : vec text; // the CLI args of llama.cpp/examples/main, as a list of strings
 };
 
 // to avoid hitting the IC's instructions limit
 // 0 = no limit (default)
-type MaxTokensRecord = record { 
+type MaxTokensRecord = record {
   max_tokens_update : nat64;
   max_tokens_query : nat64;
 };
 
-type RunOutputRecord = record { 
-  status_code: StatusCode;  
-  output: text;
-  conversation: text;
-  error: text;
-  prompt_remaining: text;
-  generated_eog: bool;
+type RunOutputRecord = record {
+  status_code : StatusCode;
+  output : text;
+  conversation : text;
+  error : text;
+  prompt_remaining : text;
+  generated_eog : bool;
 };
 type OutputRecordResult = variant {
   Ok : RunOutputRecord;
@@ -39,36 +39,36 @@ type StatusCodeRecordResult = variant {
 type StatusCodeRecord = record { status_code : nat16 };
 
 // -----------------------------------------------------
-type FileDownloadInputRecord = record { 
-  filename: text; 
-  chunksize: nat64; 
-  offset: nat64; 
+type FileDownloadInputRecord = record {
+  filename : text;
+  chunksize : nat64;
+  offset : nat64;
 };
 type FileDownloadRecordResult = variant {
   Err : ApiError;
   Ok : FileDownloadRecord;
 };
 type FileDownloadRecord = record {
-  chunk : vec nat8;   // the chunk read from the file, as a vec of bytes
-  chunksize : nat64;  // the chunksize in bytes
-  filesize : nat64;   // the total filesize in bytes
-  offset: nat64;      // the chunk starts here (bytes from beginning)
-  done : bool;        // true if there are no more bytes to read
+  chunk : vec nat8; // the chunk read from the file, as a vec of bytes
+  chunksize : nat64; // the chunksize in bytes
+  filesize : nat64; // the total filesize in bytes
+  offset : nat64; // the chunk starts here (bytes from beginning)
+  done : bool; // true if there are no more bytes to read
 };
 
 // -----------------------------------------------------
-type FileUploadInputRecord = record { 
-  filename: text;
-  chunk : vec nat8;   // the chunk being uploaded, as a vec of bytes
-  chunksize: nat64;   // the chunksize (allowing sanity check)
-  offset: nat64;      // the offset where to write the chunk
+type FileUploadInputRecord = record {
+  filename : text;
+  chunk : vec nat8; // the chunk being uploaded, as a vec of bytes
+  chunksize : nat64; // the chunksize (allowing sanity check)
+  offset : nat64; // the offset where to write the chunk
 };
 type FileUploadRecordResult = variant {
   Err : ApiError;
   Ok : FileUploadRecord;
 };
 type FileUploadRecord = record {
-  filesize : nat64;   // the total filesize in bytes after writing chunk at offset
+  filesize : nat64; // the total filesize in bytes after writing chunk at offset
 };
 
 // -----------------------------------------------------
@@ -78,8 +78,8 @@ type GetChatsRecordResult = variant {
 };
 type GetChatsRecord = record {
   chats : vec record {
-    timestamp: text;
-    chat: text;
+    timestamp : text;
+    chat : text;
   };
 };
 
@@ -87,8 +87,8 @@ type GetChatsRecord = record {
 // Access level
 // 0 = only controllers
 // 1 = all except anonymous
-type AccessInputRecord = record { 
-  level: nat16;
+type AccessInputRecord = record {
+  level : nat16;
 };
 type AccessRecordResult = variant {
   Err : ApiError;
@@ -110,7 +110,7 @@ service : {
   load_model : (InputRecord) -> (OutputRecordResult);
   set_max_tokens : (MaxTokensRecord) -> (StatusCodeRecordResult);
   get_max_tokens : () -> (MaxTokensRecord) query;
-  
+
   // up & down load of files
   file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;
   file_upload_chunk : (FileUploadInputRecord) -> (FileUploadRecordResult);
@@ -118,7 +118,8 @@ service : {
   // Inference endpoints
   new_chat : (InputRecord) -> (OutputRecordResult);
   run_query : (InputRecord) -> (OutputRecordResult) query;
-  run_update: (InputRecord) -> (OutputRecordResult);
+  run_update : (InputRecord) -> (OutputRecordResult);
+  remove_prompt_cache : (InputRecord) -> (OutputRecordResult);
 
   // Chats retrieval
   get_chats : () -> (GetChatsRecordResult) query;
@@ -130,5 +131,5 @@ service : {
 
   // Other admin endpoints
   whoami : () -> (text) query;
-    
-}
+
+};

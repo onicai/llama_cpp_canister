@@ -162,17 +162,17 @@ WARNING: Currently, the canister can only be build on a `Mac` !
 
     ```bash
     # Start a new chat - this resets the prompt-cache for this conversation
-    dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"} })'
+    dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
 
     # Repeat this call until `prompt_remaining` in the response is empty. 
     # This ingest the prompt into the prompt-cache, using multiple update calls
     # Important: KEEP SENDING THE FULL PROMPT 
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "512" } })' 
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "512" } })' 
     ...
 
     # Once `prompt_remaining` in the response is empty, repeat this call, with an empty prompt, until `generated_eog=true`
     # Now the LLM is generating new tokens !
-    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; ""; "-n"; "512" } })'
+    dfx canister call llama_cpp run_update '(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; ""; "-n"; "512" } })'
 
     ...
 
@@ -201,6 +201,9 @@ WARNING: Currently, the canister can only be build on a `Mac` !
     #      ;"--print-token-count"; "1"     #
     ########################################
 
+    # Remove the prompt cache when done - this keeps stable memory usage at a minimum
+    dfx canister call llama_cpp remove_prompt_cache '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
+    
     ```
 
     Note: The sequence of update calls to the canister is required because the Internet Computer has a limitation
@@ -221,6 +224,7 @@ WARNING: Currently, the canister can only be build on a `Mac` !
     ```
     dfx canister call llama_cpp get_chats
     ```
+
 
 
 - You can download the `main.log` file from the canister with:

@@ -4,6 +4,16 @@
 
 Follow steps of [llama_cpp_canister/README/Getting Started](https://github.com/onicai/llama_cpp_canister/blob/main/README.md#getting-started)
 
+# VS Code debugger
+
+## lldb-mi hangs
+
+On the Mac, there is an issue with lldb-mi: https://github.com/microsoft/vscode-cpptools/issues/7240
+
+Upon stopping at a breakpoint in a new module, lldb-mi will try to load all local variables, and it goes into an endless loop.
+
+The solution is to hide the VARIABLES section in the debug window, and rely on the WATCH section instead.
+
 # How to run & debug original llama.cpp
 
 - Clone ggerganov/llama.cpp  (Do NOT initialize submodules...)
