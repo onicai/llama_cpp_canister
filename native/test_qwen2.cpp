@@ -87,59 +87,59 @@ void test_qwen2(MockIC &mockIC) {
   for (int i = 0; i < 2; ++i) {
     // -----------------------------------------------------------------------------
     // Start a new chat, which will remove the prompt-cache file if it exists
-    // '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"} })' ->
-    // '(variant { Ok = record { status_code = 200 : nat16; output = "Ready to start a new chat for cache file .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/sessions/my_cache/prompt.cache"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
+    // '(record { args = vec {"--prompt-cache"; "prompt.cache"} })' ->
+    // '(variant { Ok = record { status_code = 200 : nat16; output = "Ready to start a new chat for cache file .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/sessions/prompt.cache"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
     mockIC.run_test(
         std::string(__func__) + ": " + "new_chat " + std::to_string(i) + " - " +
             model,
         new_chat,
-        "4449444c026c01dd9ad28304016d710100020e2d2d70726f6d70742d6361636865156d795f63616368652f70726f6d70742e6361636865",
-        "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a01000101009701526561647920746f2073746172742061206e6577206368617420666f722063616368652066696c65202e63616e69737465725f63616368652f6578706d742d67747873772d696e66746a2d747461626a2d71687035732d6e6f7a75702d6e3362626f2d6b377a766e2d64673468652d6b6e6163332d6c61652f73657373696f6e732f6d795f63616368652f70726f6d70742e63616368650000c8000000",
+        "4449444c026c01dd9ad28304016d710100020e2d2d70726f6d70742d63616368650c70726f6d70742e6361636865",
+        "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a01000101008e01526561647920746f2073746172742061206e6577206368617420666f722063616368652066696c65202e63616e69737465725f63616368652f6578706d742d67747873772d696e66746a2d747461626a2d71687035732d6e6f7a75702d6e3362626f2d6b377a766e2d64673468652d6b6e6163332d6c61652f73657373696f6e732f70726f6d70742e63616368650000c8000000",
         silent_on_trap, my_principal);
 
     // -----------------------------------------------------------------------------
     // -sp  : special token output enabled
-    // '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })' ->
+    // '(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })' ->
     // -> '(variant { Ok = record { status_code = 200 : nat16; error = ""; output = ""; input = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>" ; prompt_remaining = "user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"; generated_eog=false : bool} })'
     mockIC.run_test(
         std::string(__func__) + ": " + "run_update prompt step 1 for chat " +
             std::to_string(i) + " - " + model,
         run_update,
-        "4449444c026c01dd9ad28304016d710100080e2d2d70726f6d70742d6361636865156d795f63616368652f70726f6d70742e6361636865122d2d70726f6d70742d63616368652d616c6c032d7370022d6e03353132022d708a013c7c696d5f73746172747c3e73797374656d0a596f752061726520612068656c7066756c20617373697374616e742e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e757365720a4578706c61696e204c61726765204c616e6775616765204d6f64656c732e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e617373697374616e740a",
+        "4449444c026c01dd9ad28304016d710100080e2d2d70726f6d70742d63616368650c70726f6d70742e6361636865122d2d70726f6d70742d63616368652d616c6c032d7370022d6e03353132022d708a013c7c696d5f73746172747c3e73797374656d0a596f752061726520612068656c7066756c20617373697374616e742e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e757365720a4578706c61696e204c61726765204c616e6775616765204d6f64656c732e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e617373697374616e740a",
         "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a010001010000463c7c696d5f73746172747c3e73797374656d0a596f752061726520612068656c7066756c20617373697374616e742e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e00c80044757365720a4578706c61696e204c61726765204c616e6775616765204d6f64656c732e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e617373697374616e740a00",
         silent_on_trap, my_principal);
 
     // -----------------------------------------------------------------------------
     // -sp  : special token output enabled
-    // '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })' ->
+    // '(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })' ->
     // -> '(variant { Ok = record { status_code = 200 : nat16; error = ""; output = ""; input = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant"; prompt_remaining = "\n";} generated_eog=false : bool})'
     mockIC.run_test(
         std::string(__func__) + ": " + "run_update prompt step 2 for chat " +
             std::to_string(i) + " - " + model,
         run_update,
-        "4449444c026c01dd9ad28304016d710100080e2d2d70726f6d70742d6361636865156d795f63616368652f70726f6d70742e6361636865122d2d70726f6d70742d63616368652d616c6c032d7370022d6e03353132022d708a013c7c696d5f73746172747c3e73797374656d0a596f752061726520612068656c7066756c20617373697374616e742e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e757365720a4578706c61696e204c61726765204c616e6775616765204d6f64656c732e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e617373697374616e740a",
+        "4449444c026c01dd9ad28304016d710100080e2d2d70726f6d70742d63616368650c70726f6d70742e6361636865122d2d70726f6d70742d63616368652d616c6c032d7370022d6e03353132022d708a013c7c696d5f73746172747c3e73797374656d0a596f752061726520612068656c7066756c20617373697374616e742e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e757365720a4578706c61696e204c61726765204c616e6775616765204d6f64656c732e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e617373697374616e740a",
         "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a01000101000089013c7c696d5f73746172747c3e73797374656d0a596f752061726520612068656c7066756c20617373697374616e742e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e757365720a4578706c61696e204c61726765204c616e6775616765204d6f64656c732e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e617373697374616e7400c800010a00",
         silent_on_trap, my_principal);
 
     // -----------------------------------------------------------------------------
-    // '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })' ->
+    // '(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })' ->
     // -> can no longer check it, because the LLM generated tokens
     mockIC.run_test(
         std::string(__func__) + ": " + "run_update prompt step 3 for chat " +
             std::to_string(i) + " - " + model,
         run_update,
-        "4449444c026c01dd9ad28304016d710100080e2d2d70726f6d70742d6361636865156d795f63616368652f70726f6d70742e6361636865122d2d70726f6d70742d63616368652d616c6c032d7370022d6e03353132022d708a013c7c696d5f73746172747c3e73797374656d0a596f752061726520612068656c7066756c20617373697374616e742e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e757365720a4578706c61696e204c61726765204c616e6775616765204d6f64656c732e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e617373697374616e740a",
+        "4449444c026c01dd9ad28304016d710100080e2d2d70726f6d70742d63616368650c70726f6d70742e6361636865122d2d70726f6d70742d63616368652d616c6c032d7370022d6e03353132022d708a013c7c696d5f73746172747c3e73797374656d0a596f752061726520612068656c7066756c20617373697374616e742e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e757365720a4578706c61696e204c61726765204c616e6775616765204d6f64656c732e3c7c696d5f656e647c3e0a3c7c696d5f73746172747c3e617373697374616e740a",
         "", silent_on_trap, my_principal);
 
     // -----------------------------------------------------------------------------
     // Once there is no prompt_remaining, it is totally ok to send an empty prompt, and just let it generate new tokens
-    // '(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; ""} })' ->
+    // '(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; ""} })' ->
     // -> can no longer check it, because the LLM generated tokens
     mockIC.run_test(
         std::string(__func__) + ": " + "run_update prompt step 4 for chat " +
             std::to_string(i) + " - " + model,
         run_update,
-        "4449444c026c01dd9ad28304016d710100080e2d2d70726f6d70742d6361636865156d795f63616368652f70726f6d70742e6361636865122d2d70726f6d70742d63616368652d616c6c032d7370022d6e03353132022d7000",
+        "4449444c026c01dd9ad28304016d710100080e2d2d70726f6d70742d63616368650c70726f6d70742e6361636865122d2d70726f6d70742d63616368652d616c6c032d7370022d6e03353132022d7000",
         "", silent_on_trap, my_principal);
   }
 
@@ -150,4 +150,15 @@ void test_qwen2(MockIC &mockIC) {
   // Note that the pytest is verifying it in more detail
   mockIC.run_test(std::string(__func__) + ": " + "get_chats - " + model,
                   get_chats, "4449444c0000", "", silent_on_trap, my_principal);
+
+  // -----------------------------------------------------------------------------
+  // Remove the prompt-cache file if it exists
+  // '(record { args = vec {"--prompt-cache"; "prompt.cache"} })' ->
+  // '(variant { Ok = record { status_code = 200 : nat16; output = "Cache file .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/sessions/prompt.cache deleted successfully"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
+  mockIC.run_test(
+      std::string(__func__) + ": " + "remove_prompt_cache " + model,
+      remove_prompt_cache,
+      "4449444c026c01dd9ad28304016d710100020e2d2d70726f6d70742d63616368650c70726f6d70742e6361636865",
+      "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a0100010100850143616368652066696c65202e63616e69737465725f63616368652f6578706d742d67747873772d696e66746a2d747461626a2d71687035732d6e6f7a75702d6e3362626f2d6b377a766e2d64673468652d6b6e6163332d6c61652f73657373696f6e732f70726f6d70742e63616368652064656c65746564207375636365737366756c6c790000c8000000",
+      silent_on_trap, my_principal);
 }

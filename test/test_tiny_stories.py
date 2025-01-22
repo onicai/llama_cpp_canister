@@ -69,7 +69,7 @@ def test__new_chat_err(identity_anonymous: Dict[str, str], network: str) -> None
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
         canister_method="new_chat",
-        canister_argument='(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"} })',
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
         network=network,
     )
     assert "(variant { Err" in response
@@ -79,7 +79,7 @@ def test__new_chat(network: str) -> None:
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
         canister_method="new_chat",
-        canister_argument='(record { args = vec {"--prompt-cache"; "my_cache/prompt.cache"} })',
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
         network=network,
     )
     assert "(variant { Ok" in response
@@ -129,6 +129,16 @@ def test__run_query(network: str) -> None:
         canister_name=CANISTER_NAME,
         canister_method="run_query",
         canister_argument='(record { args = vec {"--prompt"; "Patrick loves ice-cream. On a hot day "; "--n-predict"; "20"; "--ctx-size"; "128"} })',
+        network=network,
+    )
+    assert "(variant { Ok" in response
+
+def test__remove_prompt_cache(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="remove_prompt_cache",
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
         network=network,
     )
     assert "(variant { Ok" in response

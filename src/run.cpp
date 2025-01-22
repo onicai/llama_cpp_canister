@@ -93,11 +93,100 @@ void new_chat() {
     } else {
       msg = "Cache file " + path_session + " not found. Nothing to delete.";
     }
+  } else {
+    error_msg = "ERROR: path_session is empty ";
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
+    return;
   }
   std::cout << msg << std::endl;
 
   // Simpler message back to the wire
   msg = "Ready to start a new chat for cache file " + path_session;
+
+  // Return output over the wire
+  CandidTypeRecord r_out;
+  r_out.append("status_code", CandidTypeNat16{Http::StatusCode::OK}); // 200
+  r_out.append("conversation", CandidTypeText{""});
+  r_out.append("output", CandidTypeText{msg});
+  r_out.append("error", CandidTypeText{""});
+  r_out.append("prompt_remaining", CandidTypeText{""});
+  r_out.append("generated_eog", CandidTypeBool{false});
+  ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
+}
+
+void remove_prompt_cache() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  std::string error_msg;
+  if (!is_caller_whitelisted(ic_api, false)) {
+    error_msg = "Access Denied.";
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::Unauthorized, error_msg);
+    return;
+  }
+
+  CandidTypePrincipal caller = ic_api.get_caller();
+  std::string principal_id = caller.get_text();
+
+  auto [argc, argv, args] = get_args_for_main(ic_api);
+
+  // Get the cache filename from --prompt-cache in args
+  gpt_params params;
+  if (!gpt_params_parse(argc, argv.data(), params)) {
+    error_msg = "Cannot parse args.";
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
+    return;
+  }
+
+  // // Create a new file to save this chat for this prinicipal
+  // if (!db_chats_new(principal_id, error_msg)) {
+  //   send_output_record_result_error_to_wire(
+  //       ic_api, Http::StatusCode::InternalServerError, error_msg);
+  //   return;
+  // }
+
+  // // Each principal can only save N chats
+  // if (!db_chats_clean(principal_id, error_msg)) {
+  //   send_output_record_result_error_to_wire(
+  //       ic_api, Http::StatusCode::InternalServerError, error_msg);
+  //   return;
+  // }
+
+  // Each principal has their own cache folder
+  std::string path_session = params.path_prompt_cache;
+  std::string canister_path_session;
+  if (!get_canister_path_session(path_session, principal_id,
+                                 canister_path_session, error_msg)) {
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
+    return;
+  }
+  path_session = canister_path_session;
+
+  std::string msg;
+  if (!path_session.empty()) {
+    // Remove the file if it exists
+    if (std::filesystem::exists(path_session)) {
+      bool success = std::filesystem::remove(path_session);
+      if (success) {
+        msg = "Cache file " + path_session + " deleted successfully";
+      } else {
+        error_msg = "Error deleting cache file " + path_session;
+        send_output_record_result_error_to_wire(
+            ic_api, Http::StatusCode::InternalServerError, error_msg);
+        return;
+      }
+    } else {
+      msg = "Cache file " + path_session + " not found. Nothing to delete.";
+    }
+  } else {
+    error_msg = "ERROR: path_session is empty ";
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
+    return;
+  }
+  std::cout << msg << std::endl;
 
   // Return output over the wire
   CandidTypeRecord r_out;
