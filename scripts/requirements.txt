@@ -1,3 +1,5 @@
+ipykernel
+jupyter_black
 requests
 python-dotenv
 black
