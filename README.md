@@ -201,6 +201,9 @@ WARNING: Currently, the canister can only be build on a `Mac` !
     #      ;"--print-token-count"; "1"     #
     ########################################
 
+    # Remove the prompt cache when done - this keeps stable memory usage at a minimum
+    dfx canister call llama_cpp remove_prompt_cache '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
+    
     ```
 
     Note: The sequence of update calls to the canister is required because the Internet Computer has a limitation
@@ -221,6 +224,7 @@ WARNING: Currently, the canister can only be build on a `Mac` !
     ```
     dfx canister call llama_cpp get_chats
     ```
+
 
 
 - You can download the `main.log` file from the canister with:
