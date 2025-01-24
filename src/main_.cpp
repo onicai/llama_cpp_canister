@@ -361,10 +361,10 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     // Should not run without any tokens
     if (embd_inp.empty()) {
         if (add_bos) {
-            embd_inp.push_back(llama_token_bos(model));
-            LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
+            embd_inp.push_back(llama_vocab_bos(vocab));
+            LOG_WRN("embd_inp was considered empty and bos was added: %s\n", string_from(ctx, embd_inp).c_str());
         } else {
-            LOG_TEE("error: input is empty\n");
+            LOG_ERR("input is empty\n");
             return -1;
         }
     }
@@ -719,7 +719,7 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
                     // ICPP-PATCH-START
                     // Keep track of the processed conversation tokens and the remaining prompt
                     int id = embd[i];
-                    const std::string token_str = llama_token_to_piece(ctx, id, params.special);
+                    const std::string token_str = common_token_to_piece(ctx, id, params.special);
                     conversation_ss << token_str;
 
                     // if (prompt_remaining.find(token_str) == 0) {
@@ -1164,10 +1164,11 @@ void free_ctx() {
 }
 
 // TODO-615212 -- Make sure this is correct
+//                llama_model_free is a replacement for llama_free_model
 //                LEAVE IT IN
 void free_model() {
     if (g_model && *g_model) {
-        llama_free_model(*g_model);
+        llama_model_free(*g_model);
         *g_model = nullptr;
         g_model = nullptr;
     }

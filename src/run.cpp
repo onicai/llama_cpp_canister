@@ -7,6 +7,8 @@
 #include "max_tokens.h"
 #include "utils.h"
 
+#include "arg.h"
+
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -26,6 +28,11 @@
   (-) run_update
 */
 
+
+static void print_usage(int argc, char ** argv) {
+  // do nothing function
+}
+
 void new_chat() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   std::string error_msg;
@@ -43,8 +50,8 @@ void new_chat() {
 
   // Create/reset a prompt-cache file to zero length, will reset the LLM state for that conversation
   // Get the cache filename from --prompt-cache in args
-  gpt_params params;
-  if (!gpt_params_parse(argc, argv.data(), params)) {
+  common_params params;
+  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN, print_usage)) {
     error_msg = "Cannot parse args.";
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, error_msg);
@@ -131,8 +138,8 @@ void remove_prompt_cache() {
   auto [argc, argv, args] = get_args_for_main(ic_api);
 
   // Get the cache filename from --prompt-cache in args
-  gpt_params params;
-  if (!gpt_params_parse(argc, argv.data(), params)) {
+  common_params params;
+  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN, print_usage)) {
     error_msg = "Cannot parse args.";
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, error_msg);

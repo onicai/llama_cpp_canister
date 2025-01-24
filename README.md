@@ -47,6 +47,7 @@ WARNING: Currently, the canister can only be build on a `Mac` !
    cd src
    git clone git@github.com:onicai/llama_cpp_onicai_fork.git
 
+TODO - DO WE STILL NEED THIS???
    # Initialize the submodules of the llama_cpp_onicai_fork repo
    cd llama_cpp_onicai_fork
    git submodule init
@@ -203,7 +204,7 @@ WARNING: Currently, the canister can only be build on a `Mac` !
 
     # Remove the prompt cache when done - this keeps stable memory usage at a minimum
     dfx canister call llama_cpp remove_prompt_cache '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
-    
+
     ```
 
     Note: The sequence of update calls to the canister is required because the Internet Computer has a limitation
