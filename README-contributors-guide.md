@@ -190,6 +190,16 @@ meld llama_cpp_onicai_fork/src/llama-vocab.cpp llama_cpp_onicai_fork_<git-sha-ol
 - add `#include "ic_api.h"`
 - replace `throw std::runtime_error` with `IC_API::trap`
 
+#### llama_cpp_onicai_fork/src/llama-impl.cpp
+- no modifications needed for the IC
+
+#### src/llama_cpp_onicai_fork/src/llama-context.cpp
+- add `#include "ic_api.h"`
+- replace `throw std::runtime_error` with `IC_API::trap`
+
+#### src/llama_cpp_onicai_fork/src/llama-arch.cpp
+- no modifications needed for the IC
+
 #### llama_cpp_onicai_fork/src/unicode-data.cpp
 - no modifications needed for the IC
 
@@ -199,11 +209,40 @@ meld llama_cpp_onicai_fork/src/llama-vocab.cpp llama_cpp_onicai_fork_<git-sha-ol
 - replace `throw std::invalid_argument` with `IC_API::trap`
 - outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
 
+#### llama_cpp_onicai_fork/src/llama-kv-cache.cpp
+- no modifications needed for the IC
+
+#### llama_cpp_onicai_fork/src/llama-chat.cpp
+- outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
+
+#### llama_cpp_onicai_fork/src/llama-mmap.cpp
+- add `#include "ic_api.h"`
+- replace `throw std::runtime_error` with `IC_API::trap`
+
+#### llama_cpp_onicai_fork/src/llama-model.cpp
+- add `#include "ic_api.h"`
+- replace `throw std::runtime_error` with `IC_API::trap`
+- outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
+
+#### llama_cpp_onicai_fork/src/llama-batch.cpp
+- no modifications needed for the IC
+
+#### llama_cpp_onicai_fork/src/llama-adapter.cpp
+- add `#include "ic_api.h"`
+- replace `throw std::runtime_error` with `IC_API::trap`
+- outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
+
+#### llama_cpp_onicai_fork/src/llama-model-loader.cpp
+- add `#include "ic_api.h"`
+- replace `throw std::runtime_error` with `IC_API::trap`
+
+#### llama_cpp_onicai_fork/src/llama-hparams.cpp
+- no modifications needed for the IC
+
 #### llama_cpp_onicai_fork/common/arg.cpp
 - add `#include "ic_api.h"`
 - replace `throw std::runtime_error` with `IC_API::trap`
 - replace `throw std::invalid_argument` with `IC_API::trap`
-- return dummy values (unreachable) after each IC_API::trap
 - outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
 
 #### llama_cpp_onicai_fork/common/json-schema-to-grammar.cpp
@@ -243,6 +282,11 @@ extern llama_model ** g_model; // The global variable from main_.cpp
 - outcomment #ifdef LLAMA_USE_CURL
   Compare to changes made last time (!)
 
+#### llama_cpp_onicai_fork/common/log.cpp
+- Remove all threading logic
+  #include <mutex>
+  #include <thread>
+
 #### llama_cpp_onicai_fork/ggml/src/ggml-backend.cpp
 No updates needed for icpp-pro
 
@@ -263,6 +307,12 @@ No updates needed for icpp-pro
 
 #### llama_cpp_onicai_fork/ggml/src/ggml-threading.cpp
 - outcomment all code related to threading
+
+#### llama_cpp_onicai_fork/ggml/src/ggml-backend-reg.cpp
+No updates needed for icpp-pro
+
+#### llama_cpp_onicai_fork/ggml/src/gguf.cpp
+- outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
 
 ---
 ### headers to modify
@@ -295,9 +345,6 @@ git push origin onicai-<git-sha-old>:onicai-<git-sha-old>
 
 ------------
 TODO: search in code files for: TODO-615212
-
-(-) main_.cpp includes a new file: `llama_cpp_onicai_fork/common/chat-template.hpp`
-    This is from Google, and a general chat_template, with tool calling !!!
 
 (-) main_.cpp has a new static `global g_smpl`:
     static common_sampler          ** g_smpl;
@@ -393,6 +440,20 @@ TODO: search in code files for: TODO-615212
           );
       }
       ```
+
+(-) DEBUG: `llama_cpp_onicai_fork/common/log.cpp` step through the logic
+          - verify the outcommented logic makes sense, or if we should just
+            completely remove the pause() & resume() functions.
+
+----------------------------------------------------------
+NOTES:
+
+(-) main_.cpp includes a new file: `llama_cpp_onicai_fork/common/chat-template.hpp`
+    This is from Google, and a general chat_template, with tool calling !!!
+
+(-) All the LLM architectures supported by llama_cpp_canister are listed in 
+    `src/llama_cpp_onicai_fork/src/llama-arch.cpp`
+
 (-) NOTE: `common/grammar-parser.cpp` is no longer there.
           It appears to be fully included in `src/llama-grammar.cpp`
 
