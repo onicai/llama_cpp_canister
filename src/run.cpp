@@ -28,8 +28,7 @@
   (-) run_update
 */
 
-
-static void print_usage(int argc, char ** argv) {
+static void print_usage(int argc, char **argv) {
   // do nothing function
 }
 
@@ -51,7 +50,8 @@ void new_chat() {
   // Create/reset a prompt-cache file to zero length, will reset the LLM state for that conversation
   // Get the cache filename from --prompt-cache in args
   common_params params;
-  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN, print_usage)) {
+  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN,
+                           print_usage)) {
     error_msg = "Cannot parse args.";
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, error_msg);
@@ -139,7 +139,8 @@ void remove_prompt_cache() {
 
   // Get the cache filename from --prompt-cache in args
   common_params params;
-  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN, print_usage)) {
+  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN,
+                           print_usage)) {
     error_msg = "Cannot parse args.";
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, error_msg);
