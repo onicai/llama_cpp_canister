@@ -290,6 +290,21 @@ extern llama_model ** g_model; // The global variable from main_.cpp
 #### llama_cpp_onicai_fork/ggml/src/ggml-backend.cpp
 No updates needed for icpp-pro
 
+#### llama_cpp_onicai_fork/ggml/src/ggml-threading.cpp
+- outcomment all code related to threading
+
+#### llama_cpp_onicai_fork/ggml/src/ggml-backend-reg.cpp
+No updates needed for icpp-pro
+
+#### llama_cpp_onicai_fork/ggml/src/gguf.cpp
+- outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
+
+#### llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu.cpp
+No updates needed for icpp-pro
+
+#### llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu-traits.cpp
+No updates needed for icpp-pro
+
 ---
 ### c_paths
 
@@ -305,14 +320,11 @@ No updates needed for icpp-pro
 #### llama_cpp_onicai_fork/ggml/src/ggml-quants.c
 No updates needed for icpp-pro
 
-#### llama_cpp_onicai_fork/ggml/src/ggml-threading.cpp
-- outcomment all code related to threading
-
-#### llama_cpp_onicai_fork/ggml/src/ggml-backend-reg.cpp
+#### llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu.c
 No updates needed for icpp-pro
 
-#### llama_cpp_onicai_fork/ggml/src/gguf.cpp
-- outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
+#### llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu-quants.c
+No updates needed for icpp-pro
 
 ---
 ### headers to modify
@@ -442,9 +454,12 @@ TODO: search in code files for: TODO-615212
       ```
 
 (-) DEBUG: `llama_cpp_onicai_fork/common/log.cpp` step through the logic
-          - verify the outcommented logic makes sense, or if we should just
-            completely remove the pause() & resume() functions.
+          - Remove the pause() function
+          - Remove the cur.is_end function ?
 
+(-) Monitor memory, and make sure that ctx is freed up...
+    See free_ctx() method that has been outcommented in main_.cpp
+    
 ----------------------------------------------------------
 NOTES:
 

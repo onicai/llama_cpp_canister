@@ -29,6 +29,8 @@ cpp_paths = [
     "src/llama_cpp_onicai_fork/ggml/src/ggml-threading.cpp",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-backend-reg.cpp",
     "src/llama_cpp_onicai_fork/ggml/src/gguf.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu-traits.cpp",
     "src/*.cpp",
 ]
 cpp_include_dirs = [
@@ -38,6 +40,7 @@ cpp_include_dirs = [
     "src/llama_cpp_onicai_fork/ggml/include",
     "src/llama_cpp_onicai_fork/ggml/src",
     "src/llama_cpp_onicai_fork/common",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu",
 ]
 # NOTE: Adding compile flag "-msimd128" might be too much. It will compile everything with simd
 #       Alternative is to add it at granular level in the code, like:
@@ -45,21 +48,24 @@ cpp_include_dirs = [
 #       void __attribute__((target("simd128"))) simd_function() {
 #           // SIMD-specific code here
 #       }
-cpp_compile_flags = ["-DNDEBUG"]
+cpp_compile_flags = ["-DNDEBUG", "-DGGML_USE_CPU"]
 cpp_link_flags = []
 c_paths = [
     "src/llama_cpp_onicai_fork/ggml/src/ggml.c",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-alloc.c",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-quants.c",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu.c",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu-quants.c",
 ]
 c_include_dirs = [
     "src/llama_cpp_onicai_fork",
     "src/llama_cpp_onicai_fork/include",
-    "src/llama_cpp_onicai_fork/ggml/src",
-    "src/llama_cpp_onicai_fork/ggml/include",
     "src/llama_cpp_onicai_fork/common",
+    "src/llama_cpp_onicai_fork/ggml/include",
+    "src/llama_cpp_onicai_fork/ggml/src",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu",
 ]
-c_compile_flags = ["-DNDEBUG", "-msimd128"]
+c_compile_flags = ["-DNDEBUG", "-msimd128", "-DGGML_USE_CPU"]
 post_wasm_function = "scripts.optimize_wasm.main"
 
 [build-native]
@@ -72,8 +78,8 @@ cpp_paths = [
     # "src/llama_cpp_onicai_fork/common/console.cpp",
 ]
 cpp_include_dirs = []
-cpp_compile_flags = ["-DNDEBUG"]
+cpp_compile_flags = ["-DNDEBUG", "-DGGML_USE_CPU"]
 cpp_link_flags = []
 c_paths = []
 c_include_dirs = []
-c_compile_flags = ["-DNDEBUG"]
+c_compile_flags = ["-DNDEBUG", "-DGGML_USE_CPU"]
