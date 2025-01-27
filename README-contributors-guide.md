@@ -263,12 +263,40 @@ make build-info-cpp-wasm
 
 #### llama_cpp_onicai_fork/common/common.cpp
 - add right below `#include llama.h`:
-```C++
-// ICPP-PATCH-START
-#include "ic_api.h"
-extern llama_model ** g_model; // The global variable from main_.cpp
-// ICPP-PATCH-END
-```
+  ```C++
+    // ICPP-PATCH-START
+    #include "ic_api.h"
+    extern llama_model ** g_model; // The global variable from main_.cpp
+    // ICPP-PATCH-END
+  ```
+- In common_init_result, skip loading the model if the --model parameter is not provided:
+  ```C++
+    // ICPP-PATCH-START
+    // Skip loading the model if the --model parameter is not provided
+    if (!params.model.empty()) {
+    // ICPP-PATCH-END
+    
+    ... 
+    model = ...
+    ...
+
+    // ICPP-PATCH-START
+    // Skip loading the model if the --model parameter is not provided
+    } else {
+        // Access the model through g_model and assign it to the local variable
+        model = *g_model;
+    }
+    // ICPP-PATCH-END
+  ```
+- In common_init_result, do NOT transfer ownership of the model pointer:
+  ```C++
+    // ICPP-PATCH-START: 
+    // 'reset' transfers ownership of the model pointer to the std::unique_ptr iparams.model
+    // We do NOT want the model to be freed when the unique_ptr goes out of scope
+    // iparams.model.reset(model);
+    // ICPP-PATCH-END
+  ```
+
 - replace `throw std::runtime_error` with `IC_API::trap`
 - replace `throw std::invalid_argument` with `IC_API::trap`
 - outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
@@ -328,6 +356,16 @@ No updates needed for icpp-pro
 
 ---
 ### headers to modify
+
+#### llama_cpp_onicai_fork/common/common.h
+- Modify this:
+```
+// ICPP-PATCH-START
+// We do NOT load a default model into the canister
+// #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
+#define DEFAULT_MODEL_PATH ""
+// ICPP-PATCH-END
+```
 
 #### llama_cpp_onicai_fork/common/chat-template.hpp
 - replace `throw std::runtime_error` with `IC_API::trap`

@@ -222,6 +222,20 @@ void run(IC_API &ic_api, const uint64_t &max_tokens) {
   // Get the data from the wire and prepare arguments for main_
   auto [argc, argv, args] = get_args_for_main(ic_api);
 
+  common_params params;
+  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN,
+                           print_usage)) {
+    error_msg = "Cannot parse args.";
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
+    return;
+  }
+
+  // If we're going to load a new model, first free the Orthogonally Persisted memory of a previously loaded model
+  if (!params.model.empty()) {
+    icpp_free_model();
+  }
+  
   // Call main_, just like it is called in the llama-cli app
   std::string icpp_error_msg;
   std::ostringstream

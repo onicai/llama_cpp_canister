@@ -156,7 +156,7 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     llama_numa_init(params.numa);
 
     static llama_model * model; // ICPP-PATCH: use static to preserve accross calls
-    static llama_context * ctx; // ICPP-PATCH: use static to preserve accross calls
+    llama_context * ctx;
     common_sampler * smpl = nullptr;
 
     // ICPP-PATCH-START
@@ -165,14 +165,6 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
 
     // Keep track of the prompt portion not yet processed
     prompt_remaining.clear();
-
-    // Skip loading the model if the --model parameter is not provided
-    // if (!params.model.empty()) {  // TODO: REMOVE THIS: WE MOVED THIS CHECK INTO llama_init_from_gpt_params
-    free_ctx();
-    if (!params.model.empty()) {
-        free_model();
-    }
-    // ICPP-PATCH-END
 
     g_model = &model;
     g_ctx = &ctx;
@@ -194,17 +186,23 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
         // ICPP-PATCH-END
         return 1;
     }
-    // ICPP-PATCH-START
-    // Skip loading the model if the --model parameter is not provided
-    // } // TODO: REMOVE THIS: WE MOVED THIS CHECK INTO llama_init_from_gpt_params
     
-    // And return if we are asked to ONLY load the model
+    // ICPP-PATCH-START
+    
+    // Transfer the ownership of the model pointer. so it persists across calls in Orthogonal Persistence.
+    // We manually take control over the memory management of the model pointer, using icpp_free_model() to free it.
+    // NOTE: The release() method of std::unique_ptr relinquishes ownership of the managed 
+    //       object and returns the raw pointer to it. 
+    //       After the call to release(), the std::unique_ptr becomes empty 
+    //       (i.e., it no longer manages any object).
+    model = llama_init.model.release();
+    
+    // Return if we are asked to ONLY load the model
     if (load_model_only) {
         return 0;
     }
     // ICPP-PATCH-END
 
-    // ICPP-TODO-START: This section is completely new...
     const llama_vocab * vocab = llama_model_get_vocab(model);
     auto chat_templates = common_chat_templates_from_model(model, params.chat_template);
 
@@ -240,7 +238,6 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     }
 
     llama_attach_threadpool(ctx, threadpool, threadpool_batch);
-    // ICPP-TODO-END
 
     const int n_ctx_train = llama_model_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
@@ -1124,24 +1121,12 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
 
     // ICPP-PATCH-START
 
-    // TODO-615212 -- This is old code that we had outcommented
-    //                REMOVE
-    // Do NOT free ctx & model storage
-    // -> we made `ctx` & `model` data static, so they are maintained across calls to the LLM
-    // -> we do NOT reset g_ctx & g_model
-    // -> we moved this into a free_model function, which can be called by canister's load_model
-    // llama_free(ctx);
-    // llama_free_model(model);
-
     // TODO-615212 -- Make sure this is correct
     //                LEAVE IT IN
     // Do reset all other static memory
     reset_static_memory();
     // ICPP-PATCH-END
 
-    // TODO-615212 -- Make sure this is now handled in common_sampler_free
-    //                REMOVE
-    // llama_sampling_free(ctx_sampling);
     llama_backend_free();
 
     ggml_threadpool_free_fn(threadpool);
@@ -1153,42 +1138,40 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
 // ICPP-PATCH-START: 
 // functions added for running on IC
 
-// TODO-615212 -- Make sure this is now handled in common_sampler_free
-//                REMOVE
-void free_ctx() {
-    if (g_ctx && *g_ctx) {
-        llama_free(*g_ctx);
-        *g_ctx = nullptr;
-        g_ctx = nullptr;
-    }
-}
-
-// TODO-615212 -- Make sure this is correct
-//                llama_model_free is a replacement for llama_free_model
-//                LEAVE IT IN
-void free_model() {
+// Function to be called by the canister to free the model which is persisted in Orthogonal Persisted memory
+void icpp_free_model() {
     if (g_model && *g_model) {
         llama_model_free(*g_model);
         *g_model = nullptr;
         g_model = nullptr;
     }
 }
-// TODO-615212 -- Make sure this is correct
-//                LEAVE IT IN
+
 void reset_static_memory() {
-    // Tip: to find what must be reset, use a native debug build and stop here 
-    //      in vscode. Then check the static memory section in VARIABLES.
+    /* Tip: to find what must be reset, use a native debug build and stop here 
+            in lldb:
+        
+        lldb ./build-native/mockic.exe
+        (lldb) breakpoint set --name reset_static_memory
+        (lldb) run
+        (lldb) target variable
+    */
 
     // Avoid dangling pointers in static memory
     // -> The data pointed to is re-created each call
-    // -> The data pointed to is cleared automatic, because it is non-static
-    g_output_tokens = nullptr;
+    // -> The data pointed to is cleared automatic, because:
+    //    (-) it is a smart pointer (std::unique_ptr)
+    //    (-) it is non-static
+    
+    g_ctx = nullptr;
+    g_smpl = nullptr;
     g_params = nullptr;
-    g_input_tokens = nullptr;
     g_output_ss = nullptr;
-
+    g_output_tokens = nullptr;
+    g_input_tokens = nullptr;
+    
     // Do not carry over any other values in static memory
-    is_interacting = false;
     need_insert_eot = false;
+    is_interacting = false;
 }
 // ICPP-PATCH-END

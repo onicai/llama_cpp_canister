@@ -9,10 +9,17 @@
 #include "upload.h"
 #include "utils.h"
 
+#include "common.h"
+#include "arg.h"
+
 #include <iostream>
 #include <string>
 
 #include "ic_api.h"
+
+static void print_usage(int argc, char **argv) {
+  // do nothing function
+}
 
 void load_model() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
@@ -21,14 +28,33 @@ void load_model() {
   CandidTypePrincipal caller = ic_api.get_caller();
   std::string principal_id = caller.get_text();
 
+  std::string error_msg;
+
   // Get the data from the wire and prepare arguments for main_
   auto [argc, argv, args] = get_args_for_main(ic_api);
 
-  // Lets go.
-  ready_for_inference = true;
+  common_params params;
+  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN,
+                           print_usage)) {
+    error_msg = "Cannot parse args.";
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
+    return;
+  }
 
-  // First free the OP memory of a previously loaded model
-  free_model();
+  if (!params.model.empty()) {
+    // We're going to load a new model, first free the Orthogonally Persisted memory of a previously loaded model
+    icpp_free_model();
+  } else {
+    error_msg = "--model not provided in args. Do not know what model to load.";
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
+    return;
+  }
+
+
+  // First free the Orthogonally Persisted memory of a previously loaded model
+  icpp_free_model();
 
   // Call main_, just like it is called in the llama-cli app
   std::string icpp_error_msg;
@@ -43,15 +69,8 @@ void load_model() {
 
   // Exit if there was an error
   if (result != 0) {
-    CandidTypeRecord r_out;
-    r_out.append("status_code",
-                 CandidTypeNat16{Http::StatusCode::InternalServerError}); // 500
-    r_out.append("conversation", CandidTypeText{""});
-    r_out.append("output", CandidTypeText{""});
-    r_out.append("error", CandidTypeText{icpp_error_msg});
-    r_out.append("prompt_remaining", CandidTypeText{""});
-    r_out.append("generated_eog", CandidTypeBool{generated_eog});
-    ic_api.to_wire(CandidTypeVariant{"Err", r_out});
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, icpp_error_msg);
     return;
   }
 
