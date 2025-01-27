@@ -235,7 +235,7 @@ void run(IC_API &ic_api, const uint64_t &max_tokens) {
   if (!params.model.empty()) {
     icpp_free_model();
   }
-  
+
   // Call main_, just like it is called in the llama-cli app
   std::string icpp_error_msg;
   std::ostringstream

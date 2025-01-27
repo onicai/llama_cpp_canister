@@ -9,8 +9,8 @@
 #include "upload.h"
 #include "utils.h"
 
-#include "common.h"
 #include "arg.h"
+#include "common.h"
 
 #include <iostream>
 #include <string>
@@ -51,7 +51,6 @@ void load_model() {
         ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
-
 
   // First free the Orthogonally Persisted memory of a previously loaded model
   icpp_free_model();
