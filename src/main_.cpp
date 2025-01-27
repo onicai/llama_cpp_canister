@@ -250,8 +250,13 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     const bool has_chat_template = chat_templates.has_explicit_template && chat_templates.template_default;
     if (params.conversation_mode == COMMON_CONVERSATION_MODE_AUTO) {
         if (has_chat_template) {
-            LOG_INF("%s: chat template is available, enabling conversation mode (disable it with -no-cnv)\n", __func__);
-            params.conversation_mode = COMMON_CONVERSATION_MODE_ENABLED;
+            // ICPP-PATCH-START
+            // conversation mode is not supported in a canister. Do not turn it on by default.
+            // LOG_INF("%s: chat template is available, enabling conversation mode (disable it with -no-cnv)\n", __func__);
+            // params.conversation_mode = COMMON_CONVERSATION_MODE_ENABLED;
+            LOG_INF("%s: chat template is available, but since canisters do not support conversation mode, we use -no-cnv by default.)\n", __func__);
+            params.conversation_mode = COMMON_CONVERSATION_MODE_DISABLED;
+            // ICPP-PATCH-END
         } else {
             params.conversation_mode = COMMON_CONVERSATION_MODE_DISABLED;
         }
