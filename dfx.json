@@ -5,6 +5,16 @@
       "type": "custom",
       "candid": "src/llama_cpp.did",
       "wasm": "build/llama_cpp.wasm"
+    },
+    "llm_0": {
+      "type": "custom",
+      "candid": "src/llama_cpp.did",
+      "wasm": "build/llama_cpp.wasm"
+    },
+    "llm_1": {
+      "type": "custom",
+      "candid": "src/llama_cpp.did",
+      "wasm": "build/llama_cpp.wasm"
     }
   },
   "defaults": {
