@@ -46,12 +46,6 @@ WARNING: Currently, the canister can only be build on a `Mac` !
    # Into the ./src folder
    cd src
    git clone git@github.com:onicai/llama_cpp_onicai_fork.git
-
-TODO - DO WE STILL NEED THIS???
-   # Initialize the submodules of the llama_cpp_onicai_fork repo
-   cd llama_cpp_onicai_fork
-   git submodule init
-   git submodule update
    ```
 
 - Create the file src/llama_cpp_onicai_fork/common/build-info.cpp

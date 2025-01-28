@@ -217,7 +217,10 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     struct ggml_threadpool_params tpp =
             ggml_threadpool_params_from_cpu_params(params.cpuparams);
 
-    set_process_priority(params.cpuparams.priority);
+    // ICPP-PATCH-START
+    // This is not supported in a canister
+    // set_process_priority(params.cpuparams.priority);
+    // ICPP-PATCH-END
 
     struct ggml_threadpool * threadpool_batch = NULL;
     if (!ggml_threadpool_params_match(&tpp, &tpp_batch)) {

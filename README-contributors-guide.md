@@ -235,6 +235,14 @@ meld llama_cpp_onicai_fork/src/llama-vocab.cpp llama_cpp_onicai_fork_<git-sha-ol
 #### llama_cpp_onicai_fork/src/llama-model-loader.cpp
 - add `#include "ic_api.h"`
 - replace `throw std::runtime_error` with `IC_API::trap`
+- outcomment all uses of `validation_result`:
+  ```C++
+    // ICPP-PATCH-START
+    // we do not support check_tensors. It requires threading.
+    // std::vector<std::future<std::pair<ggml_tensor *, bool>>> validation_result;
+    // ICPP-PATCH-END
+    ... several other references to validation_result
+  ```
 
 #### llama_cpp_onicai_fork/src/llama-hparams.cpp
 - no modifications needed for the IC
@@ -244,6 +252,11 @@ meld llama_cpp_onicai_fork/src/llama-vocab.cpp llama_cpp_onicai_fork_<git-sha-ol
 - replace `throw std::runtime_error` with `IC_API::trap`
 - replace `throw std::invalid_argument` with `IC_API::trap`
 - outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
+- outcomment args that require `std::thread`
+- outcomment call to `ggml_backend_load_all();`
+  We are not loading the dynamic backends, because it is calling dlopen which results in
+  undefined symbols during linking.
+  We can skip it, because we already registered the CPU backend as a compile flag.
 
 #### llama_cpp_onicai_fork/common/json-schema-to-grammar.cpp
 - add `#include "ic_api.h"`
@@ -275,7 +288,7 @@ make build-info-cpp-wasm
     // Skip loading the model if the --model parameter is not provided
     if (!params.model.empty()) {
     // ICPP-PATCH-END
-    
+
     ... 
     model = ...
     ...
@@ -296,7 +309,6 @@ make build-info-cpp-wasm
     // iparams.model.reset(model);
     // ICPP-PATCH-END
   ```
-
 - replace `throw std::runtime_error` with `IC_API::trap`
 - replace `throw std::invalid_argument` with `IC_API::trap`
 - outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
@@ -310,6 +322,8 @@ make build-info-cpp-wasm
 - outcomment #ifdef LLAMA_USE_CURL
   Compare to changes made last time (!)
 
+- outcomment `set_process_priority` function
+
 #### llama_cpp_onicai_fork/common/log.cpp
 - Remove all threading logic
   #include <mutex>
@@ -322,13 +336,30 @@ No updates needed for icpp-pro
 - outcomment all code related to threading
 
 #### llama_cpp_onicai_fork/ggml/src/ggml-backend-reg.cpp
-No updates needed for icpp-pro
+- Update dl_handle_deleter, to avoid a call to dlclose that should never happen
+  The linker ends up with undefined if we don't outcomment it
+  ```C++
+  #include "ic_api.h"
+  struct dl_handle_deleter {
+    void operator()(void * handle) {
+        // ICPP-PATCH-START
+        // We are NOT dynamically loading any backend
+        // SO WE SHOULD NEVER GET HERE
+        // Avoid linker error by outcommenting this, but inserting a runtime trap
+        // dlclose(handle);
+        IC_API::trap("THIS SHOULD NEVER HAPPEN - dl_handle_deleter::operator() called");
+        // ICPP-PATCH-END
+      }
+  };
+  ```
 
 #### llama_cpp_onicai_fork/ggml/src/gguf.cpp
 - outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
 
 #### llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu.cpp
-No updates needed for icpp-pro
+- outcomment all code related to signals & threading:
+  - `#include "ggml-threading.h"`
+  - `#include <signal.h>`
 
 #### llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu-traits.cpp
 No updates needed for icpp-pro
@@ -357,6 +388,40 @@ No updates needed for icpp-pro
 ---
 ### headers to modify
 
+#### llama_cpp_onicai_fork/src/llama-model-loader.h
+- add `#include "ic_api.h"`
+- replace `throw std::runtime_error` with `IC_API::trap`
+
+#### llama_cpp_onicai_fork/src/minja.hpp
+- add `#include "ic_api.h"`
+- replace `throw std::runtime_error` with `IC_API::trap`
+- re-define two functions:
+  ```C++
+    // ICPP-PATCH-START
+    // throw not supported, using IC_API::trap instead, which expects a string
+    // std::runtime_error unexpected(const TemplateToken & token) const {
+    //   return std::runtime_error("Unexpected " + TemplateToken::typeToString(token.type)
+    //     + error_location_suffix(*template_str, token.location.pos));
+    // }
+    // std::runtime_error unterminated(const TemplateToken & token) const {
+    //   return std::runtime_error("Unterminated " + TemplateToken::typeToString(token.type)
+    //     + error_location_suffix(*template_str, token.location.pos));
+    // }
+    std::string unexpected(const TemplateToken & token) const {
+      return ("Unexpected " + TemplateToken::typeToString(token.type)
+        + error_location_suffix(*template_str, token.location.pos));
+    }
+    std::string unterminated(const TemplateToken & token) const {
+      return ("Unterminated " + TemplateToken::typeToString(token.type)
+        + error_location_suffix(*template_str, token.location.pos));
+    }
+    // ICPP-PATCH-END
+  ```
+- replace `throw unterminated(**start)` with `IC_API::trap(unterminated(**start))`
+- replace `throw unexpected(**(it-1))` with `IC_API::trap(unexpected(**(it-1)))`
+- replace `throw unexpected(**(it))` with `IC_API::trap(unexpected(**(it)))`
+- outcomment try-catch
+
 #### llama_cpp_onicai_fork/common/common.h
 - Modify this:
 ```
@@ -370,6 +435,9 @@ No updates needed for icpp-pro
 #### llama_cpp_onicai_fork/common/chat-template.hpp
 - replace `throw std::runtime_error` with `IC_API::trap`
 - outcomment `try - catch`. The program will abrupt in case of thrown exceptions.
+
+#### llama_cpp_onicai_fork/ggml/include/ggml.h
+- #define GGML_DEFAULT_N_THREADS  1
 
 ## llama_cpp_onicai_fork: replace `onicai` branch
 
