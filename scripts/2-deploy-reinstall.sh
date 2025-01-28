@@ -64,11 +64,8 @@ do
     output=$(dfx canister call llm_$i health --network $NETWORK_TYPE )
 
     if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
-        echo "llm_$i health check failed. Exiting."
-        echo $output
-        echo "****************************************************************"
-        echo "llm_$i health check failed. Exiting."
-        echo "****************************************************************"
+        echo "llm_$i health check failed."
+        echo $output        
         exit 1
     else
         echo "llm_$i health check succeeded."

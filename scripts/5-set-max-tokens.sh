@@ -9,10 +9,10 @@
 NETWORK_TYPE="local"
 NUM_LLMS_DEPLOYED=1
 
-MAX_TOKENS=128 # stories260Ktok512.gguf
+# MAX_TOKENS=128 # stories260Ktok512.gguf
 # MAX_TOKENS=60 # stories15Mtok4096.gguf
-# MAX_TOKENS=25 # SmolLM2-135M-Instruct-Q4_K_M.gguf
-# MAX_TOKENS=10 # qwen2.5-0.5b-instruct-q8_0.gguf
+# MAX_TOKENS=20 # SmolLM2-135M-Instruct-Q4_K_M.gguf
+MAX_TOKENS=10 # qwen2.5-0.5b-instruct-q8_0.gguf
 
 # Parse command line arguments for network type
 while [ $# -gt 0 ]; do
@@ -52,11 +52,8 @@ do
     output=$(dfx canister call llm_$i health --network $NETWORK_TYPE )
 
     if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
-        echo "llm_$i health check failed. Exiting."
+        echo "llm_$i health check failed"
         echo $output
-        echo "****************************************************************"
-        echo "llm_$i health check failed. Exiting."
-        echo "****************************************************************"
         exit 1
     else
         echo "llm_$i health check succeeded."
@@ -71,11 +68,8 @@ do
 
 
     if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
-        echo "llm_$i set_max_tokens failed. Exiting."
+        echo "llm_$i set_max_tokens failed."
         echo $output
-        echo "****************************************************************"
-        echo "llm_$i set_max_tokens to $MAX_TOKENS failed. Exiting."
-        echo "****************************************************************"
         exit 1
     else
         echo "llm_$i set_max_tokens to $MAX_TOKENS succeeded."

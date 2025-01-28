@@ -13,10 +13,11 @@ NETWORK_TYPE="local"
 NUM_LLMS_DEPLOYED=1
 
 # The gguf model file to upload (Relative to llama_cpp_canister folder)
-MODEL="models/stories260Ktok512.gguf"
+# MODEL="models/stories260Ktok512.gguf"
 # MODEL="models/stories15Mtok4096.gguf"
 # MODEL="models/tensorblock/SmolLM2-135M-Instruct-GGUF/SmolLM2-135M-Instruct-Q4_K_M.gguf"
-# MODEL="models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf"
+MODEL="models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf"
+# MODEL="models/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf"
 
 # Parse command line arguments for network type
 while [ $# -gt 0 ]; do
@@ -56,11 +57,8 @@ do
     output=$(dfx canister call llm_$i health --network $NETWORK_TYPE )
 
     if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
-        echo "llm_$i health check failed. Exiting."
+        echo "llm_$i health check failed."
         echo $output
-        echo "****************************************************************"
-        echo "llm_$i health check failed. Exiting."
-        echo "****************************************************************"
         exit 1
     else
         echo "llm_$i health check succeeded."
@@ -72,11 +70,8 @@ do
     python -m scripts.upload --network $NETWORK_TYPE --canister llm_$i --canister-filename models/model.gguf $MODEL
 
     if [ $? -ne 0 ]; then
-        echo "scripts.upload for llm_$i exited with an error. Exiting the bash script."
+        echo "scripts.upload for llm_$i exited with an error."
         echo $?
-        echo "****************************************************************"
-        echo "scripts.upload for llm_$i exited with an error. Exiting the bash script."
-        echo "****************************************************************"
         exit 1
     fi
 done

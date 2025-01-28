@@ -243,6 +243,7 @@ meld llama_cpp_onicai_fork/src/llama-vocab.cpp llama_cpp_onicai_fork_<git-sha-ol
     // ICPP-PATCH-END
     ... several other references to validation_result
   ```
+- outcomment all uses of `getenv`
 
 #### llama_cpp_onicai_fork/src/llama-hparams.cpp
 - no modifications needed for the IC
@@ -257,6 +258,7 @@ meld llama_cpp_onicai_fork/src/llama-vocab.cpp llama_cpp_onicai_fork_<git-sha-ol
   We are not loading the dynamic backends, because it is calling dlopen which results in
   undefined symbols during linking.
   We can skip it, because we already registered the CPU backend as a compile flag.
+- outcomment all calls to std::getenv
 
 #### llama_cpp_onicai_fork/common/json-schema-to-grammar.cpp
 - add `#include "ic_api.h"`
@@ -330,7 +332,14 @@ make build-info-cpp-wasm
   #include <thread>
 
 #### llama_cpp_onicai_fork/ggml/src/ggml-backend.cpp
-No updates needed for icpp-pro
+- outcomment all uses of `getenv`:
+  ```C++
+    // ICPP-PATCH-START
+    // const char * GGML_SCHED_DEBUG = getenv("GGML_SCHED_DEBUG");
+    // sched->debug = GGML_SCHED_DEBUG ? atoi(GGML_SCHED_DEBUG) : 0;
+    sched->debug = 0;
+    // ICPP-PATCH-END
+  ```
 
 #### llama_cpp_onicai_fork/ggml/src/ggml-threading.cpp
 - outcomment all code related to threading
@@ -423,13 +432,18 @@ No updates needed for icpp-pro
 - outcomment try-catch
 
 #### llama_cpp_onicai_fork/common/common.h
-- Modify this:
+- Modify these:
 ```
-// ICPP-PATCH-START
-// We do NOT load a default model into the canister
-// #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
-#define DEFAULT_MODEL_PATH ""
-// ICPP-PATCH-END
+    // ICPP-PATCH-START
+    // bool use_mmap          = true;  // use mmap for faster loads
+    bool use_mmap          = false;  // not in a canister...
+    // ICPP-PATCH-END
+
+    // ICPP-PATCH-START
+    // We do NOT load a default model into the canister
+    // #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
+    #define DEFAULT_MODEL_PATH ""
+    // ICPP-PATCH-END
 ```
 
 #### llama_cpp_onicai_fork/common/chat-template.hpp
