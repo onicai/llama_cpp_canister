@@ -52,9 +52,6 @@ void load_model() {
     return;
   }
 
-  // First free the Orthogonally Persisted memory of a previously loaded model
-  icpp_free_model();
-
   // Call main_, just like it is called in the llama-cli app
   std::string icpp_error_msg;
   std::ostringstream conversation_ss;
