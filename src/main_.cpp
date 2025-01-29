@@ -1128,10 +1128,7 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     common_sampler_free(smpl);
 
     // ICPP-PATCH-START
-
-    // TODO-615212 -- Make sure this is correct
-    //                LEAVE IT IN
-    // Do reset all other static memory
+    // Reset all static memory we do not want to carry over to the next update call
     reset_static_memory();
     // ICPP-PATCH-END
 
