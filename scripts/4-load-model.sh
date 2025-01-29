@@ -58,7 +58,7 @@ do
     echo "--------------------------------------------------"
     echo "Calling load_model for llm_$i"
     output=$(dfx canister call llm_$i load_model \
-            '(record { args = vec {"--model"; "models/model.gguf";} })' \
+            '(record { args = vec {"--model"; "models/model.gguf"; "--no-warmup";} })' \
             --network "$NETWORK_TYPE")
 
     if ! echo "$output" | grep -q " Ok "; then

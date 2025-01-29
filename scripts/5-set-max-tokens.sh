@@ -12,7 +12,8 @@ NUM_LLMS_DEPLOYED=1
 # MAX_TOKENS=128 # stories260Ktok512.gguf
 # MAX_TOKENS=60 # stories15Mtok4096.gguf
 # MAX_TOKENS=20 # SmolLM2-135M-Instruct-Q4_K_M.gguf
-MAX_TOKENS=10 # qwen2.5-0.5b-instruct-q8_0.gguf
+# MAX_TOKENS=10 # qwen2.5-0.5b-instruct-q8_0.gguf
+MAX_TOKENS=2 # DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf
 
 # Parse command line arguments for network type
 while [ $# -gt 0 ]; do

@@ -28,13 +28,21 @@ Please join our [OpenChat C++ community](https://oc.app/community/cklkv-3aaaa-aa
 
 # Capabilities 🔥
 
-- You can deploy LLMs up to ~0.5B parameters.
-- The full context window of the LLM is used. (128K tokens for the Qwen2.5 example below.) 
-
+- Deploy any LLM available as a gguf file.
+- Our largest so far is DeepSeek-R1 1.5B (See [X](https://x.com/onicaiHQ/status/1884339580851151089)).
 
 # Set up
 
-WARNING: Currently, the canister can only be build on a `Mac` ! 
+The build of the wasm must be done on a `Mac` ! 
+
+- Install dfx:
+
+   ```bash
+   sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
+
+   # Configure your shell
+   source "$HOME/.local/share/dfx/env"
+   ```
 
 - Clone the repo and it's children:
 
@@ -47,12 +55,6 @@ WARNING: Currently, the canister can only be build on a `Mac` !
    cd src
    git clone git@github.com:onicai/llama_cpp_onicai_fork.git
    ```
-
-- Create the file src/llama_cpp_onicai_fork/common/build-info.cpp
-  ```
-  # from ./llama_cpp_canister folder
-  make build-info-cpp-wasm
-  ```
 
 - Create a Python environment with dependencies installed
   
@@ -70,26 +72,14 @@ WARNING: Currently, the canister can only be build on a `Mac` !
    pip install -r requirements.txt
    ```
 
-- Install dfx:
-
-   ```bash
-   sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
-
-   # Configure your shell
-   source "$HOME/.local/share/dfx/env"
-   ```
-
 - Build & Deploy the canister `llama_cpp`:
 
   - Compile & link to WebAssembly (wasm):
     ```bash
+    make build-info-cpp-wasm
     icpp build-wasm
     ```
-    Note: 
-    
-    The first time you run this command, the tool-chain will be installed in ~/.icpp
-    
-    This can take a few minutes, depending on your internet speed and computer.
+    Note: The first time you run this command, the tool-chain will be installed in ~/.icpp
 
   - Start the local network:
     ```bash
@@ -124,24 +114,22 @@ WARNING: Currently, the canister can only be build on a `Mac` !
     ```bash
     python -m scripts.upload --network local --canister llama_cpp --canister-filename models/model.gguf models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf
     ```
+
+  NOTE: In C++, files are stored in stable memory of the canister.
+        They will survive a code upgrade.
   
-  - Only needed after a canister upgrade (`dfx deploy -m upgrade`), re-load the gguf file into Orthogonal Persisted (OP) working memory 
-  
-    This step is already done by scripts.upload above, so you can skip it if you just ran that.
+- Load the gguf file into Orthogonal Persisted (OP) working memory 
 
-    After a canister upgrade, the gguf file in the canister is still there, because it is persisted in 
-    stable memory, but you need to load it into Orthogonal Persisted (working) memory, which is erased during a canister upgrade.
+  ```bash
+  dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/model.gguf";} })'
+  ```
 
-    ```bash
-    dfx canister call llama_cpp load_model '(record { args = vec {"--model"; "models/model.gguf";} })'
-    ```
+- Set the max_tokens for this model, to avoid it hits the IC's instruction limit
+  ```
+  dfx canister call llama_cpp set_max_tokens '(record { max_tokens_query = 10 : nat64; max_tokens_update = 10 : nat64 })'
 
-  - Set the max_tokens for this model, to avoid it hits the IC's instruction limit
-    ```
-    dfx canister call llama_cpp set_max_tokens '(record { max_tokens_query = 10 : nat64; max_tokens_update = 10 : nat64 })'
-
-    dfx canister call llama_cpp get_max_tokens
-    ```
+  dfx canister call llama_cpp get_max_tokens
+  ```
 
 - Chat with the LLM
 
@@ -202,14 +190,13 @@ WARNING: Currently, the canister can only be build on a `Mac` !
     ```
 
     Note: The sequence of update calls to the canister is required because the Internet Computer has a limitation
-    on the number of computations it allows per call. At the moment, only 10 tokens can be generated per call.
+    on the number of instructions it allows per call. For this model, 10 tokens can be generated per update call.
+
     This sequence of update calls is equivalent to using the [ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp) 
     repo directly and running the `llama-cli` locally, with the command:
     ```
-    ./llama-cli -m /models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf --prompt-cache prompt.cache --prompt-cache-all -sp -p "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n" -n 512 -fa -ngl 80 
+    <path-to>/llama-cli -m /models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf --prompt-cache prompt.cache --prompt-cache-all -sp -p "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n" -n 512
     ```
-    In above command, the `-fa -ngl 80` arguments are useful only on GPU. We do not use them when calling the IC, because
-    the canister has a CPU only.
 
   - Retrieving saved chats
 
@@ -220,9 +207,8 @@ WARNING: Currently, the canister can only be build on a `Mac` !
     dfx canister call llama_cpp get_chats
     ```
 
-
-
-- You can download the `main.log` file from the canister with:
+TODO-615212: there is no longer a main.log file?
+- For debug purposes, you can download the `main.log` file from the canister with:
   ```
   python -m scripts.download --network local --canister llama_cpp --local-filename main.log main.log
   ```
