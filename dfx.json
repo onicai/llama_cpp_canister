@@ -3,7 +3,7 @@
   "canisters": {
     "llama_cpp": {
       "type": "custom",
-      "candid": "src/llama_cpp.did",
+      "candid": "build/llama_cpp.did",
       "wasm": "build/llama_cpp.wasm"
     }
   },
