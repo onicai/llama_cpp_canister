@@ -39,7 +39,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: onicai/llama_cpp_onicai_fork
-          ref: onicai  # Specify the branch name here
+          # ref: onicai  # Specify the branch name here
+          ref: onicai-615212  # While working on the upgrade...
           path: src/llama_cpp_onicai_fork
           fetch-depth: 1 # Get just the last commit
           submodules: 'recursive'
