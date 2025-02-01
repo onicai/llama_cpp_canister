@@ -182,21 +182,14 @@ void test_tiny_stories(MockIC &mockIC) {
 
       // -----------------------------------------------------------------------------
       // Remove the log-file file if it exists
-      // '(record { args = vec {"--log-file"; "main.log"} })' -> response
-      std::string response;
-      if (i == 1) {
-        // '(variant { Ok = record { status_code = 200 : nat16; output = "Successfully removed log file: main.log"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
-        response =
-            "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a0100010100275375636365737366756c6c792072656d6f766564206c6f672066696c653a206d61696e2e6c6f670000c8000000";
-      } else {
-        response =
-            "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a0100010100275375636365737366756c6c792072656d6f766564206c6f672066696c653a206d61696e2e6c6f670000c8000000";
-      }
+      // '(record { args = vec {"--log-file"; "main.log"} })' ->
+      // '(variant { Ok = record { status_code = 200 : nat16; output = "Successfully removed log file: main.log"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
       mockIC.run_test(
           std::string(__func__) + ": " + "remove_log_file " + model,
           remove_log_file,
           "4449444c026c01dd9ad28304016d710100020a2d2d6c6f672d66696c65086d61696e2e6c6f67",
-          response, silent_on_trap, my_principal);
+          "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a0100010100275375636365737366756c6c792072656d6f766564206c6f672066696c653a206d61696e2e6c6f670000c8000000",
+          silent_on_trap, my_principal);
     }
   }
 }

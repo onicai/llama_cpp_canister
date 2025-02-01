@@ -142,3 +142,13 @@ def test__remove_prompt_cache(network: str) -> None:
         network=network,
     )
     assert "(variant { Ok" in response
+
+def test__remove_log_file(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="remove_log_file",
+        canister_argument='(record { args = vec {"--log-file"; "main.log"} })',
+        network=network,
+    )
+    assert "(variant { Ok" in response

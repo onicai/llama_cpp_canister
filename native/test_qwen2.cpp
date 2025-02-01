@@ -165,11 +165,11 @@ void test_qwen2(MockIC &mockIC) {
   // -----------------------------------------------------------------------------
   // Remove the log-file file if it exists
   // '(record { args = vec {"--log-file"; "main.log"} })' ->
-  // '(variant { Ok = record { status_code = 200 : nat16; output = "Cache file .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/sessions/main.log deleted successfully"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
+  // '(variant { Ok = record { status_code = 200 : nat16; output = "Successfully removed log file: main.log"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
   mockIC.run_test(
       std::string(__func__) + ": " + "remove_log_file " + model,
-      remove_prompt_cache,
+      remove_log_file,
       "4449444c026c01dd9ad28304016d710100020a2d2d6c6f672d66696c65086d61696e2e6c6f67",
-      "4449444c026b01bc8a01016c06819e846471c897a79907718a88f7f00b719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e010000810143616368652066696c65202e63616e69737465725f63616368652f6578706d742d67747873772d696e66746a2d747461626a2d71687035732d6e6f7a75702d6e3362626f2d6b377a766e2d64673468652d6b6e6163332d6c61652f73657373696f6e732f6d61696e2e6c6f672064656c65746564207375636365737366756c6c790000c8000000",
+      "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a0100010100275375636365737366756c6c792072656d6f766564206c6f672066696c653a206d61696e2e6c6f670000c8000000",
       silent_on_trap, my_principal);
 }
