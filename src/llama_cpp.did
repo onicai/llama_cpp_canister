@@ -120,6 +120,7 @@ service : {
   run_query : (InputRecord) -> (OutputRecordResult) query;
   run_update : (InputRecord) -> (OutputRecordResult);
   remove_prompt_cache : (InputRecord) -> (OutputRecordResult);
+  remove_log_file : (InputRecord) -> (OutputRecordResult);
 
   // Chats retrieval
   get_chats : () -> (GetChatsRecordResult) query;

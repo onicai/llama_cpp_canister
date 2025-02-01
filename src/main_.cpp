@@ -1128,6 +1128,9 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     common_sampler_free(smpl);
 
     // ICPP-PATCH-START
+    // Close log file and reset pointers, so next call will start fresh, with or without logging
+    common_log_set_file(common_log_main(), nullptr);
+
     // Reset all static memory we do not want to carry over to the next update call
     reset_static_memory();
     // ICPP-PATCH-END

@@ -207,10 +207,31 @@ The build of the wasm must be done on a `Mac` !
     dfx canister call llama_cpp get_chats
     ```
 
-TODO-615212: there is no longer a main.log file?
-- For debug purposes, you can download the `main.log` file from the canister with:
-  ```
+- For debug purposes, you can tell the canister to log to a file and download it afterwards:
+
+  ```bash
+  # Start a new chat - this resets the prompt-cache for this conversation
+  dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
+
+  # Pass '"--log-file"; "main.log";' to the `run_update` calls: 
+  
+  # Repeat this call until `prompt_remaining` in the response is empty. 
+  # This ingest the prompt into the prompt-cache, using multiple update calls
+  # Important: KEEP SENDING THE FULL PROMPT 
+  dfx canister call llama_cpp run_update '(record { args = vec {"--log-file"; "main.log"; "--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "512" } })' 
+  ...
+
+  # Once `prompt_remaining` in the response is empty, repeat this call, with an empty prompt, until `generated_eog=true`
+  # Now the LLM is generating new tokens !
+  dfx canister call llama_cpp run_update '(record { args = vec {"--log-file"; "main.log"; "--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; ""; "-n"; "512" } })'
+
+
+  # Download the `main.log` file from the canister:
   python -m scripts.download --network local --canister llama_cpp --local-filename main.log main.log
+
+  # Cleanup, by deleting both the log & prompt.cache files in the canister:
+  dfx canister call llama_cpp remove_prompt_cache '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
+  dfx canister call llama_cpp remove_log_file '(record { args = vec {"--log-file"; "main.log"} })'
   ```
 
 ## Smoke testing the deployed LLM
