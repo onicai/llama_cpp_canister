@@ -21,6 +21,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <format>
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
