@@ -29,8 +29,12 @@ You can try out a variety of fully on-chain LLMs at https://icgpt.onicai.com
 # Capabilities 🔥
 
 - Deploy any LLM available as a gguf file.
-- Our largest so far is DeepSeek-R1 1.5B (See [X](https://x.com/onicaiHQ/status/1884339580851151089)).
 
+  *(The model must be able to produce at least 1 token per update call)*
+
+- Our largest so far is DeepSeek-R1 1.5B (See [X](https://x.com/onicaiHQ/status/1884339580851151089)).
+  
+  
 # Set up
 
 The build of the wasm must be done on a `Mac` ! 

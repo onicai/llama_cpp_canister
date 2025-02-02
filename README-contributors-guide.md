@@ -84,10 +84,15 @@ We need to rethink this logic, but for now it is ok...
 Do NOT merge the `onicai-<git-sha>` branch into the `onicai` branch, but replace it:
 
 ```
+# do the onicai branch management while master branch is checked out
+git checkout master
 git branch -m onicai onicai-<git-sha-old>
 git branch -m onicai-<git-sha-new> onicai
-git push origin onicai:onicai
+git push --force origin onicai:onicai
 git push origin onicai-<git-sha-old>:onicai-<git-sha-old>
+#
+# Switch to the onicai branch, which now contains the <git-sha-new> version
+git checkout onicai
 ```
 
 ## llama_cpp_canister
