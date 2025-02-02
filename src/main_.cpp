@@ -156,7 +156,7 @@ int main_(int argc, char ** argv, std::string principal_id, bool load_model_only
     llama_backend_init();
     llama_numa_init(params.numa);
 
-    static llama_model * model; // ICPP-PATCH: use static to preserve accross calls
+    static llama_model * model; // ICPP-PATCH: use static to preserve across calls
     llama_context * ctx;
     common_sampler * smpl = nullptr;
 
