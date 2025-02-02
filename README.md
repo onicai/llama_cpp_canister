@@ -5,8 +5,11 @@
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
 
-`llama_cpp_canister` allows you to deploy [ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp) as a Smart Contract on the Internet Computer.
+`llama_cpp_canister` allows you to deploy [ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp) as a Smart Contract on the Internet Computer,
+and run an LLM on-chain as the brain for your on-chain AI Agents.
 
+- Run any LLM on-chain via the gguf format 🔥
+- Solves your cybersecurity problem 🔐
 - MIT open source 🧑‍💻
 - Well documented 📝
 - Fully QA'd via CI/CD ✅
@@ -16,15 +19,12 @@
 
 # Try it out
 
-You can try out a deployed version at https://icgpt.onicai.com
+You can try out a variety of fully on-chain LLMs at https://icgpt.onicai.com
 
-# Need help?
+# Need help or have feedback? ❤️
 
-If you decide to use llama_cpp_canister in your ICP dApp, we want to help you.
-
-We do NOT consider llama_cpp_canister "our IP". It is for the broad benefit of DeAI on ICP, and we hope many of you will try it out and use it.
-
-Please join our [OpenChat C++ community](https://oc.app/community/cklkv-3aaaa-aaaar-ar7uq-cai/?ref=6e3y2-4yaaa-aaaaf-araya-cai) for any questions, discussions or feedback. ❤️
+- [OpenChat C++ community](https://oc.app/community/cklkv-3aaaa-aaaar-ar7uq-cai/?ref=6e3y2-4yaaa-aaaaf-araya-cai) 
+- [Forum: Llama.cpp on the Internet Computer](https://forum.dfinity.org/t/llama-cpp-on-the-internet-computer/33471?u=icpp)
 
 # Capabilities 🔥
 
