@@ -1,9 +1,14 @@
 {
   "version": 1,
   "canisters": {
-    "llama_cpp": {
+    "llm_0": {
       "type": "custom",
-      "candid": "build/llama_cpp.did",
+      "candid": "src/llama_cpp.did",
+      "wasm": "build/llama_cpp.wasm"
+    },
+    "llm_1": {
+      "type": "custom",
+      "candid": "src/llama_cpp.did",
       "wasm": "build/llama_cpp.wasm"
     }
   },
