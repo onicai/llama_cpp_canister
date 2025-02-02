@@ -34,11 +34,11 @@ Take following steps locally:
 
 - These are the git-sha values of the llama.cpp versions we branched from:
 
-  | upgrade # | llama.cpp sha | llama.cpp release-tag |
-  | --------- | ------------- | --------------------- |
-  |    0000   |     5cdb37    |         -             |
-  |    0001   |     b841d0    |         -             |
-  |    0002   |     615212    |         b4532         |
+  | upgrade # | llama.cpp sha | llama.cpp release-tag |    date    |
+  | --------- | ------------- | --------------------- | ---------- |
+  |    0000   |     5cdb37    |         -             |    -       |
+  |    0001   |     b841d0    |         -             |    -       |
+  |    0002   |     615212    |         b4532         | Feb  2 '25 |
 
 
 - Start with a fresh clone of llama_cpp_onicai_fork:

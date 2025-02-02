@@ -104,7 +104,8 @@ The build of the wasm must be done on a `Mac` !
 - Upload gguf file
 
   The canister is now up & running, and ready to be loaded with a gguf file. In
-  this example we use the powerful `qwen2.5-0.5b-instruct-q8_0.gguf` model.
+  this example we use the powerful `qwen2.5-0.5b-instruct-q8_0.gguf` model, but
+  you can use any model availabe in gguf format. 
 
   - Download the model from huggingface: https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF
 
