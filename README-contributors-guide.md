@@ -36,9 +36,9 @@ Take following steps locally:
 
   | upgrade # | llama.cpp sha | llama.cpp release-tag |    date    |
   | --------- | ------------- | --------------------- | ---------- |
-  |    0000   |     5cdb37    |         -             |    -       |
-  |    0001   |     b841d0    |         -             |    -       |
   |    0002   |     615212    |         b4532         | Feb  2 '25 |
+  |    0001   |     b841d0    |         -             | Oct 18 '24 |
+  |    0000   |     5cdb37    |         -             | Jul 21 '24 |
 
 
 - Start with a fresh clone of llama_cpp_onicai_fork:
