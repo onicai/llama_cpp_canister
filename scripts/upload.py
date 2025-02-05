@@ -105,12 +105,14 @@ def main() -> int:
         if DEBUG_VERBOSE == 0:
             pass
         elif DEBUG_VERBOSE == 1:
-            print(
-                f"chunk size = {len(chunk)} "
-                f"len(file_bytes) = {len(file_bytes)} "
-                f"offset = {offset} bytes "
-                f"({((offset+len(chunk)) / len(file_bytes) * 100):.1f}%)"
-            )
+            # print only every 20th chunk
+            if i % 20 == 0:
+                print(
+                    f"chunk size = {len(chunk)} "
+                    f"len(file_bytes) = {len(file_bytes)} "
+                    f"offset = {offset} bytes "
+                    f"({((offset+len(chunk)) / len(file_bytes) * 100):.1f}%)"
+                )
         else:
             print("+++++++++++++++++++++++++++++++++++++++++++++++++++++")
             print(f"Sending candid for {len(chunk)} bytes :")
@@ -147,7 +149,14 @@ def main() -> int:
                 time.sleep(retry_delay)  # Wait before retrying
 
         if "Ok" in response[0].keys():
-            print(f"OK! filesize = {response[0]['Ok']['filesize']}")
+            if DEBUG_VERBOSE == 0:
+                pass
+            elif DEBUG_VERBOSE == 1:
+                # print only every 20th chunk
+                if i % 20 == 0:
+                    print(f"OK! filesize = {response[0]['Ok']['filesize']}")
+            else:
+                print(f"OK! filesize = {response[0]['Ok']['filesize']}")
         else:
             print("Something went wrong:")
             print(response)
