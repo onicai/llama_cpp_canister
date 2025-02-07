@@ -255,6 +255,19 @@ You can run a smoketest on the deployed LLM:
   pytest -vv test/test_qwen2.py
   ```
 
+## log_pause & log_resume
+
+The llama.cpp code is quite verbose. When deployed to the canister, you can 
+turn the logging off and back on with these commands:
+
+```bash
+# turn off logging
+dfx canister call llama_cpp log_pause
+
+# turn on logging
+dfx canister call llama_cpp log_resume
+```
+
 ## Access control
 
 By default, only a controller can call the inference endpoints:
