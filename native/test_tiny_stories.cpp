@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include "../src/health.h"
+#include "../src/logs.h"
 #include "../src/max_tokens.h"
 #include "../src/model.h"
 #include "../src/ready.h"
@@ -22,6 +23,14 @@ void test_tiny_stories(MockIC &mockIC) {
   std::string anonymous_principal{"2vxsx-fae"};
 
   bool silent_on_trap = true;
+
+  // -----------------------------------------------------------------------------
+  // Pause logging
+  // '()' -> '(variant { Ok = record { status_code = 200 : nat16; } })'
+  mockIC.run_test(std::string(__func__) + ": " + "log_pause", log_pause,
+                  "4449444c0000",
+                  "4449444c026c019aa1b2f90c7a6b01bc8a0100010100c800",
+                  silent_on_trap, my_principal);
 
   // -----------------------------------------------------------------------------
   // TinyStories models: text generation following a prompt
@@ -192,4 +201,12 @@ void test_tiny_stories(MockIC &mockIC) {
           silent_on_trap, my_principal);
     }
   }
+
+  // -----------------------------------------------------------------------------
+  // Resume logging
+  // '()' -> '(variant { Ok = record { status_code = 200 : nat16; } })'
+  mockIC.run_test(std::string(__func__) + ": " + "log_resume", log_resume,
+                  "4449444c0000",
+                  "4449444c026c019aa1b2f90c7a6b01bc8a0100010100c800",
+                  silent_on_trap, my_principal);
 }

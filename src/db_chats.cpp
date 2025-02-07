@@ -32,11 +32,11 @@ bool db_chats_write_conversation(const std::string &file_path,
                                  const std::string &principal_id,
                                  std::string &error_msg) {
 
-  std::cout << std::endl;
-  std::cout << std::string(__func__) << ": Writing conversation to file "
-            << file_path << std::endl;
-  std::cout << std::string(__func__) << ": " << conversation << std::endl;
-  std::cout << std::endl;
+  // std::cout << std::endl;
+  // std::cout << std::string(__func__) << ": Writing conversation to file "
+  //           << file_path << std::endl;
+  // std::cout << std::string(__func__) << ": " << conversation << std::endl;
+  // std::cout << std::endl;
 
   std::ofstream ofs(file_path);
   if (ofs.is_open()) {
@@ -137,7 +137,7 @@ bool db_chats_clean(const std::string &principal_id, std::string &error_msg) {
                     files[i].path().string() + ": " + ec.message();
         return false;
       } else {
-        std::cout << "Deleted: " << files[i].path().string() << '\n';
+        // std::cout << "Deleted: " << files[i].path().string() << '\n';
       }
     }
   }

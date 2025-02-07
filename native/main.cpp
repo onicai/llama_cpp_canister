@@ -10,6 +10,7 @@
 
 #include "../src/auth.h"
 #include "../src/health.h"
+#include "../src/logs.h"
 #include "../src/model.h"
 #include "../src/ready.h"
 #include "../src/run.h"

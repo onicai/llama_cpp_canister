@@ -18,6 +18,17 @@ DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
 # Canister in the dfx.json file we want to test
 CANISTER_NAME = "llama_cpp"
 
+def test__log_pause(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="log_pause",
+        canister_argument='()',
+        network=network,
+    )
+    expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
+    assert response == expected_response
+
 def test__load_model(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
@@ -152,3 +163,14 @@ def test__remove_log_file(network: str) -> None:
         network=network,
     )
     assert "(variant { Ok" in response
+
+def test__log_resume(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="log_resume",
+        canister_argument='()',
+        network=network,
+    )
+    expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
+    assert response == expected_response
