@@ -23,10 +23,6 @@
   (-) Parse the command arguments (string) into argc and argv
   (-) Call main_
   (-) Return output wrapped in a variant
-
-  Two endpoints are provided:
-  (-) run_query
-  (-) run_update
 */
 
 static void print_usage(int argc, char **argv) {
@@ -112,23 +108,10 @@ void new_chat() {
         ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
-  std::cout << msg << std::endl;
+  // std::cout << msg << std::endl;
 
   // Simpler message back to the wire
   msg = "Ready to start a new chat for cache file " + path_session;
-
-  // -----------------------------------------------------------
-  // If --log-file is provided, the file was opened by common_params_parse
-  // Was it already closed, and common_log_main() does not work anymore???
-  // If so, then store --log-file value in params.log_file, and delete it here
-  // If not, then get the file handle from common_log_main() and empty the file
-  //
-  // When running native, the log file is only closed at the end...
-  //                                   it is opened multiple times. Does that work OK ?
-
-  // When running in the IC, the log file is ????
-
-  std::cout << "TODO";
 
   // -----------------------------------------------------------
   // Return output over the wire
@@ -200,49 +183,7 @@ void remove_prompt_cache() {
         ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
-  std::cout << msg << std::endl;
-
-  // Return output over the wire
-  CandidTypeRecord r_out;
-  r_out.append("status_code", CandidTypeNat16{Http::StatusCode::OK}); // 200
-  r_out.append("conversation", CandidTypeText{""});
-  r_out.append("output", CandidTypeText{msg});
-  r_out.append("error", CandidTypeText{""});
-  r_out.append("prompt_remaining", CandidTypeText{""});
-  r_out.append("generated_eog", CandidTypeBool{false});
-  ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
-}
-
-void remove_log_file() {
-  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  std::string error_msg;
-  if (!is_caller_whitelisted(ic_api, false)) {
-    error_msg = "Access Denied.";
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::Unauthorized, error_msg);
-    return;
-  }
-
-  auto [argc, argv, args] = get_args_for_main(ic_api);
-
-  // Process the args, which will instantiate the log singleton
-  common_params params;
-  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN,
-                           print_usage)) {
-    error_msg = "Cannot parse args.";
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::InternalServerError, error_msg);
-    return;
-  }
-
-  // Now we can remove the log file
-  std::string msg;
-  bool success = common_log_remove_file(common_log_main(), msg);
-  if (!success) {
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::InternalServerError, msg);
-    return;
-  }
+  // std::cout << msg << std::endl;
 
   // Return output over the wire
   CandidTypeRecord r_out;

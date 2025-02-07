@@ -2,6 +2,7 @@
 
 #include "../src/db_chats.h"
 #include "../src/health.h"
+#include "../src/logs.h"
 #include "../src/max_tokens.h"
 #include "../src/model.h"
 #include "../src/ready.h"
@@ -23,6 +24,14 @@ void test_qwen2(MockIC &mockIC) {
   std::string anonymous_principal{"2vxsx-fae"};
 
   bool silent_on_trap = true;
+
+  // -----------------------------------------------------------------------------
+  // Pause logging
+  // '()' -> '(variant { Ok = record { status_code = 200 : nat16; } })'
+  mockIC.run_test(std::string(__func__) + ": " + "log_pause", log_pause,
+                  "4449444c0000",
+                  "4449444c026c019aa1b2f90c7a6b01bc8a0100010100c800",
+                  silent_on_trap, my_principal);
 
   // -----------------------------------------------------------------------------
   // TinyStories models: text generation following a prompt
@@ -172,4 +181,12 @@ void test_qwen2(MockIC &mockIC) {
       "4449444c026c01dd9ad28304016d710100020a2d2d6c6f672d66696c65086d61696e2e6c6f67",
       "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cdd9e6b30e7e6b01bc8a0100010100275375636365737366756c6c792072656d6f766564206c6f672066696c653a206d61696e2e6c6f670000c8000000",
       silent_on_trap, my_principal);
+
+  // -----------------------------------------------------------------------------
+  // Resume logging
+  // '()' -> '(variant { Ok = record { status_code = 200 : nat16; } })'
+  mockIC.run_test(std::string(__func__) + ": " + "log_resume", log_resume,
+                  "4449444c0000",
+                  "4449444c026c019aa1b2f90c7a6b01bc8a0100010100c800",
+                  silent_on_trap, my_principal);
 }
