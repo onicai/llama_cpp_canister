@@ -73,7 +73,6 @@ void new_chat() {
   }
 
   // -----------------------------------------------------------
-  // Create/reset a prompt-cache file to zero length, will reset the LLM state for that conversation
   // Each principal has their own cache folder
   std::string path_session = params.path_prompt_cache;
   std::string canister_path_session;
@@ -89,18 +88,9 @@ void new_chat() {
   if (!path_session.empty()) {
 
     if (std::filesystem::exists(path_session)) {
-      // First, remove the file if it exists
-      bool success = std::filesystem::remove(path_session);
-      if (success) {
-        msg = "Cache file " + path_session + " deleted successfully";
-      } else {
-        error_msg = "Error deleting cache file " + path_session;
-        send_output_record_result_error_to_wire(
-            ic_api, Http::StatusCode::InternalServerError, error_msg);
-        return;
-      }
+      msg = "Re-using existing prompt-cache file " + path_session;
     } else {
-      msg = "Cache file " + path_session + " not found. Nothing to delete.";
+      msg = "Will create new prompt-cache file " + path_session;
     }
   } else {
     error_msg = "ERROR: path_session is empty ";
@@ -108,7 +98,7 @@ void new_chat() {
         ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
-  // std::cout << msg << std::endl;
+  std::cout << msg << std::endl;
 
   // Simpler message back to the wire
   msg = "Ready to start a new chat for cache file " + path_session;

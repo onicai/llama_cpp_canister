@@ -102,10 +102,19 @@ void test_tiny_stories(MockIC &mockIC) {
 
     // Let's have two chats with this model
     for (int i = 0; i < 2; ++i) {
+      // -----------------------------------------------------------------------------
+      // Remove the prompt-cache file if it exists
+      // '(record { args = vec {"--prompt-cache"; "prompt.cache"} })' ->
+      // '(variant { Ok = record { status_code = 200 : nat16; output = "Cache file .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/sessions/prompt.cache deleted successfully"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
+      mockIC.run_test(
+          std::string(__func__) + ": " + "remove_prompt_cache " + model,
+          remove_prompt_cache,
+          "4449444c026c01dd9ad28304016d710100020e2d2d70726f6d70742d63616368650c70726f6d70742e6361636865",
+          "", silent_on_trap, my_principal);
       if (i == 0) {
         // -----------------------------------------------------------------------------
         // Without log file
-        // Start a new chat, which will reset the prompt-cache file
+        // Start a new chat
         // '(record { args = vec {"--prompt-cache"; "prompt.cache"} })' ->
         // '(variant { Ok = record { status_code = 200 : nat16; output = "Ready to start a new chat for cache file .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/sessions/prompt.cache"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
         mockIC.run_test(
@@ -142,7 +151,7 @@ void test_tiny_stories(MockIC &mockIC) {
       } else {
         // -----------------------------------------------------------------------------
         // With log file
-        // Start a new chat, which will reset both the prompt-cache and log-file files
+        // Start a new chat
         // '(record { args = vec {"--log-file"; "main.log"; "--prompt-cache"; "prompt.cache"} })' ->
         // '(variant { Ok = record { status_code = 200 : nat16; output = "Ready to start a new chat for cache file .canister_cache/expmt-gtxsw-inftj-ttabj-qhp5s-nozup-n3bbo-k7zvn-dg4he-knac3-lae/sessions/prompt.cache"; input = ""; error=""; prompt_remaining=""; generated_eog=false : bool } })'
         mockIC.run_test(
