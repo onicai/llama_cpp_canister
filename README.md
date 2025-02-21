@@ -278,6 +278,16 @@ For maximum benefit, design your prompts such that repetitive content is placed 
 
 All repetitive content at the beginning of the prompt does not need to be processed by the LLM.
 
+Each caller of the llama_cpp_canister has it's own cache folder, and has the following endpoints available to manage their prompt-cache files:
+
+```bash
+# To remove a prompt cache file from the caller's cache folder
+dfx canister call llama_cpp remove_prompt_cache '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
+
+# To copy a prompt cache file within the caller's cache folder
+dfx canister call llama_cpp copy_prompt_cache '(record { from = "prompt.cache"; to = "prompt-save.cache"} })'
+```
+
 # Access control
 
 By default, only a controller can call the inference endpoints:

@@ -186,6 +186,74 @@ void remove_prompt_cache() {
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
 }
 
+void copy_prompt_cache() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  std::string error_msg;
+  if (!is_caller_whitelisted(ic_api, false)) {
+    error_msg = "Access Denied";
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
+    return;
+  }
+
+  CandidTypePrincipal caller = ic_api.get_caller();
+  std::string principal_id = caller.get_text();
+
+  std::string from{""};
+  std::string to{""};
+  CandidTypeRecord r_in;
+  r_in.append("from", CandidTypeText{&from});
+  r_in.append("to", CandidTypeText{&to});
+  ic_api.from_wire(r_in);
+
+  // Each principal has their own cache folder
+  std::string from_path;
+  if (!get_canister_path_session(from, principal_id, from_path, error_msg)) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
+    return;
+  }
+  std::string to_path;
+  if (!get_canister_path_session(to, principal_id, to_path, error_msg)) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
+    return;
+  }
+
+  // copy the file from_path to to_path if it exists
+  if (!std::filesystem::exists(from_path)) {
+    error_msg = "File " + from_path + " does not exist.";
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
+    return;
+  }
+
+  // first remove the 'to' file if it already exists
+  if (std::filesystem::exists(to_path)) {
+    bool success = std::filesystem::remove(to_path);
+    if (!success) {
+      error_msg = "Could not remove existing 'to' file " + to_path;
+      ic_api.to_wire(CandidTypeVariant{
+          "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
+      return;
+    }
+  }
+
+  // now copy the 'from' file to 'to' file
+  std::error_code ec;
+  std::filesystem::copy(from_path, to_path, ec);
+  if (ec) {
+    error_msg = "Error copying file from " + from_path + " to " + to_path;
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
+    return;
+  }
+
+  CandidTypeRecord status_code_record;
+  status_code_record.append("status_code", CandidTypeNat16{200});
+  ic_api.to_wire(CandidTypeVariant{"Ok", status_code_record});
+}
+
 void run(IC_API &ic_api, const uint64_t &max_tokens) {
   std::string error_msg;
   if (!is_caller_whitelisted(ic_api, false)) {
