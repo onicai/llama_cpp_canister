@@ -149,7 +149,7 @@ The build of the wasm must be done on a `Mac` !
     https://qwen.readthedocs.io/en/latest/run_locally/llama.cpp.html
 
     ```bash
-    # Start a new chat - this resets the prompt-cache for this conversation
+    # Start a new chat
     dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
 
     # Repeat this call until `prompt_remaining` in the response is empty. 
@@ -212,34 +212,49 @@ The build of the wasm must be done on a `Mac` !
     dfx canister call llama_cpp get_chats
     ```
 
-- For debug purposes, you can tell the canister to log to a file and download it afterwards:
+# log_pause & log_resume
 
-  ```bash
-  # Start a new chat - this resets the prompt-cache for this conversation
-  dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
+The llama.cpp code is quite verbose. In llama_cpp_canister, you can 
+turn the logging off and back on with these commands:
 
-  # Pass '"--log-file"; "main.log";' to the `run_update` calls: 
-  
-  # Repeat this call until `prompt_remaining` in the response is empty. 
-  # This ingest the prompt into the prompt-cache, using multiple update calls
-  # Important: KEEP SENDING THE FULL PROMPT 
-  dfx canister call llama_cpp run_update '(record { args = vec {"--log-file"; "main.log"; "--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "512" } })' 
-  ...
+```bash
+# turn off logging
+dfx canister call llama_cpp log_pause
 
-  # Once `prompt_remaining` in the response is empty, repeat this call, with an empty prompt, until `generated_eog=true`
-  # Now the LLM is generating new tokens !
-  dfx canister call llama_cpp run_update '(record { args = vec {"--log-file"; "main.log"; "--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; ""; "-n"; "512" } })'
+# turn on logging
+dfx canister call llama_cpp log_resume
+```
+
+# Logging to a file
+
+For debug purposes, you can tell the canister to log to a file and download it afterwards:
+
+```bash
+# Start a new chat
+dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
+
+# Pass '"--log-file"; "main.log";' to the `run_update` calls: 
+
+# Repeat this call until `prompt_remaining` in the response is empty. 
+# This ingest the prompt into the prompt-cache, using multiple update calls
+# Important: KEEP SENDING THE FULL PROMPT 
+dfx canister call llama_cpp run_update '(record { args = vec {"--log-file"; "main.log"; "--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n"; "-n"; "512" } })' 
+...
+
+# Once `prompt_remaining` in the response is empty, repeat this call, with an empty prompt, until `generated_eog=true`
+# Now the LLM is generating new tokens !
+dfx canister call llama_cpp run_update '(record { args = vec {"--log-file"; "main.log"; "--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; ""; "-n"; "512" } })'
 
 
-  # Download the `main.log` file from the canister:
-  python -m scripts.download --network local --canister llama_cpp --local-filename main.log main.log
+# Download the `main.log` file from the canister:
+python -m scripts.download --network local --canister llama_cpp --local-filename main.log main.log
 
-  # Cleanup, by deleting both the log & prompt.cache files in the canister:
-  dfx canister call llama_cpp remove_prompt_cache '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
-  dfx canister call llama_cpp remove_log_file '(record { args = vec {"--log-file"; "main.log"} })'
-  ```
+# Cleanup, by deleting both the log & prompt.cache files in the canister:
+dfx canister call llama_cpp remove_prompt_cache '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
+dfx canister call llama_cpp remove_log_file '(record { args = vec {"--log-file"; "main.log"} })'
+```
 
-## Smoke testing the deployed LLM
+# Smoke testing the deployed LLM
 
 You can run a smoketest on the deployed LLM:
 
@@ -255,20 +270,23 @@ You can run a smoketest on the deployed LLM:
   pytest -vv test/test_qwen2.py
   ```
 
-## log_pause & log_resume
+# Prompt Caching
 
-The llama.cpp code is quite verbose. When deployed to the canister, you can 
-turn the logging off and back on with these commands:
+When a prompt cache file is already present, llama_cpp_canister automatically applies prompt caching to reduce latency and cost.
+
+All repetitive content at the beginning of the prompt does not need to be processed by the LLM, so make sure to design your AI agent prompts such that repetitive content is placed at the beginning.
+
+Each caller of the llama_cpp_canister has it's own cache folder, and has the following endpoints available to manage their prompt-cache files:
 
 ```bash
-# turn off logging
-dfx canister call llama_cpp log_pause
+# Remove a prompt cache file from the caller's cache folder
+dfx canister call llama_cpp remove_prompt_cache '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
 
-# turn on logging
-dfx canister call llama_cpp log_resume
+# Copy a prompt cache file within the caller's cache folder
+dfx canister call llama_cpp copy_prompt_cache '(record { from = "prompt.cache"; to = "prompt-save.cache"} )'
 ```
 
-## Access control
+# Access control
 
 By default, only a controller can call the inference endpoints:
 - new_chat

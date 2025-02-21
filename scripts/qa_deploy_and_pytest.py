@@ -23,7 +23,7 @@ def main() -> int:
         tests = [
             {
                 "filename": "models/stories260Ktok512.gguf",
-                "canister_filename": "models/model.gguf",
+                "canister_filename": "models/tiny.gguf",
                 "test_path_model": "test/test_tiny_stories.py",
             },
             # This times out in Github action. Can only be run locally.

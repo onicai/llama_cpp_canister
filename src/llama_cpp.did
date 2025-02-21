@@ -84,6 +84,12 @@ type GetChatsRecord = record {
 };
 
 // -----------------------------------------------------
+type CopyPromptCacheInputRecord = record {
+  from : text;
+  to : text;
+};
+
+// -----------------------------------------------------
 // Access level
 // 0 = only controllers
 // 1 = all except anonymous
@@ -120,6 +126,7 @@ service : {
   run_query : (InputRecord) -> (OutputRecordResult) query;
   run_update : (InputRecord) -> (OutputRecordResult);
   remove_prompt_cache : (InputRecord) -> (OutputRecordResult);
+  copy_prompt_cache : (CopyPromptCacheInputRecord) -> (StatusCodeRecordResult);
 
   // Logging endpoints
   remove_log_file : (InputRecord) -> (OutputRecordResult);
