@@ -71,7 +71,7 @@ def test__ready(network: str) -> None:
     expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
     assert response == expected_response
 
-def test__remove_prompt_cache(network: str) -> None:
+def test__remove_prompt_cache_1(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
@@ -81,7 +81,7 @@ def test__remove_prompt_cache(network: str) -> None:
     )
     assert "(variant { Ok" in response
 
-def test__new_chat(network: str) -> None:
+def test__new_chat_1(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
@@ -144,7 +144,7 @@ def test__run_update_4(network: str) -> None:
     expected_response = '(variant { Ok = record { status_code = 200 : nat16; error = ""; output = ""; input = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>" ; prompt_remaining = "user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"; generated_eog=false : bool} })'
     assert "(variant { Ok" in response
 
-def test__remove_prompt_cache(network: str) -> None:
+def test__remove_prompt_cache_2(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
@@ -164,7 +164,7 @@ def test__copy_prompt_cache_restore(network: str) -> None:
     )
     assert "(variant { Ok" in response
 
-def test__new_chat(network: str) -> None:
+def test__new_chat_2(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
