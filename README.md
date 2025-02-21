@@ -272,20 +272,18 @@ You can run a smoketest on the deployed LLM:
 
 # Prompt Caching
 
-When you don't remove the prompt cache but leave it in place and then reuse it for your next chat, llama_cpp_canister automatically applies prompt caching to reduce latency and cost.
+When a prompt cache file is already present, llama_cpp_canister automatically applies prompt caching to reduce latency and cost.
 
-For maximum benefit, design your prompts such that repetitive content is placed at the beginning.
-
-All repetitive content at the beginning of the prompt does not need to be processed by the LLM.
+All repetitive content at the beginning of the prompt does not need to be processed by the LLM, so make sure to design your AI agent prompts such that repetitive content is placed at the beginning.
 
 Each caller of the llama_cpp_canister has it's own cache folder, and has the following endpoints available to manage their prompt-cache files:
 
 ```bash
-# To remove a prompt cache file from the caller's cache folder
+# Remove a prompt cache file from the caller's cache folder
 dfx canister call llama_cpp remove_prompt_cache '(record { args = vec {"--prompt-cache"; "prompt.cache"} })'
 
-# To copy a prompt cache file within the caller's cache folder
-dfx canister call llama_cpp copy_prompt_cache '(record { from = "prompt.cache"; to = "prompt-save.cache"} })'
+# Copy a prompt cache file within the caller's cache folder
+dfx canister call llama_cpp copy_prompt_cache '(record { from = "prompt.cache"; to = "prompt-save.cache"} )'
 ```
 
 # Access control

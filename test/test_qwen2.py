@@ -71,6 +71,16 @@ def test__ready(network: str) -> None:
     expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
     assert response == expected_response
 
+def test__remove_prompt_cache(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="remove_prompt_cache",
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
+        network=network,
+    )
+    assert "(variant { Ok" in response
+
 def test__new_chat(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
@@ -91,6 +101,16 @@ def test__run_update_1(network: str) -> None:
     )
     expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>"; error = ""; status_code = 200 : nat16; prompt_remaining = "\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\n"; generated_eog = false;} })'
     assert expected_response == response
+
+def test__copy_prompt_cache_save(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="copy_prompt_cache",
+        canister_argument='(record { from = "prompt.cache"; to = "prompt-save.cache"} )',
+        network=network,
+    )
+    assert "(variant { Ok" in response
 
 def test__run_update_2(network: str) -> None:
     response = call_canister_api(
@@ -130,6 +150,56 @@ def test__remove_prompt_cache(network: str) -> None:
         canister_name=CANISTER_NAME,
         canister_method="remove_prompt_cache",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
+        network=network,
+    )
+    assert "(variant { Ok" in response
+
+def test__copy_prompt_cache_restore(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="copy_prompt_cache",
+        canister_argument='(record { from = "prompt-save.cache"; to = "prompt.cache"} )',
+        network=network,
+    )
+    assert "(variant { Ok" in response
+
+def test__new_chat(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="new_chat",
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
+        network=network,
+    )
+    assert "(variant { Ok" in response
+
+def test__run_update_2_2(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="run_update",
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
+        network=network,
+    )
+    expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models."; error = ""; status_code = 200 : nat16; prompt_remaining = "<|im_end|>\\n<|im_start|>assistant\\n"; generated_eog = false;} })'
+    assert expected_response == response
+
+def test__remove_prompt_cache_cleanup(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="remove_prompt_cache",
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
+        network=network,
+    )
+    assert "(variant { Ok" in response
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="remove_prompt_cache",
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt-save.cache"} })',
         network=network,
     )
     assert "(variant { Ok" in response
