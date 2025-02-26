@@ -19,7 +19,7 @@ After cloning the `llama_cpp_onicai_fork` repo to you local computer:
 
 ```
 # From llama_cpp_onicai_fork
-git remote add upstream https://github.com/ggerganov/llama.cpp.git
+git remote add upstream https://github.com/ggml-org/llama.cpp.git
 
 # after this, the tags will apear locally
 git fetch upstream --tags
