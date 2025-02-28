@@ -141,7 +141,7 @@ The build of the wasm must be done on a `Mac` !
 - Set the max_tokens for this model, to avoid it hits the IC's instruction limit
   
   *(See Appendix A for values of others models.)*
-  ```
+  ```bash
   dfx canister call llama_cpp set_max_tokens '(record { 
     max_tokens_query = 13 : nat64; 
     max_tokens_update = 13 : nat64 
@@ -391,12 +391,15 @@ We tested several LLM models available on HuggingFace:
 
 | Model | # weights | file size | quantization | --cache-type-k |  max_tokens<br> *(ingestion)* | max_tokens<br> *(generation)* |
 | ------| ----------| --------- | ------------ | ---------------| ----------------------------- | ----------------------------- |
-| [SmolLM2-135M-Instruct-Q8_0.gguf](https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF)               |  135 M | 0.15 GB | q8_0   | f16  | -- | 40 |
-| [qwen2.5-0.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                    |  630 M | 0.49 GB | q4_k_m | f16  | -- | 14 |
-| [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                      |  630 M | 0.68 GB | q8_0   | q8_0 | -- | 13 |
+| [SmolLM2-135M-Instruct-Q8_0.gguf](https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF)               |  135 M | 0.15 GB | q8_0   | f16  |  - | 40 |
+| [qwen2.5-0.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                    |  630 M | 0.49 GB | q4_k_m | f16  |  - | 14 |
+| [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                      |  630 M | 0.68 GB | q8_0   | q8_0 |  - | 13 |
 | [Llama-3.2-1B-Instruct-Q4_K_M.gguf](https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF)                 | 1.24 B | 0.81 GB | q4_k_m | q5_0 |  5 |  4 |
-| [qwen2.5-1.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF)                    | 1.78 B | 1.10 GB | q4_k_m | q8_0 | -- |  3 |
-| [DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)   | 1.78 B | 0.75 GB | q2_k   | ---  | -- | -- |
+| [qwen2.5-1.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF)                    | 1.78 B | 1.10 GB | q4_k_m | q8_0 |  - |  3 |
+| [DeepSeek-R1-Distill-Qwen-1.5B-Q6_K.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)   | 1.78 B | 1.46 GB | q6_k   | q8_0 |  4 |  3 |
+| [DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF) | 1.78 B | 1.12 GB | q4_k_m | q8_0 |  4 |  3 |
+| [DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)   | 1.78 B | 0.75 GB | q2_k   | q8_0 |  2 |  2 |
+
 
 
 NOTEs: 
