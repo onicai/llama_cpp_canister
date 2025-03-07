@@ -97,9 +97,6 @@ jobs:
         run: |
           make all-static
 
-      - name: Download tinyStories model file from HF - storiesICP42Mtok4096
-        run: wget -nv -O ./models/storiesICP42Mtok4096.gguf "https://huggingface.co/onicai/llama_cpp_canister_models/resolve/main/storiesICP42Mtok4096.gguf?download=true"
-
       - name: Create directory for Qwen models
         run: mkdir -p ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF
 
@@ -115,3 +112,11 @@ jobs:
         shell: bash -l {0}
         run: |
           make test-llm-wasm
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama_cpp_artifacts
+          path: |
+            build/llama_cpp.wasm
+            build/llama_cpp.did

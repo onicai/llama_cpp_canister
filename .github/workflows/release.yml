@@ -1,0 +1,48 @@
+name: Release llama_cpp_canister
+
+on:
+  workflow_dispatch:  # Allows manual triggering from GitHub Actions UI
+    inputs:
+      tag:
+        description: "Tag for the release (e.g., v0.0.1)"
+        required: true
+
+jobs:
+  check-cicd-mac-status:
+    name: Check if cicd-mac succeeded
+    runs-on: macos-latest
+    steps:
+      - name: Get the latest `cicd-mac` run status
+        id: check_cicd
+        run: |
+          echo "Fetching the latest run of cicd-mac..."
+          latest_run=$(gh run list --workflow="cicd-mac.yml" --limit 1 --json status --jq '.[0].status')
+          if [ "$latest_run" != "success" ]; then
+            echo "The latest cicd-mac run was not successful. Exiting."
+            exit 1
+          fi
+          echo "The latest cicd-mac run was successful."
+          
+  release:
+    name: Release llama_cpp_canister
+    runs-on: macos-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Download artifacts uploaded by cicd-mac.yml
+        uses: actions/download-artifact@v4
+        with:
+          name: llama_cpp_artifacts
+          path: build/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/*
+          tag_name: ${{ github.event.inputs.tag }}
+          release_name: "Release ${{ github.event.inputs.tag }}"
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
