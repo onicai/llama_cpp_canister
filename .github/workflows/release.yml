@@ -1,10 +1,10 @@
 name: Release llama_cpp_canister
 
 on:
-  workflow_dispatch:  # Allows manual triggering from GitHub Actions UI
+  workflow_dispatch:
     inputs:
       tag:
-        description: "Tag for the release (e.g., v0.0.1)"
+        description: "Tag for the release (e.g., v1.0.0)"
         required: true
 
 jobs:
@@ -12,27 +12,35 @@ jobs:
     name: Check if cicd-mac succeeded
     runs-on: macos-latest
     steps:
+      - name: Set up GitHub CLI
+        run: echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+
       - name: Get the latest `cicd-mac` run status
-        id: check_cicd
         run: |
           echo "Fetching the latest run of cicd-mac..."
-          latest_run=$(gh run list --workflow="cicd-mac.yml" --limit 1 --json status --jq '.[0].status')
+          latest_run=$(gh run list --workflow="cicd-mac.yml" --limit 1 --json conclusion --jq '.[0].conclusion')
           if [ "$latest_run" != "success" ]; then
             echo "The latest cicd-mac run was not successful. Exiting."
             exit 1
           fi
           echo "The latest cicd-mac run was successful."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release:
-    name: Release llama_cpp_canister
+    name: Build and Release
+    needs: check-cicd-mac-status  # Ensures this job runs only if check-cicd-mac-status is successful
     runs-on: macos-latest
 
     steps:
-      - name: Download artifacts uploaded by cicd-mac.yml
+      - name: Download artifacts from build job
         uses: actions/download-artifact@v4
         with:
           name: llama_cpp_artifacts
           path: build/
+
+      - name: List downloaded artifacts
+        run: ls -l build/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
