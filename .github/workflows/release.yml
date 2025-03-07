@@ -22,12 +22,10 @@ jobs:
             exit 1
           fi
           echo "The latest cicd-mac run was successful."
-          
+
   release:
     name: Release llama_cpp_canister
     runs-on: macos-latest
-
-    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Download artifacts uploaded by cicd-mac.yml
