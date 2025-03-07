@@ -12,13 +12,16 @@ jobs:
     name: Check if cicd-mac succeeded
     runs-on: macos-latest
     steps:
-      - name: Set up GitHub CLI
+      - name: Checkout repository
+        uses: actions/checkout@v4  # ✅ This ensures GitHub CLI can detect the repo
+
+      - name: Set up GitHub CLI authentication
         run: echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
 
-      - name: Get the latest `cicd-mac` run status
+      - name: Get the latest `cicd-mac.yml` run status
         run: |
           echo "Fetching the latest run of cicd-mac..."
-          latest_run=$(gh run list --workflow="cicd-mac.yml" --limit 1 --json conclusion --jq '.[0].conclusion')
+          latest_run=$(gh run list --repo ${{ github.repository }} --workflow="cicd-mac.yml" --limit 1 --json conclusion --jq '.[0].conclusion')
           if [ "$latest_run" != "success" ]; then
             echo "The latest cicd-mac run was not successful. Exiting."
             exit 1
