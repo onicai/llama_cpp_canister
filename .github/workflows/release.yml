@@ -7,6 +7,9 @@ on:
         description: "Tag for the release (e.g., v1.0.0)"
         required: true
 
+permissions:
+  contents: write  # ✅ Grants permission to create a release
+  
 jobs:
   check-cicd-mac-status:
     name: Check if cicd-mac succeeded
@@ -32,6 +35,7 @@ jobs:
 
   release:
     name: Build and Release
+    needs: check-cicd-mac-status  # Ensures this job runs only if check-cicd-mac-status is successful
     strategy:
       matrix:
         python-version: [3.11]
@@ -126,7 +130,7 @@ jobs:
             build/llama_cpp.wasm
             build/llama_cpp.did
           tag_name: ${{ github.event.inputs.tag }}
-          release_name: "Release ${{ github.event.inputs.tag }}"
+          name: "Release ${{ github.event.inputs.tag }}"
           draft: false
           prerelease: false
         env:
