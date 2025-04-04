@@ -55,6 +55,19 @@ def test__load_model(network: str) -> None:
         print(f"{current_func_name()}: response: {response}")
     assert "(variant { Ok" in response
 
+def test__uploaded_file_details(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="uploaded_file_details",
+        canister_argument='(record { filename = "models/tiny.gguf" })',
+        network=network,
+    )
+    if PRINT_RESPONSE:
+        print(f"{current_func_name()}: response: {response}")
+    expected_response = '(variant { Ok = record { filename = "models/tiny.gguf"; filesize = 1_185_376 : nat64; filesha256 = "047bf46455a544931cff6fef14d7910154c56afbc23ab1c5e56a72e69912c04b";} })'
+    assert expected_response == response
+
 def test__set_max_tokens(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,

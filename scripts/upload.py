@@ -220,7 +220,7 @@ def main() -> int:
     # ---------------------------------------------------------------------------
     # Verify that the query endpoint 'file_details' is also working correctly
     print("--\nChecking the file_details endpoint")
-    response = canister_instance.file_details({"filename": canister_filename})
+    response = canister_instance.uploaded_file_details({"filename": canister_filename})
     if "Ok" in response[0].keys():
         print(
             f"OK! filesize = {response[0]['Ok']['filesize']}, "
