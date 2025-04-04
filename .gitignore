@@ -10,6 +10,7 @@ paths.txt
 secret
 .vscode/
 models/
+models_bitnet/
 .canister_cache
 README-WIP.md
 Makefile-WIP

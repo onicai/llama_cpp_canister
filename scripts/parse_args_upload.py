@@ -14,8 +14,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--canister-filename",
         type=str,
-        default=None,
-        help="Canister filename. Defaults to local filename",
+        default="models/model.gguf",
+        help="Canister filename. Defaults to 'models/model.gguf'",
     )
     parser.add_argument(
         "--network",
@@ -46,6 +46,12 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=2000000,
         help="Chunk Size used during file download, in bytes",
+    )
+    parser.add_argument(
+        "--hf-sha256",
+        type=str,
+        default=None,
+        help="Optional - provides the HuggingFace Hash, to check against.",
     )
 
     args = parser.parse_args()

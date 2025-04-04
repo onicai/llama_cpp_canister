@@ -68,7 +68,23 @@ type FileUploadRecordResult = variant {
   Ok : FileUploadRecord;
 };
 type FileUploadRecord = record {
+  filename : text; // the total filesize in bytes
   filesize : nat64; // the total filesize in bytes after writing chunk at offset
+  filesha256 : text; // the total filesize in bytes after writing chunk at offset
+};
+
+// -----------------------------------------------------
+type FileDetailsInputRecord = record {
+  filename : text;
+};
+type FileDetailsRecordResult = variant {
+  Err : ApiError;
+  Ok : FileDetailsRecord;
+};
+type FileDetailsRecord = record {
+  filename : text;
+  filesize : nat64; // the total filesize in bytes
+  filesha256 : text; // the total filesize in bytes
 };
 
 // -----------------------------------------------------
@@ -120,6 +136,7 @@ service : {
   // up & down load of files
   file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;
   file_upload_chunk : (FileUploadInputRecord) -> (FileUploadRecordResult);
+  uploaded_file_details : (FileDetailsInputRecord) -> (FileDetailsRecordResult) query;
 
   // Inference endpoints
   new_chat : (InputRecord) -> (OutputRecordResult);

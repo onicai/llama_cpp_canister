@@ -15,6 +15,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Generator
+from .calculate_sha256 import calculate_sha256
 from .ic_py_canister import get_canister
 from .parse_args_upload import parse_args
 
@@ -62,6 +63,7 @@ def main() -> int:
     else:
         canister_filename = args.__dict__["local-filename"]
     chunksize = args.chunksize
+    hf_sha256 = args.hf_sha256
 
     dfx_json_path = ROOT_PATH / "dfx.json"
 
@@ -75,6 +77,7 @@ def main() -> int:
         f"\n - canister_id         = {canister_id}"
         f"\n - dfx_json_path       = {dfx_json_path}"
         f"\n - candid_path         = {candid_path}"
+        f"\n - hf_sha256           = {hf_sha256}"
     )
 
     # ---------------------------------------------------------------------------
@@ -93,29 +96,51 @@ def main() -> int:
     # ---------------------------------------------------------------------------
     # UPLOAD FILE
 
-    print(f"--\nUploading the file: {local_filename_path}")
-    print(f"--\nTo canister file  : {canister_filename}")
+    local_model_sha256 = calculate_sha256(local_filename_path)
+    local_model_filesize = local_filename_path.stat().st_size
+
+    print(f"--\nUploading the file     : {local_filename_path}")
+    print(f"Calculated filesize : {local_model_filesize}")
+    print(f"Calculated SHA256 hash : {local_model_sha256}")
+    if hf_sha256 is not None:
+        if local_model_sha256 != hf_sha256:
+            print(" ")
+            print("ERROR - local file does not match the --hf-sha256:")
+            print(f"- local_model_sha256: {local_model_sha256}")
+            print(f"- hf_sha256         : {hf_sha256}")
+            sys.exit(1)
+        else:
+            print("SHA256 of the local file is correct.")
+    else:
+        print(
+            "You did not specify --hf-sha256, "
+            "so can't check the hash against HuggingFace reference."
+        )
+
+    print(f"--\nTo canister file             : {canister_filename}")
 
     print(f"--\nReading the file into a bytes object: {local_filename_path}")
     file_bytes = read_file_bytes(local_filename_path)
 
     # Iterate over all chunks
     offset = 0
+    canister_filesize = 0
+    canister_filesha256 = ""
     for i, chunk in enumerate(generate_chunks(file_bytes, chunksize)):
         if DEBUG_VERBOSE == 0:
             pass
         elif DEBUG_VERBOSE == 1:
-            # print only every 20th chunk
-            if i % 20 == 0:
+            # print only every 10th chunk
+            if i % 10 == 0:
                 print(
-                    f"chunk size = {len(chunk)} "
+                    f"Sending another chunk size = {len(chunk)} "
                     f"len(file_bytes) = {len(file_bytes)} "
                     f"offset = {offset} bytes "
                     f"({((offset+len(chunk)) / len(file_bytes) * 100):.1f}%)"
                 )
         else:
             print("+++++++++++++++++++++++++++++++++++++++++++++++++++++")
-            print(f"Sending candid for {len(chunk)} bytes :")
+            print(f"Sending another chunk for {len(chunk)} bytes :")
             print(f"- i         = {i}")
             print(f"- progress  = {offset+len(chunk) / len(file_bytes) * 100:.1f} % ")
             print(f"- chunk[0]  = {chunk[0]}")
@@ -124,7 +149,7 @@ def main() -> int:
         # Handle exceptions in case the Ingress is busy and it throws this message:
         # Ingress message ... timed out waiting to start executing.
 
-        max_retries = 5
+        max_retries = 10
         retry_delay = 2  # seconds
         for attempt in range(1, max_retries + 1):
             try:
@@ -152,11 +177,20 @@ def main() -> int:
             if DEBUG_VERBOSE == 0:
                 pass
             elif DEBUG_VERBOSE == 1:
-                # print only every 20th chunk
-                if i % 20 == 0:
-                    print(f"OK! filesize = {response[0]['Ok']['filesize']}")
+                # print only every 10th chunk or if it is the last chunk
+                if i % 10 == 0 or (offset + len(chunk)) >= len(file_bytes):
+                    print(
+                        f"OK! filesize = {response[0]['Ok']['filesize']}, "
+                        f"filesha256 = {response[0]['Ok']['filesha256']}"
+                    )
             else:
-                print(f"OK! filesize = {response[0]['Ok']['filesize']}")
+                print(
+                    f"OK! filesize = {response[0]['Ok']['filesize']}, "
+                    f"filesha256 = {response[0]['Ok']['filesha256']}"
+                )
+
+            canister_filesize = response[0]["Ok"]["filesize"]
+            canister_filesha256 = response[0]["Ok"]["filesha256"]
         else:
             print("Something went wrong:")
             print(response)
@@ -164,8 +198,55 @@ def main() -> int:
 
         offset += len(chunk)
 
-    print(f"--\nCongratulations, the file {local_filename_path} was uploaded!")
+    if (canister_filesize != local_model_filesize) or (
+        canister_filesha256 != local_model_sha256
+    ):
+        print(" ")
+        print("ERROR - canister file does not match the local file:")
+        print(f"- canister_filesize: {canister_filesize}")
+        print(f"- local_model_filesize: {local_model_filesize}")
+        print(f"- canister_filesha256: {canister_filesha256}")
+        print(f"- local_model_sha256: {local_model_sha256}")
+        sys.exit(1)
 
+    print(
+        f"--\nCongratulations, the file {local_filename_path} "
+        "was uploaded and the filesize & sha256 are correct!"
+    )
+    print(f"- canister_filesize: {canister_filesize}")
+    print(f"- local_model_filesize: {local_model_filesize}")
+    print(f"- canister_filesha256: {canister_filesha256}")
+
+    # ---------------------------------------------------------------------------
+    # Verify that the query endpoint 'file_details' is also working correctly
+    print("--\nChecking the file_details endpoint")
+    response = canister_instance.uploaded_file_details({"filename": canister_filename})
+    if "Ok" in response[0].keys():
+        print(
+            f"OK! filesize = {response[0]['Ok']['filesize']}, "
+            f"filesha256 = {response[0]['Ok']['filesha256']}"
+        )
+
+        canister_filesize = response[0]["Ok"]["filesize"]
+        canister_filesha256 = response[0]["Ok"]["filesha256"]
+
+        if (canister_filesize != local_model_filesize) or (
+            canister_filesha256 != local_model_sha256
+        ):
+            print(" ")
+            print("ERROR - canister file metadata does not match the local file:")
+            print(f"- canister_filesize: {canister_filesize}")
+            print(f"- local_model_filesize: {local_model_filesize}")
+            print(f"- canister_filesha256: {canister_filesha256}")
+            print(f"- local_model_sha256: {local_model_sha256}")
+            sys.exit(1)
+    else:
+        print("Something went wrong:")
+        print(response)
+        sys.exit(1)
+
+    # ---------------------------------------------------------------------------
+    # print success message
     try:
         print("💯 🎉 🏁")
     except UnicodeEncodeError:

@@ -121,11 +121,32 @@ The build of the wasm must be done on a `Mac` !
       --network local \
       --canister llama_cpp \
       --canister-filename models/model.gguf \
+      --hf-sha256 "ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e" \
       models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf
     ```
 
-  NOTE: In C++, files are stored in stable memory of the canister.
-        They will survive a code upgrade.
+    NOTEs: 
+      - In C++, files are stored in stable memory of the canister. They will survive a code upgrade.
+      - The --hf-sha256 argument is optional but highly recommended:
+        - The upload process will check if the file on disk has the same sha256 as the one you downloaded from HuggingFace.
+        - The --hf-sha256 for our sample model can be found at https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/blob/main/qwen2.5-0.5b-instruct-q8_0.gguf
+
+  - Check the filesize & sha256 of the uploaded gguf file in the canister
+
+    ```bash
+    dfx canister call llama_cpp uploaded_file_details '(record { 
+      filename = "models/model.gguf"
+    })' --output json
+
+    # Which returns the following for the Qwen2.5-0.5B-Instruct-GGUF model
+    {
+      "Ok": {
+        "filename": "models/model.gguf",
+        "filesha256": "ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e",
+        "filesize": "675710816"
+      }
+    }
+    ```
   
 - Load the gguf file into Orthogonal Persisted (OP) working memory 
 
@@ -391,15 +412,15 @@ We tested several LLM models available on HuggingFace:
 
 | Model | # weights | file size | quantization | --cache-type-k |  max_tokens<br> *(ingestion)* | max_tokens<br> *(generation)* |
 | ------| ----------| --------- | ------------ | ---------------| ----------------------------- | ----------------------------- |
-| [SmolLM2-135M-Instruct-Q8_0.gguf](https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF)               |  135 M | 0.15 GB | q8_0   | f16  |  - | 40 |
-| [qwen2.5-0.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                    |  630 M | 0.49 GB | q4_k_m | f16  |  - | 14 |
-| [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                      |  630 M | 0.68 GB | q8_0   | q8_0 |  - | 13 |
-| [Llama-3.2-1B-Instruct-Q4_K_M.gguf](https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF)                 | 1.24 B | 0.81 GB | q4_k_m | q5_0 |  5 |  4 |
-| [qwen2.5-1.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF)                    | 1.78 B | 1.10 GB | q4_k_m | q8_0 |  - |  3 |
-| [DeepSeek-R1-Distill-Qwen-1.5B-Q6_K.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)   | 1.78 B | 1.46 GB | q6_k   | q8_0 |  4 |  3 |
-| [DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF) | 1.78 B | 1.12 GB | q4_k_m | q8_0 |  4 |  3 |
-| [DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)   | 1.78 B | 0.75 GB | q2_k   | q8_0 |  2 |  2 |
-
+| [SmolLM2-135M-Instruct-Q8_0.gguf](https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF)                         |  135 M | 0.15 GB | q8_0           | f16  |  - | 40 |
+| [qwen2.5-0.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                              |  630 M | 0.49 GB | q4_k_m         | f16  |  - | 14 |
+| [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                                |  630 M | 0.68 GB | q8_0           | q8_0 |  - | 13 |
+| [Llama-3.2-1B-Instruct-Q4_K_M.gguf](https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF)                           | 1.24 B | 0.81 GB | q4_k_m         | q5_0 |  5 |  4 |
+| [qwen2.5-1.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF)                              | 1.78 B | 1.10 GB | q4_k_m         | q8_0 |  - |  3 |
+| [DeepSeek-R1-Distill-Qwen-1.5B-NexaQuant.gguf](https://huggingface.co/NexaAIDev/DeepSeek-R1-Distill-Qwen-1.5B-NexaQuant) | 1.78 B | 1.34 GB | NexaQuant-4Bit | f16  |  4 |  3 |
+| [DeepSeek-R1-Distill-Qwen-1.5B-Q6_K.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)             | 1.78 B | 1.46 GB | q6_k           | q8_0 |  4 |  3 |
+| [DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)           | 1.78 B | 1.12 GB | q4_k_m         | q8_0 |  4 |  3 |
+| [DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)             | 1.78 B | 0.75 GB | q2_k           | q8_0 |  2 |  2 |
 
 
 NOTEs: 

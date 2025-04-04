@@ -98,7 +98,8 @@ void new_chat() {
         ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
-  std::cout << msg << std::endl;
+  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+            << std::endl;
 
   // Simpler message back to the wire
   msg = "Ready to start a new chat for cache file " + path_session;
@@ -173,7 +174,7 @@ void remove_prompt_cache() {
         ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
-  // std::cout << msg << std::endl;
+  // std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg << std::endl;
 
   // Return output over the wire
   CandidTypeRecord r_out;
