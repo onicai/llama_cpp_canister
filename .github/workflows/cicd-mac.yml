@@ -112,11 +112,3 @@ jobs:
         shell: bash -l {0}
         run: |
           make test-llm-wasm
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: llama_cpp_artifacts
-          path: |
-            build/llama_cpp.wasm
-            build/llama_cpp.did

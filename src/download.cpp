@@ -19,7 +19,8 @@ void print_file_download_summary(const std::string &filename,
          ": chunksize=" + std::to_string(v.size()) +
          "; offset=" + std::to_string(offset) +
          "; done=" + std::to_string(done);
-  std::cout << msg << std::endl;
+  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+            << std::endl;
 }
 
 void file_download_chunk() {

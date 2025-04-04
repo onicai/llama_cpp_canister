@@ -1001,8 +1001,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       }
       ++iii;
     }
-    // std::cout << "prompt_consumed (" << n_consumed << " tokens) = " << prompt_consumed << std::endl;
-    // std::cout << "prompt_remaining (" << n_prompt_tokens_remaining << " tokens) = "<< prompt_remaining << std::endl;
+    // std::cout << "llama_cpp: " << std::string(__func__) << " - " << "llama_cpp: " << std::string(__func__) << " - " << "prompt_consumed (" << n_consumed << " tokens) = " << prompt_consumed << std::endl;
+    // std::cout << "llama_cpp: " << std::string(__func__) << " - " << "llama_cpp: " << std::string(__func__) << " - " << "prompt_remaining (" << n_prompt_tokens_remaining << " tokens) = "<< prompt_remaining << std::endl;
     // ICPP-PATCH-END
 
     // display text
