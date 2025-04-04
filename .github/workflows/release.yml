@@ -127,8 +127,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            version.txt
             build/llama_cpp.wasm
             build/llama_cpp.did
+            scripts/download.py
+            scripts/ic_py_canister.py
+            scripts/parse_args_download.py
+            scripts/parse_args_upload.py
+            scripts/upload.py
           tag_name: ${{ github.event.inputs.tag }}
           name: "Release ${{ github.event.inputs.tag }}"
           draft: false
