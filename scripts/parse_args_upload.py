@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
         "--chunksize",
         type=int,
         default=2000000,
-        help="Chunk Size used during file download, in bytes",
+        help="Chunk Size used during file upload, in bytes",
     )
     parser.add_argument(
         "--hf-sha256",
