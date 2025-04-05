@@ -24,7 +24,7 @@ ROOT_PATH = Path(__file__).parent.parent
 #  0 - none
 #  1 - minimal
 #  2 - a lot
-DEBUG_VERBOSE = 1
+DEBUG_VERBOSE = 2
 
 
 def read_file_bytes(file_path: Path) -> bytes:
@@ -142,7 +142,7 @@ def main() -> int:
             print("+++++++++++++++++++++++++++++++++++++++++++++++++++++")
             print(f"Sending another chunk for {len(chunk)} bytes :")
             print(f"- i         = {i}")
-            print(f"- progress  = {offset+len(chunk) / len(file_bytes) * 100:.1f} % ")
+            print(f"- progress  = {(offset+len(chunk)) / len(file_bytes) * 100:.1f} % ")
             print(f"- chunk[0]  = {chunk[0]}")
             print(f"- chunk[-1] = {chunk[-1]}")
 

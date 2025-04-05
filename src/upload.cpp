@@ -15,6 +15,16 @@
 
 #include "ic_api.h"
 
+// Make it idempotent by checking if offset is equal to previous_offset,
+// and if so, just return without doing anything
+// This is important to properly handle timeouts...
+static bool is_first_chunk = true;
+static uint64_t previous_offset = 0;
+
+// Calculate SHA256 hash for the file we're uploading
+// It is callers responsibility to upload one file from start to finish
+static SHA256 sha256_state;
+
 // Maintain a list of files that are uploaded to the canister with metadata
 // (filename, filesize, sha256) to be used for validation
 struct FileMetadata {
@@ -196,6 +206,37 @@ void file_upload_chunk() {
     return;
   }
 
+  // Check if we already handled this chunk
+  if (!is_first_chunk && offset == previous_offset) {
+    std::string msg = "Already handled this chunk";
+    std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+              << std::endl;
+    // This is OK, just send back the current status!
+    // Get the metadata for the file
+    const FileMetadata *metadata = get_file_metadata(filename);
+    if (metadata == nullptr) {
+      std::string msg =
+          "Already handled this chunk, but Metadata for this file are not found: " +
+          filename;
+      ic_api.to_wire(CandidTypeVariant{
+          "Err",
+          CandidTypeVariant{
+              "Other", CandidTypeText{std::string(__func__) + ": " + msg}}});
+      return;
+    }
+    uint64_t filesize = metadata->filesize;
+    std::string filesha256 = metadata->sha256;
+    CandidTypeRecord file_upload_record;
+    file_upload_record.append("filename", CandidTypeText{filename});
+    file_upload_record.append("filesize", CandidTypeNat64{filesize});
+    file_upload_record.append("filesha256", CandidTypeText{filesha256});
+    ic_api.to_wire(
+        CandidTypeVariant{"Ok", CandidTypeRecord{file_upload_record}});
+    return;
+  }
+  is_first_chunk = false;
+  previous_offset = offset;
+
   // Write 'v' to 'filename', starting at 'offset'
   of_stream.seekp(offset);
   of_stream.write(reinterpret_cast<const char *>(v.data()), v.size());
@@ -203,14 +244,9 @@ void file_upload_chunk() {
   // Update the file metadata, including the SHA256 hash using the streaming interface
   uint64_t filesize = offset + v.size();
 
-  // Calculate SHA256 hash for the file
-  static std::string current_filename = "";
-  static SHA256 sha256_state;
-
-  // If this is the first chunk (offset == 0) or a different file, reset the hash state
-  if (offset == 0 || current_filename != filename) {
+  // If this is the first chunk (offset == 0) reset the hash state
+  if (offset == 0) {
     sha256_state = SHA256();
-    current_filename = filename;
   }
 
   // Add this chunk to the hash calculation
