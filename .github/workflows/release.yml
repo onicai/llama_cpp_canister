@@ -123,19 +123,28 @@ jobs:
         run: |
           icpp build-wasm
 
+      - name: Zip Release Files
+        run: |
+          mkdir -p release
+          cp version.txt release/
+          mkdir -p release/build
+          cp build/llama_cpp.wasm release/build/
+          cp build/llama_cpp.did release/build/
+          mkdir -p release/scripts
+          cp scripts/download.py release/scripts/
+          cp scripts/ic_py_canister.py release/scripts/
+          cp scripts/parse_args_download.py release/scripts/
+          cp scripts/parse_args_upload.py release/scripts/
+          cp scripts/upload.py release/scripts/
+          cp scripts/calculate_sha256.py release/scripts/
+          cd release
+          zip -r ../llama_cpp_canister_${{ github.event.inputs.tag }}.zip .
+          cd ..
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            version.txt
-            build/llama_cpp.wasm
-            build/llama_cpp.did
-            scripts/download.py
-            scripts/ic_py_canister.py
-            scripts/parse_args_download.py
-            scripts/parse_args_upload.py
-            scripts/upload.py
-            scripts/calculate_sha256.py
+          files: llama_cpp_canister_${{ github.event.inputs.tag }}.zip
           tag_name: ${{ github.event.inputs.tag }}
           name: "Release ${{ github.event.inputs.tag }}"
           draft: false
