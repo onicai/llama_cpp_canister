@@ -131,6 +131,7 @@ jobs:
           cp build/llama_cpp.wasm release/build/
           cp build/llama_cpp.did release/build/
           mkdir -p release/scripts
+          cp scripts/__init__.py release/scripts/
           cp scripts/download.py release/scripts/
           cp scripts/ic_py_canister.py release/scripts/
           cp scripts/parse_args_download.py release/scripts/
