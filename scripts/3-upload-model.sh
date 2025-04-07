@@ -10,14 +10,13 @@ export PYTHONPATH="${PYTHONPATH}:$(realpath $LLAMA_CPP_CANISTER_PATH)"
 
 # Default network type is local
 NETWORK_TYPE="local"
-NUM_LLMS_DEPLOYED=1
 
 # The gguf model file to upload (Relative to llama_cpp_canister folder)
 # MODEL="models/stories260Ktok512.gguf"
 # MODEL="models/stories15Mtok4096.gguf"
 # MODEL="models/tensorblock/SmolLM2-135M-Instruct-GGUF/SmolLM2-135M-Instruct-Q4_K_M.gguf"
-# MODEL="models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf"
-MODEL="models/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf"
+MODEL="models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf"
+# MODEL="models/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf"
 # MODEL="models/unsloth/DeepSeek-R1-Distill-Qwen-7B-GGUF/DeepSeek-R1-Distill-Qwen-7B-Q2_K.gguf"
 
 # Parse command line arguments for network type
@@ -46,33 +45,28 @@ echo "Using network type: $NETWORK_TYPE"
 #######################################################################
 echo " "
 echo "==================================================="
-echo "Uploading model for $NUM_LLMS_DEPLOYED llms"
-llm_id_start=0
-llm_id_end=$((NUM_LLMS_DEPLOYED - 1))
+echo "Uploading model to llama_cpp"
 
-for i in $(seq $llm_id_start $llm_id_end)
-do
-    echo " "
-    echo "--------------------------------------------------"
-    echo "Checking health endpoint for llm_$i"
-    output=$(dfx canister call llm_$i health --network $NETWORK_TYPE )
+echo " "
+echo "--------------------------------------------------"
+echo "Checking health endpoint for llama_cpp"
+output=$(dfx canister call llama_cpp health --network $NETWORK_TYPE )
 
-    if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
-        echo "llm_$i health check failed."
-        echo $output
-        exit 1
-    else
-        echo "llm_$i health check succeeded."
-    fi
+if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
+    echo "llama_cpp health check failed."
+    echo $output
+    exit 1
+else
+    echo "llama_cpp health check succeeded."
+fi
 
-    echo " "
-    echo "--------------------------------------------------"
-    echo "Upload the model ($MODEL) to llm_$i"
-    python -m scripts.upload --network $NETWORK_TYPE --canister llm_$i --canister-filename models/model.gguf $MODEL
+echo " "
+echo "--------------------------------------------------"
+echo "Upload the model ($MODEL) to llama_cpp"
+python -m scripts.upload --network $NETWORK_TYPE --canister llama_cpp --canister-filename models/model.gguf $MODEL
 
-    if [ $? -ne 0 ]; then
-        echo "scripts.upload for llm_$i exited with an error."
-        echo $?
-        exit 1
-    fi
-done
+if [ $? -ne 0 ]; then
+    echo "scripts.upload for llama_cpp exited with an error."
+    echo $?
+    exit 1
+fi

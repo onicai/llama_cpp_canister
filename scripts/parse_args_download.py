@@ -5,6 +5,7 @@ from pathlib import Path
 
 SCRIPT_PATH = Path(__file__).parent
 
+
 def parse_args() -> argparse.Namespace:
     """Returns the command line arguments"""
     parser = argparse.ArgumentParser(description="Download a file")

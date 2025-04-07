@@ -2,17 +2,18 @@
 
 #######################################################################
 # run from parent folder as:
-# scripts/load-model.sh --network [local|ic]
+# scripts/deploy.sh --mode [install/$DEPLOY_MODE/upgrade] [--network ic]
 #######################################################################
 
 # Default network type is local
 NETWORK_TYPE="local"
 
-# MAX_TOKENS=128 # stories260Ktok512.gguf
-# MAX_TOKENS=60 # stories15Mtok4096.gguf
-# MAX_TOKENS=20 # SmolLM2-135M-Instruct-Q4_K_M.gguf
-MAX_TOKENS=10 # qwen2.5-0.5b-instruct-q8_0.gguf
-# MAX_TOKENS=2 # DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf
+DEPLOY_MODE="install"
+
+# When deploying to IC, we deploy to a specific subnet
+# none will not use subnet parameter in deploy to ic
+SUBNET="none"
+# SUBNET="-------"
 
 # Parse command line arguments for network type
 while [ $# -gt 0 ]; do
@@ -23,6 +24,16 @@ while [ $# -gt 0 ]; do
                 NETWORK_TYPE=$1
             else
                 echo "Invalid network type: $1. Use 'local' or 'ic'."
+                exit 1
+            fi
+            shift
+            ;;
+        --mode)
+            shift
+            if [ "$1" = "install" ] || [ "$1" = "$DEPLOY_MODE" ] || [ "$1" = "upgrade" ]; then
+                DEPLOY_MODE=$1
+            else
+                echo "Invalid mode: $1. Use 'install', '$DEPLOY_MODE' or 'upgrade'."
                 exit 1
             fi
             shift
@@ -38,9 +49,17 @@ done
 echo "Using network type: $NETWORK_TYPE"
 
 #######################################################################
-echo " "
-echo "==================================================="
-echo "set_max_tokens to $MAX_TOKENS for llama_cpp"
+echo "--------------------------------------------------"
+echo "Deploying the wasm to llama_cpp"
+if [ "$NETWORK_TYPE" = "ic" ]; then
+    if [ "$SUBNET" = "none" ]; then
+        yes | dfx deploy llama_cpp -m $DEPLOY_MODE --yes --network $NETWORK_TYPE
+    else
+        yes | dfx deploy llama_cpp -m $DEPLOY_MODE --yes --network $NETWORK_TYPE --subnet $SUBNET
+    fi
+else
+    yes | dfx deploy llama_cpp -m $DEPLOY_MODE --yes --network $NETWORK_TYPE
+fi 
 
 echo " "
 echo "--------------------------------------------------"
@@ -48,26 +67,10 @@ echo "Checking health endpoint for llama_cpp"
 output=$(dfx canister call llama_cpp health --network $NETWORK_TYPE )
 
 if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
-    echo "llama_cpp health check failed"
-    echo $output
+    echo "llama_cpp health check failed."
+    echo $output        
     exit 1
 else
     echo "llama_cpp health check succeeded."
-fi
-
-echo " "
-echo "--------------------------------------------------"
-echo "Setting max tokens to ($MAX_TOKENS) for llama_cpp"
-output=$(dfx canister call llama_cpp set_max_tokens \
-        '(record { max_tokens_query = '"$MAX_TOKENS"' : nat64; max_tokens_update = '"$MAX_TOKENS"' : nat64 })' \
-        --network "$NETWORK_TYPE")
-
-
-if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
-    echo "llama_cpp set_max_tokens failed."
-    echo $output
-    exit 1
-else
-    echo "llama_cpp set_max_tokens to $MAX_TOKENS succeeded."
     echo 🎉
 fi

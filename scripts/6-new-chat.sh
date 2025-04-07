@@ -7,7 +7,6 @@
 
 # Default network type is local
 NETWORK_TYPE="local"
-i=0 # llm_$i will be tested
 
 # Parse command line arguments for network type
 while [ $# -gt 0 ]; do
@@ -34,18 +33,18 @@ echo "Using network type: $NETWORK_TYPE"
 
 echo " "
 echo "--------------------------------------------------"
-echo "Checking health endpoint for llm_$i"
-output=$(dfx canister call llm_$i health --network $NETWORK_TYPE )
+echo "Checking health endpoint for llama_cpp"
+output=$(dfx canister call llama_cpp health --network $NETWORK_TYPE )
 
 if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
-    echo "llm_$i health check failed."
+    echo "llama_cpp health check failed."
     echo $output
     exit 1
 else
-    echo "llm_$i health check succeeded."
+    echo "llama_cpp health check succeeded."
 fi
 
 echo " "
 echo "--------------------------------------------------"
-echo "Calling new_chat for llm_$i"
-dfx canister call llm_$i new_chat '(record { args = vec {"--prompt-cache"; "prompt.cache"} })' --network $NETWORK_TYPE
+echo "Calling new_chat for llama_cpp"
+dfx canister call llama_cpp new_chat '(record { args = vec {"--prompt-cache"; "prompt.cache"} })' --network $NETWORK_TYPE

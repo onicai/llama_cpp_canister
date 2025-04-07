@@ -7,7 +7,6 @@
 
 # Default network type is local
 NETWORK_TYPE="local"
-i=0 # llm_$i will be tested
 
 # Parse command line arguments for network type
 while [ $# -gt 0 ]; do
@@ -34,5 +33,5 @@ echo "Using network type: $NETWORK_TYPE"
 
 echo " "
 echo "--------------------------------------------------"
-echo "Calling run_update for llm_$i"
-dfx canister call llm_$i run_update '(record { args = vec {"--cache-type-k"; "q8_0"; "--no-warmup"; "--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "";} })'
+echo "Calling run_update for llama_cpp"
+dfx canister call llama_cpp run_update '(record { args = vec {"--cache-type-k"; "q8_0"; "--no-warmup"; "--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "";} })'
