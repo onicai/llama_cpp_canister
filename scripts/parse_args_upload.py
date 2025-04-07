@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--candid",
         type=str,
-        default="src/llama_cpp.did",
+        default="build/llama_cpp.did",
         help="canister's candid file",
     )
     parser.add_argument(

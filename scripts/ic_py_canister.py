@@ -22,7 +22,7 @@ def run_dfx_command(cmd: str) -> Optional[str]:
         return run_shell_cmd(cmd, capture_output=True).rstrip("\n")
     except subprocess.CalledProcessError as e:
         print(f"Failed dfx command: '{cmd}' with error: \n{e.output}")
-        sys.exit(1)
+        # sys.exit(1)
     return None
 
 
@@ -51,6 +51,12 @@ def get_canister(
         print(f"networks-json-path = {networks_json_path}")
 
         network_url = f"http://localhost:{replica_port}"
+        if replica_port is None:
+            if webserver_port is not None:
+                network_url = f"http://localhost:{webserver_port}"
+            else:
+                print("Error: replica_port and webserver_port are both None.")
+                sys.exit(1)
     else:
         # https://smartcontracts.org/docs/interface-spec/index.html#http-interface
         network_url = "https://ic0.app"
