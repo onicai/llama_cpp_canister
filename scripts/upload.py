@@ -220,6 +220,8 @@ def main() -> int:
     # ---------------------------------------------------------------------------
     # Verify that the query endpoint 'file_details' is also working correctly
     print("--\nChecking the file_details endpoint")
+    print("Waiting 5 seconds before trying, to ensure the upload calls are done.")
+    time.sleep(5)
     response = canister_instance.uploaded_file_details({"filename": canister_filename})
     if "Ok" in response[0].keys():
         print(
