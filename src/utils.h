@@ -22,10 +22,5 @@ void send_output_record_result_error_to_wire(IC_API &ic_api,
                                              uint16_t http_status_code,
                                              const std::string &error_msg);
 
-bool get_canister_path_session(const std::string &path_session,
-                               const std::string &principal_id,
-                               std::string &canister_path_session,
-                               std::string &error_msg);
-
 std::filesystem::file_time_type
 get_last_write_time(const std::filesystem::path &file, std::error_code &ec);

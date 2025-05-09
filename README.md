@@ -42,11 +42,12 @@ llama_cpp_canister is used as the on-chain LLM brain inside the following projec
   *(The model must be able to produce at least 1 token per update call)*
 
 - Our largest so far is DeepSeek-R1 1.5B (See [X](https://x.com/onicaiHQ/status/1884339580851151089)).
-  
+
+# Using the release
+
+Instead of building the wasm using the instructions below, you can also grab the latest [release](https://github.com/onicai/llama_cpp_canister/releases) and unzip it. Then follow the same instructions from the README, but skip the `icpp build-wasm` step.
 
 # Set up
-
-The build of the wasm must be done on a `Mac` ! 
 
 - Install dfx:
 
@@ -92,7 +93,9 @@ The build of the wasm must be done on a `Mac` !
     make build-info-cpp-wasm
     icpp build-wasm
     ```
-    Note: The first time you run this command, the tool-chain will be installed in ~/.icpp
+    Notes:
+    - The build of the wasm must be done on a `Mac` ! 
+    - Instead of building the wasm, you can also grab the latest [release](https://github.com/onicai/llama_cpp_canister/releases) and unzip it.
 
   - Start the local network:
     ```bash
@@ -113,6 +116,14 @@ The build of the wasm must be done on a `Mac` !
     (variant { Ok = record { status_code = 200 : nat16 } })
     ```
   
+- Ensure the canister has enough cycles
+
+  The LLM upload and inference calls consume cycles. You can add with:
+
+  ```bash
+  # Add 20 trillion cycles
+  dfx ledger fabricate-cycles --canister llama_cpp --t 20
+  ```
 
 - Upload gguf file
 
@@ -156,7 +167,13 @@ The build of the wasm must be done on a `Mac` !
       }
     }
     ```
-  
+
+- Optional: You can now run a pytest based QA, using the icpp-pro smoketesting framework:
+
+  ```bash
+  pytest -vv test/test_qwen2.py
+  ```
+
 - Load the gguf file into Orthogonal Persisted (OP) working memory 
 
   ```bash
@@ -173,7 +190,7 @@ The build of the wasm must be done on a `Mac` !
   *(See Appendix A for values of others models.)*
   ```bash
   dfx canister call llama_cpp set_max_tokens '(record { 
-    max_tokens_query = 13 : nat64; 
+    max_tokens_query = 1 : nat64; 
     max_tokens_update = 13 : nat64 
   })'
 
@@ -382,6 +399,18 @@ dfx canister call llama_cpp copy_prompt_cache '(record {
   from = "prompt.cache"; 
   to = "prompt-save.cache"
 })'
+
+# Download a chunk of a prompt cache file (wrap in loop for large files)
+dfx canister call llama_cpp download_prompt_cache_chunk '(record { 
+  prompt-cache = "prompt.cache";
+})'
+
+# Upload a chunk of a prompt cache file (wrap in loop for large files)
+dfx canister call llama_cpp upload_prompt_cache_chunk '(record { 
+  prompt-cache = "prompt.cache";
+  chunk = [....] : blob;
+})'
+
 ```
 
 # Access control

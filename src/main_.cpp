@@ -3,6 +3,7 @@
 // See: https://github.com/onicai/llama_cpp_onicai_fork/tree/master/examples/main/README.md
 #include "main_.h"
 #include "ic_api.h"
+#include "prompt_cache.h"
 #include "utils.h"
 // ICPP-PATCH-END
 #include "arg.h"
