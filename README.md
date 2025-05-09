@@ -17,9 +17,18 @@ and run an LLM on-chain as the brain for your on-chain AI Agents.
 - Smoke testing framework using pytest 🚬
 
 
-# Try it out
+# In the wild
 
-You can try out a variety of fully on-chain LLMs at https://icgpt.onicai.com
+llama_cpp_canister is used as the on-chain LLM brain inside the following projects:
+
+*(Issue a PR to get your project listed)*
+
+| Project | Description/Tagline | GitHub | X | Token | URL |
+| ------- | ------------------- | ------ | - | ----- | --- |
+| IConfucius | Wisdom fueled by Cycles<br>*Fully on chain Confucian quote generator*| [IConfucius](https://github.com/onicai/IConfucius) | [@IConfucius_odin](https://x.com/IConfucius_odin) | [$ICONFUCIUS](https://odin.fun/token/29m8) | [onicai.com](https://www.onicai.com/#/iconfucius) |
+| Forseti | Son of Baldr<br>*Fully on chain Forsetian quote generator*| [forseti.fun](https://github.com/forria64/forseti.fun) | [@forsetidotfun](https://x.com/forsetidotfun) | [$FORSETI](https://odin.fun/token/2dld) | [forseti.fun](https://forseti.fun) |
+| ICGPT | on-chain LLMs<br>*Chat with on-chain LLMs*| [icgpt](https://github.com/icppWorld/icgpt) | [@onicaiHQ](https://x.com/onicaiHQ) | - | [icgpt.onicai.com](https://icgpt.onicai.com) |
+
 
 # Need help or have feedback? ❤️
 
