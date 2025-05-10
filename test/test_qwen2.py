@@ -47,7 +47,7 @@ def test__get_max_tokens(network: str) -> None:
         network=network,
     )
     expected_response = '(record { max_tokens_query = 1 : nat64; max_tokens_update = 13 : nat64;})'
-    assert expected_response == response
+    assert response == expected_response
 
 def test__ready(network: str) -> None:
     response = call_canister_api(
@@ -89,7 +89,7 @@ def test__run_update_1(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user"; error = ""; status_code = 200 : nat16; prompt_remaining = "\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\n"; generated_eog = false;} })'
-    assert expected_response == response
+    assert response == expected_response
 
 def test__copy_prompt_cache_save(network: str) -> None:
     response = call_canister_api(
@@ -110,7 +110,7 @@ def test__run_update_2(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { output = "Large"; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\nLarge"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
-    assert expected_response == response
+    assert response == expected_response
 
 def test__run_update_3(network: str) -> None:
     response = call_canister_api(
@@ -172,7 +172,7 @@ def test__run_update_2_2(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { output = "Large"; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\nLarge"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
-    assert expected_response == response
+    assert response == expected_response
 
 def test__remove_prompt_cache_cleanup(network: str) -> None:
     response = call_canister_api(
@@ -222,7 +222,7 @@ def test__run_query_1(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { output = "<|im_start|>"; conversation = "<|im_start|>"; error = ""; status_code = 200 : nat16; prompt_remaining = "system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\n"; generated_eog = false;} })'
-    assert expected_response == response
+    assert response == expected_response
 
 def test__log_pause(network: str) -> None:
     response = call_canister_api(

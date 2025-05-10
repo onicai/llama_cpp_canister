@@ -232,10 +232,14 @@ def main() -> int:
     print("Waiting 5 seconds before next call, to ensure the upload calls are done.")
     time.sleep(5)
     if filetype == "promptcache":
-        response = canister_instance.uploaded_prompt_cache_details({"promptcache": canister_filename})
+        response = canister_instance.uploaded_prompt_cache_details(
+            {"promptcache": canister_filename}
+        )
     else:
-        response = canister_instance.uploaded_file_details({"filename": canister_filename})
-        
+        response = canister_instance.uploaded_file_details(
+            {"filename": canister_filename}
+        )
+
     if "Ok" in response[0].keys():
         print(
             f"OK! filesize = {response[0]['Ok']['filesize']}, "

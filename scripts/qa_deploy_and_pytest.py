@@ -35,12 +35,13 @@ def main() -> int:
         ]
 
         test_path_canister = "test/test_canister_functions.py"
+        test_path_promptcash = "test/test_promptcache.py"
         for test in tests:
             filename = test["filename"]
             canister_filename = test["canister_filename"]
             test_path_model = test["test_path_model"]
 
-            test_paths = [test_path_canister, test_path_model]
+            test_paths = [test_path_canister, test_path_promptcash, test_path_model]
 
             typer.echo("--\nStop the local network")
             run_dfx_cmd("stop")
