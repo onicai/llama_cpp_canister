@@ -1,12 +1,14 @@
-#include "prompt_cache.h"
+#include "promptcache.h"
 
 #include "auth.h"
 #include "common.h"
 #include "db_chats.h"
+#include "download.h"
 #include "http.h"
 #include "main_.h"
 #include "max_tokens.h"
 #include "run.h"
+#include "upload.h"
 #include "utils.h"
 
 #include "arg.h"
@@ -20,10 +22,10 @@
 #include "ic_api.h"
 
 /*
-prompt-cache is also called a session file
+The prompt cache is also called a session file
 It contains the state of the LLM and is preserved between update calls
 
-This module provides functions to manage the prompt-cache file to
+This module provides functions to manage the prompt cache file to
 optimize performance & cost
 */
 
@@ -35,10 +37,10 @@ bool get_canister_path_session(const std::string &path_session,
                                const std::string &principal_id,
                                std::string &canister_path_session,
                                std::string &error_msg) {
-  // We store the prompt-cache files in a folder named with the principal id of the caller
+  // We store the prompt cache files in a folder named with the principal id of the caller
   //
   // Note: to save multiple conversations per user, the front end can simply assign
-  //       a unique prompt-cache file per conversation, and that will do the job !
+  //       a unique prompt cache file per conversation, and that will do the job !
   //
 
   std::string path_session_ = path_session;
@@ -206,4 +208,97 @@ void copy_prompt_cache() {
   CandidTypeRecord status_code_record;
   status_code_record.append("status_code", CandidTypeNat16{200});
   ic_api.to_wire(CandidTypeVariant{"Ok", status_code_record});
+}
+
+void download_prompt_cache_chunk() {
+  IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
+  if (!is_caller_a_controller(ic_api)) return;
+
+  CandidTypePrincipal caller = ic_api.get_caller();
+  std::string principal_id = caller.get_text();
+
+  // Get filename to download and the chunksize
+  std::string promptcache{""};
+  uint64_t chunksize{0};
+  uint64_t offset{0};
+
+  CandidTypeRecord r_in;
+  r_in.append("promptcache", CandidTypeText{&promptcache});
+  r_in.append("chunksize", CandidTypeNat64{&chunksize});
+  r_in.append("offset", CandidTypeNat64{&offset});
+  ic_api.from_wire(r_in);
+
+  // Each principal has their own cache folder
+  std::string filename;
+  std::string error_msg;
+  if (!get_canister_path_session(promptcache, principal_id, filename,
+                                 error_msg)) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
+    return;
+  }
+
+  file_download_chunk_(ic_api, filename, chunksize, offset);
+}
+
+void upload_prompt_cache_chunk() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!is_caller_a_controller(ic_api)) return;
+
+  CandidTypePrincipal caller = ic_api.get_caller();
+  std::string principal_id = caller.get_text();
+
+  // Get filename and the chunk to write to it
+  std::string promptcache{""};
+  std::vector<uint8_t> v;
+  uint64_t chunksize{0};
+  uint64_t offset{0};
+
+  CandidTypeRecord r_in;
+  r_in.append("promptcache", CandidTypeText{&promptcache});
+  r_in.append("chunk", CandidTypeVecNat8{&v});
+  r_in.append("chunksize", CandidTypeNat64{&chunksize});
+  r_in.append("offset", CandidTypeNat64{&offset});
+  ic_api.from_wire(r_in);
+
+  // Each principal has their own cache folder
+  std::string filename;
+  std::string error_msg;
+  if (!get_canister_path_session(promptcache, principal_id, filename,
+                                 error_msg)) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
+    return;
+  }
+
+  file_upload_chunk_(ic_api, filename, v, chunksize, offset);
+}
+
+void uploaded_prompt_cache_details() {
+  // Returns the metadata for an uploaded prompt cache
+
+  IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
+  if (!is_caller_a_controller(ic_api)) return;
+
+  CandidTypePrincipal caller = ic_api.get_caller();
+  std::string principal_id = caller.get_text();
+
+  // Get filename
+  std::string promptcache{""};
+
+  CandidTypeRecord r_in;
+  r_in.append("promptcache", CandidTypeText{&promptcache});
+  ic_api.from_wire(r_in);
+
+  // Each principal has their own cache folder
+  std::string filename;
+  std::string error_msg;
+  if (!get_canister_path_session(promptcache, principal_id, filename,
+                                 error_msg)) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
+    return;
+  }
+
+  uploaded_file_details_(ic_api, filename);
 }

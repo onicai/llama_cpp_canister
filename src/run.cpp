@@ -5,7 +5,7 @@
 #include "http.h"
 #include "main_.h"
 #include "max_tokens.h"
-#include "prompt_cache.h"
+#include "promptcache.h"
 #include "utils.h"
 
 #include "arg.h"

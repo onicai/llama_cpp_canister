@@ -3,7 +3,7 @@
 
 Run with:
 
-    python -m scripts.upload FILENAME
+    python -m scripts.upload [options] FILENAME
 
     python -m scripts.upload --help
 
@@ -54,6 +54,7 @@ def main() -> int:
 
     local_filename_path = ROOT_PATH / args.__dict__["local-filename"]
 
+    filetype = args.filetype
     network = args.network
     canister_name = args.canister
     canister_id = args.canister_id
@@ -70,6 +71,7 @@ def main() -> int:
     print(
         f"Summary:"
         f"\n - canister_filename   = {canister_filename}"
+        f"\n - filetype            = {filetype}"
         f"\n - local_filename_path = {local_filename_path}"
         f"\n - chunksize           = {chunksize} ({chunksize/1024/1024:.3f} Mb)"
         f"\n - network             = {network}"
@@ -96,26 +98,22 @@ def main() -> int:
     # ---------------------------------------------------------------------------
     # UPLOAD FILE
 
-    local_model_sha256 = calculate_sha256(local_filename_path)
-    local_model_filesize = local_filename_path.stat().st_size
+    local_file_sha256 = calculate_sha256(local_filename_path)
+    local_file_size = local_filename_path.stat().st_size
 
-    print(f"--\nUploading the file     : {local_filename_path}")
-    print(f"Calculated filesize : {local_model_filesize}")
-    print(f"Calculated SHA256 hash : {local_model_sha256}")
+    print(f"--\nUploading the file : {local_filename_path}")
+    print(f"Calculated filesize    : {local_file_size}")
+    print(f"Calculated SHA256 hash : {local_file_sha256}")
     if hf_sha256 is not None:
-        if local_model_sha256 != hf_sha256:
+        # Check if the local file matches a HuggingFace hash
+        if local_file_sha256 != hf_sha256:
             print(" ")
             print("ERROR - local file does not match the --hf-sha256:")
-            print(f"- local_model_sha256: {local_model_sha256}")
+            print(f"- local_file_sha256: {local_file_sha256}")
             print(f"- hf_sha256         : {hf_sha256}")
             sys.exit(1)
         else:
             print("SHA256 of the local file is correct.")
-    else:
-        print(
-            "You did not specify --hf-sha256, "
-            "so can't check the hash against HuggingFace reference."
-        )
 
     print(f"--\nTo canister file             : {canister_filename}")
 
@@ -153,14 +151,25 @@ def main() -> int:
         retry_delay = 2  # seconds
         for attempt in range(1, max_retries + 1):
             try:
-                response = canister_instance.file_upload_chunk(
-                    {
-                        "filename": canister_filename,
-                        "chunk": chunk,
-                        "chunksize": chunksize,
-                        "offset": offset,
-                    }
-                )  # pylint: disable=no-member
+                if filetype == "promptcache":
+                    response = canister_instance.upload_prompt_cache_chunk(
+                        {
+                            "promptcache": canister_filename,
+                            "chunk": chunk,
+                            "chunksize": chunksize,
+                            "offset": offset,
+                        }
+                    )  # pylint: disable=no-member
+                else:
+                    response = canister_instance.file_upload_chunk(
+                        {
+                            "filename": canister_filename,
+                            "chunk": chunk,
+                            "chunksize": chunksize,
+                            "offset": offset,
+                        }
+                    )  # pylint: disable=no-member
+
                 break  # Exit the loop if the request is successful
             except Exception as e:
                 print(f"Attempt {attempt} failed: {e}")
@@ -198,15 +207,15 @@ def main() -> int:
 
         offset += len(chunk)
 
-    if (canister_filesize != local_model_filesize) or (
-        canister_filesha256 != local_model_sha256
+    if (canister_filesize != local_file_size) or (
+        canister_filesha256 != local_file_sha256
     ):
         print(" ")
         print("ERROR - canister file does not match the local file:")
         print(f"- canister_filesize: {canister_filesize}")
-        print(f"- local_model_filesize: {local_model_filesize}")
+        print(f"- local_file_size: {local_file_size}")
         print(f"- canister_filesha256: {canister_filesha256}")
-        print(f"- local_model_sha256: {local_model_sha256}")
+        print(f"- local_file_sha256: {local_file_sha256}")
         sys.exit(1)
 
     print(
@@ -214,15 +223,19 @@ def main() -> int:
         "was uploaded and the filesize & sha256 are correct!"
     )
     print(f"- canister_filesize: {canister_filesize}")
-    print(f"- local_model_filesize: {local_model_filesize}")
+    print(f"- local_file_size: {local_file_size}")
     print(f"- canister_filesha256: {canister_filesha256}")
 
     # ---------------------------------------------------------------------------
     # Verify that the query endpoint 'file_details' is also working correctly
-    print("--\nChecking the file_details endpoint")
-    print("Waiting 5 seconds before trying, to ensure the upload calls are done.")
+    print("--\nVerifying that the file was uploaded correctly")
+    print("Waiting 5 seconds before next call, to ensure the upload calls are done.")
     time.sleep(5)
-    response = canister_instance.uploaded_file_details({"filename": canister_filename})
+    if filetype == "promptcache":
+        response = canister_instance.uploaded_prompt_cache_details({"promptcache": canister_filename})
+    else:
+        response = canister_instance.uploaded_file_details({"filename": canister_filename})
+        
     if "Ok" in response[0].keys():
         print(
             f"OK! filesize = {response[0]['Ok']['filesize']}, "
@@ -232,15 +245,15 @@ def main() -> int:
         canister_filesize = response[0]["Ok"]["filesize"]
         canister_filesha256 = response[0]["Ok"]["filesha256"]
 
-        if (canister_filesize != local_model_filesize) or (
-            canister_filesha256 != local_model_sha256
+        if (canister_filesize != local_file_size) or (
+            canister_filesha256 != local_file_sha256
         ):
             print(" ")
             print("ERROR - canister file metadata does not match the local file:")
             print(f"- canister_filesize: {canister_filesize}")
-            print(f"- local_model_filesize: {local_model_filesize}")
+            print(f"- local_file_size: {local_file_size}")
             print(f"- canister_filesha256: {canister_filesha256}")
-            print(f"- local_model_sha256: {local_model_sha256}")
+            print(f"- local_file_sha256: {local_file_sha256}")
             sys.exit(1)
     else:
         print("Something went wrong:")

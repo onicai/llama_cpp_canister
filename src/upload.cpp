@@ -18,6 +18,15 @@
 // Make it idempotent by checking if offset is equal to previous_offset,
 // and if so, just return without doing anything
 // This is important to properly handle timeouts...
+//     ************************************************
+// *** This only works for uploading one file at a time ***
+// *** TODO: support multiple files at the same time    ***
+// **        likely just by storing these in the FileMetadata:
+//           - is_first_chunk
+//           - previous_offset
+//           - sha256_state
+//     ************************************************
+
 static bool is_first_chunk = true;
 static uint64_t previous_offset = 0;
 
@@ -192,12 +201,21 @@ void file_upload_chunk() {
   r_in.append("offset", CandidTypeNat64{&offset});
   ic_api.from_wire(r_in);
 
+  file_upload_chunk_(ic_api, filename, v, chunksize, offset);
+}
+
+void file_upload_chunk_(IC_API &ic_api, const std::string &filename,
+                        const std::vector<uint8_t> &v,
+                        const uint64_t &chunksize, const uint64_t &offset) {
+
   // Open an ofstream
   std::ofstream of_stream;
   std::string msg;
   std::ios_base::openmode mode = std::ios::binary;
   if (offset == 0) {
     mode |= std::ios::trunc; // truncate the file to zero length
+    is_first_chunk = true;   // reset the first chunk flag
+    previous_offset = 0;     // reset the previous offset
   }
   if (!open_ofstream(filename, mode, of_stream, msg)) {
     ic_api.to_wire(CandidTypeVariant{
@@ -271,13 +289,7 @@ void uploaded_file_details() {
   // Returns the metadata for an uploaded file
 
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  if (!is_caller_whitelisted(ic_api, false)) {
-    std::string msg = "Access Denied.";
-    ic_api.to_wire(CandidTypeVariant{
-        "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +
-                                                         ": " + msg}}});
-    return;
-  }
+  if (!is_caller_a_controller(ic_api)) return;
 
   // Get filename
   std::string filename{""};
@@ -286,6 +298,11 @@ void uploaded_file_details() {
   r_in.append("filename", CandidTypeText{&filename});
   ic_api.from_wire(r_in);
 
+  uploaded_file_details_(ic_api, filename);
+}
+
+void uploaded_file_details_(IC_API &ic_api, const std::string &filename) {
+  // Returns the metadata for an uploaded file
   std::cout << "llama_cpp:" << std::string(__func__) << "Filename: " << filename
             << std::endl;
 
