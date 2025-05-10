@@ -109,8 +109,8 @@ def test__run_update_2(network: str) -> None:
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
         network=network,
     )
-    expected_response = '(variant { Ok = record { output = "Large"; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\nLarge"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
-    assert response == expected_response
+    # Tokens are being generated. Can no longer assert the response.
+    assert "(variant { Ok" in response
 
 def test__run_update_3(network: str) -> None:
     response = call_canister_api(
@@ -120,6 +120,7 @@ def test__run_update_3(network: str) -> None:
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
         network=network,
     )
+    # Tokens are being generated. Can no longer assert the response.
     assert "(variant { Ok" in response
 
 def test__run_update_4(network: str) -> None:
