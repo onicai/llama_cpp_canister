@@ -106,6 +106,26 @@ type CopyPromptCacheInputRecord = record {
 };
 
 // -----------------------------------------------------
+type DownloadPromptCacheInputRecord = record {
+  promptcache : text;
+  chunksize : nat64;
+  offset : nat64;
+};
+
+// -----------------------------------------------------
+type UploadPromptCacheInputRecord = record {
+  promptcache : text;
+  chunk : vec nat8;
+  chunksize : nat64;
+  offset : nat64;
+};
+
+// -----------------------------------------------------
+type PromptCacheDetailsInputRecord = record {
+  promptcache : text;
+};
+
+// -----------------------------------------------------
 // Access level
 // 0 = only controllers
 // 1 = all except anonymous
@@ -142,8 +162,13 @@ service : {
   new_chat : (InputRecord) -> (OutputRecordResult);
   run_query : (InputRecord) -> (OutputRecordResult) query;
   run_update : (InputRecord) -> (OutputRecordResult);
+
+  // Prompt cache endpoints
   remove_prompt_cache : (InputRecord) -> (OutputRecordResult);
   copy_prompt_cache : (CopyPromptCacheInputRecord) -> (StatusCodeRecordResult);
+  download_prompt_cache_chunk : (DownloadPromptCacheInputRecord) -> (FileDownloadRecordResult) query;
+  upload_prompt_cache_chunk : (UploadPromptCacheInputRecord) -> (FileUploadRecordResult);
+  uploaded_prompt_cache_details : (PromptCacheDetailsInputRecord) -> (FileDetailsRecordResult) query;
 
   // Logging endpoints
   remove_log_file : (InputRecord) -> (OutputRecordResult);

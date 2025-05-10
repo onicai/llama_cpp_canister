@@ -15,15 +15,18 @@
 
 #include "ic_api.h"
 
-// Make it idempotent by checking if offset is equal to previous_offset,
+// Ephemeral state for an in‑flight upload
+// Used to make it idempotent by checking if offset is equal to previous_offset,
 // and if so, just return without doing anything
 // This is important to properly handle timeouts...
-static bool is_first_chunk = true;
-static uint64_t previous_offset = 0;
-
-// Calculate SHA256 hash for the file we're uploading
-// It is callers responsibility to upload one file from start to finish
-static SHA256 sha256_state;
+struct UploadSession {
+  bool is_first_chunk;
+  uint64_t previous_offset;
+  SHA256 sha256_state; // Calculate SHA256 hash for the file we're uploading
+      // It is callers responsibility to upload one file from start to finish
+};
+// One upload session per filename
+static std::unordered_map<std::string, UploadSession> upload_sessions;
 
 // Maintain a list of files that are uploaded to the canister with metadata
 // (filename, filesize, sha256) to be used for validation
@@ -192,12 +195,31 @@ void file_upload_chunk() {
   r_in.append("offset", CandidTypeNat64{&offset});
   ic_api.from_wire(r_in);
 
+  file_upload_chunk_(ic_api, filename, v, chunksize, offset);
+}
+
+void file_upload_chunk_(IC_API &ic_api, const std::string &filename,
+                        const std::vector<uint8_t> &v,
+                        const uint64_t &chunksize, const uint64_t &offset) {
+
+  // Make sure there’s a session entry for this filename
+  auto &session = upload_sessions[filename];
+  if (offset == 0) {
+    // First chunk for this file: (re)initialize
+    session.is_first_chunk = true;
+    session.previous_offset = 0;
+    session.sha256_state = SHA256();
+  }
+
   // Open an ofstream
   std::ofstream of_stream;
   std::string msg;
   std::ios_base::openmode mode = std::ios::binary;
   if (offset == 0) {
-    mode |= std::ios::trunc; // truncate the file to zero length
+    mode |= std::ios::trunc;         // truncate the file to zero length
+    session.is_first_chunk = true;   // reset the first chunk flag
+    session.previous_offset = 0;     // reset the previous offset
+    session.sha256_state = SHA256(); // reset the SHA256 state
   }
   if (!open_ofstream(filename, mode, of_stream, msg)) {
     ic_api.to_wire(CandidTypeVariant{
@@ -207,7 +229,7 @@ void file_upload_chunk() {
   }
 
   // Check if we already handled this chunk
-  if (!is_first_chunk && offset == previous_offset) {
+  if (!session.is_first_chunk && offset == session.previous_offset) {
     std::string msg = "Already handled this chunk";
     std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
               << std::endl;
@@ -234,8 +256,8 @@ void file_upload_chunk() {
         CandidTypeVariant{"Ok", CandidTypeRecord{file_upload_record}});
     return;
   }
-  is_first_chunk = false;
-  previous_offset = offset;
+  session.is_first_chunk = false;
+  session.previous_offset = offset;
 
   // Write 'v' to 'filename', starting at 'offset'
   of_stream.seekp(offset);
@@ -244,16 +266,11 @@ void file_upload_chunk() {
   // Update the file metadata, including the SHA256 hash using the streaming interface
   uint64_t filesize = offset + v.size();
 
-  // If this is the first chunk (offset == 0) reset the hash state
-  if (offset == 0) {
-    sha256_state = SHA256();
-  }
-
   // Add this chunk to the hash calculation
-  sha256_state.add(reinterpret_cast<const char *>(v.data()), v.size());
+  session.sha256_state.add(reinterpret_cast<const char *>(v.data()), v.size());
 
   // Get the current hash (we'll update it again if more chunks come)
-  std::string filesha256 = sha256_state.getHash();
+  std::string filesha256 = session.sha256_state.getHash();
 
   update_file_metadata(filename, filesize, filesha256);
 
@@ -271,13 +288,7 @@ void uploaded_file_details() {
   // Returns the metadata for an uploaded file
 
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  if (!is_caller_whitelisted(ic_api, false)) {
-    std::string msg = "Access Denied.";
-    ic_api.to_wire(CandidTypeVariant{
-        "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +
-                                                         ": " + msg}}});
-    return;
-  }
+  if (!is_caller_a_controller(ic_api)) return;
 
   // Get filename
   std::string filename{""};
@@ -286,6 +297,11 @@ void uploaded_file_details() {
   r_in.append("filename", CandidTypeText{&filename});
   ic_api.from_wire(r_in);
 
+  uploaded_file_details_(ic_api, filename);
+}
+
+void uploaded_file_details_(IC_API &ic_api, const std::string &filename) {
+  // Returns the metadata for an uploaded file
   std::cout << "llama_cpp:" << std::string(__func__) << "Filename: " << filename
             << std::endl;
 

@@ -4,6 +4,7 @@
 #include "../src/logs.h"
 #include "../src/max_tokens.h"
 #include "../src/model.h"
+#include "../src/promptcache.h"
 #include "../src/ready.h"
 #include "../src/run.h"
 #include "../src/upload.h"

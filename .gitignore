@@ -12,6 +12,7 @@ secret
 models/
 models_bitnet/
 .canister_cache
+prompt.cache
 README-WIP.md
 Makefile-WIP
 main*.log

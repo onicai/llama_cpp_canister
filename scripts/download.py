@@ -2,19 +2,20 @@
 
 Run with:
 
-    python -m scripts.download FILENAME
+    python -m scripts.download [options] FILENAME
 
     python -m scripts.download --help
 
 """
 
-# pylint: disable=invalid-name, too-few-public-methods, no-member, too-many-statements
+# pylint: disable=invalid-name, too-few-public-methods, no-member, too-many-statements, line-too-long
 
 import sys
 from pathlib import Path
 from typing import List
 from .ic_py_canister import get_canister
 from .parse_args_download import parse_args
+from .calculate_sha256 import calculate_sha256
 
 ROOT_PATH = Path(__file__).parent.parent
 
@@ -31,6 +32,7 @@ def main() -> int:
 
     canister_filename = args.__dict__["canister-filename"]
 
+    filetype = args.filetype
     network = args.network
     canister_name = args.canister
     canister_id = args.canister_id
@@ -46,6 +48,7 @@ def main() -> int:
     print(
         f"Summary:"
         f"\n - canister_filename   = {canister_filename}"
+        f"\n - filetype            = {filetype}"
         f"\n - local_filename_path = {local_filename_path}"
         f"\n - chunksize           = {chunksize} ({chunksize/1024/1024:.3f} Mb)"
         f"\n - network             = {network}"
@@ -79,22 +82,41 @@ def main() -> int:
     offset = 0
     with open(local_filename_path, "wb") as f:
         while not done:
-            response = canister_instance.file_download_chunk(
-                {
-                    "filename": canister_filename,
-                    "chunksize": chunksize,
-                    "offset": offset,
-                }
-            )
-            if "Ok" in response[0].keys():
-                chunk: List[int] = response[0]["Ok"]["chunk"]
-                offset += len(chunk)
-                print(
-                    f"filesize, chunksize, total_received: "
-                    f"{response[0]['Ok']['filesize']}, {len(chunk)}, {offset} "
+            if filetype == "promptcache":
+                response = canister_instance.download_prompt_cache_chunk(
+                    {
+                        "promptcache": canister_filename,
+                        "chunksize": chunksize,
+                        "offset": offset,
+                    }
+                )
+            else:
+                response = canister_instance.file_download_chunk(
+                    {
+                        "filename": canister_filename,
+                        "chunksize": chunksize,
+                        "offset": offset,
+                    }
                 )
 
-                f.write(bytearray(chunk))
+            if "Ok" in response[0].keys():
+                r_filesize = response[0]["Ok"]["filesize"]
+                r_chunk: List[int] = response[0]["Ok"]["chunk"]
+                r_chunksize = response[0]["Ok"]["chunksize"]
+                r_offset = response[0]["Ok"]["offset"]
+                total_received = offset + len(r_chunk)
+                print(
+                    "--"
+                    "\nDownloaded a chunk:"
+                    f"\n- filesize       = {r_filesize} bytes ({r_filesize/1024/1024:.3f} Mb), "
+                    f"\n- len(chunk)     = {len(r_chunk)} bytes ({len(r_chunk)/1024/1024:.3f} Mb), "
+                    f"\n- chunksize      = {r_chunksize} bytes ({r_chunksize/1024/1024:.3f} Mb), "
+                    f"\n- offset         = {r_offset} bytes ({r_offset/1024/1024:.3f} Mb), "
+                    f"\n- total_received = {total_received} bytes ({total_received/1024/1024:.3f} Mb)"
+                )
+                offset += len(r_chunk)
+
+                f.write(bytearray(r_chunk))
 
                 done = response[0]["Ok"]["done"]
             else:
@@ -103,10 +125,17 @@ def main() -> int:
                 sys.exit(1)
 
     # ---------------------------------------------------------------------------
+    local_file_sha256 = calculate_sha256(local_filename_path)
+    local_file_size = local_filename_path.stat().st_size
+
+    # ---------------------------------------------------------------------------
     print(
         f"--\nCongratulations, the file was succesfully downloaded to "
         f"{local_filename_path}!"
     )
+    print(f"Filesize    : {local_file_size} bytes ({local_file_size/1024/1024:.3f} Mb)")
+    print(f"SHA256 hash : {local_file_sha256}")
+
     try:
         print("💯 🎉 🏁")
     except UnicodeEncodeError:

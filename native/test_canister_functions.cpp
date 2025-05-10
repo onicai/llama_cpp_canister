@@ -4,6 +4,7 @@
 #include "../src/health.h"
 #include "../src/logs.h"
 #include "../src/model.h"
+#include "../src/promptcache.h"
 #include "../src/ready.h"
 #include "../src/run.h"
 #include "../src/upload.h"

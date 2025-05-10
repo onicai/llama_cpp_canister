@@ -38,6 +38,11 @@ void file_download_chunk() {
   r_in.append("offset", CandidTypeNat64{&offset});
   ic_api.from_wire(r_in);
 
+  file_download_chunk_(ic_api, filename, chunksize, offset);
+}
+
+void file_download_chunk_(IC_API &ic_api, const std::string &filename,
+                          const uint64_t &chunksize, const uint64_t &offset) {
   // Open an ifstream
   std::ifstream if_stream;
   std::string msg;

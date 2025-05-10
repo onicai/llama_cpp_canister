@@ -15,10 +15,16 @@ def parse_args() -> argparse.Namespace:
         help="Local filename to upload",
     )
     parser.add_argument(
+        "--filetype",
+        type=str,
+        default="other",
+        choices=["promptcache", "gguf", "wasm", "log", "other"],
+        help="Type of file to download: promptcache, gguf, wasm, log, or other",
+    )
+    parser.add_argument(
         "--canister-filename",
         type=str,
-        default="models/model.gguf",
-        help="Canister filename. Defaults to 'models/model.gguf'",
+        help="Canister filename",
     )
     parser.add_argument(
         "--network",

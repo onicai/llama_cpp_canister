@@ -15,6 +15,13 @@ def parse_args() -> argparse.Namespace:
         help="Canister filename to download",
     )
     parser.add_argument(
+        "--filetype",
+        type=str,
+        default="other",
+        choices=["promptcache", "gguf", "wasm", "log", "other"],
+        help="Type of file to download: promptcache, gguf, wasm, log, or other",
+    )
+    parser.add_argument(
         "--local-filename",
         type=str,
         default=None,

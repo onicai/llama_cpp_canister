@@ -66,7 +66,7 @@ def test__uploaded_file_details(network: str) -> None:
     if PRINT_RESPONSE:
         print(f"{current_func_name()}: response: {response}")
     expected_response = '(variant { Ok = record { filename = "models/tiny.gguf"; filesize = 1_185_376 : nat64; filesha256 = "047bf46455a544931cff6fef14d7910154c56afbc23ab1c5e56a72e69912c04b";} })'
-    assert expected_response == response
+    assert response == expected_response
 
 def test__set_max_tokens(network: str) -> None:
     response = call_canister_api(
@@ -91,7 +91,7 @@ def test__get_max_tokens(network: str) -> None:
     if PRINT_RESPONSE:
         print(f"{current_func_name()}: response: {response}")
     expected_response = '(record { max_tokens_query = 5 : nat64; max_tokens_update = 5 : nat64;})'
-    assert expected_response == response
+    assert response == expected_response
 
 def test__ready(network: str) -> None:
     response = call_canister_api(

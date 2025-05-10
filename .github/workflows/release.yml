@@ -127,6 +127,8 @@ jobs:
         run: |
           mkdir -p release
           cp version.txt release/
+          cp requirements.txt release/
+          cp README.md release/
           mkdir -p release/build
           cp build/llama_cpp.wasm release/build/
           cp build/llama_cpp.did release/build/

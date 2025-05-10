@@ -16,13 +16,13 @@ ROOT_PATH = Path(__file__).parent.parent
 DFX = "dfx"
 
 
-def run_dfx_command(cmd: str) -> Optional[str]:
+def run_dfx_command(cmd: str, quiet: bool = False) -> Optional[str]:
     """Runs dfx command as a subprocess"""
     try:
         return run_shell_cmd(cmd, capture_output=True).rstrip("\n")
     except subprocess.CalledProcessError as e:
-        print(f"Failed dfx command: '{cmd}' with error: \n{e.output}")
-        # sys.exit(1)
+        if not quiet:
+            print(f"Failed dfx command: '{cmd}' with error: \n{e.output}")
     return None
 
 
@@ -41,12 +41,10 @@ def get_canister(
 
     # Set the network URL
     if network == "local":
-        replica_port = run_dfx_command(f"{DFX} info replica-port  ")
-        replica_rev = run_dfx_command(f"{DFX} info replica-rev  ")
+        replica_port = run_dfx_command(f"{DFX} info replica-port  ", quiet=True)
         webserver_port = run_dfx_command(f"{DFX} info webserver-port  ")
         networks_json_path = run_dfx_command(f"{DFX} info networks-json-path  ")
         print(f"replica-port       = {replica_port}")
-        print(f"replica-rev        = {replica_rev}")
         print(f"webserver-port     = {webserver_port}")
         print(f"networks-json-path = {networks_json_path}")
 

@@ -88,44 +88,6 @@ void send_output_record_result_error_to_wire(IC_API &ic_api,
   ic_api.to_wire(CandidTypeVariant{"Err", r_out});
 }
 
-bool get_canister_path_session(const std::string &path_session,
-                               const std::string &principal_id,
-                               std::string &canister_path_session,
-                               std::string &error_msg) {
-  // We store the prompt-cache files in a folder named with the principal id of the caller
-  //
-  // Note: to save multiple conversations per user, the front end can simply assign
-  //       a unique prompt-cache file per conversation, and that will do the job !
-  //
-
-  std::string path_session_ = path_session;
-  canister_path_session = "";
-  error_msg = "";
-
-  if (!path_session_.empty()) {
-    // Remove all leading '/'
-    size_t pos = path_session_.find_first_not_of('/');
-    if (pos != std::string::npos) {
-      path_session_.erase(0, pos);
-    } else {
-      // If the string only contains slashes, clear it
-      path_session_.clear();
-    }
-
-    // The cache file will be stored in ".cache/<principal_id>/<path_session-with_/replaced-by-_>"
-    canister_path_session =
-        ".canister_cache/" + principal_id + "/sessions/" + path_session_;
-
-    // Make sure that the cache directory exists, else llama.cpp cannot create the file
-    std::filesystem::path file_path(canister_path_session);
-    std::filesystem::path dir_path = file_path.parent_path();
-    if (!my_create_directory(dir_path, error_msg)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 // Helper function to retrieve the last write time of a file
 std::filesystem::file_time_type
 get_last_write_time(const std::filesystem::path &file, std::error_code &ec) {
