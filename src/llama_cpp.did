@@ -84,7 +84,7 @@ type FileDetailsRecordResult = variant {
 type FileDetailsRecord = record {
   filename : text;
   filesize : nat64; // the total filesize in bytes
-  filesha256 : text; // the total filesize in bytes
+  filesha256 : text; // the sha256 of the file
 };
 
 // -----------------------------------------------------
