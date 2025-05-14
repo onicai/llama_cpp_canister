@@ -42,7 +42,7 @@ _(Issue a PR to get your project listed)_
 
 # Using the release
 
-You can also grab the latest [release](https://github.com/onicai/llama_cpp_canister/releases) and unzip it. Then follow the instructions from the README, but skip these steps:
+You can just grab the latest [release](https://github.com/onicai/llama_cpp_canister/releases) and unzip it. Then follow the instructions from the README, but skip these steps:
 
 - No need to clone the repo. Everything is included in the release zip
 - No need to build the wasm. It is included in the release zip.
