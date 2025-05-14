@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 from typing import Generator
 from .calculate_sha256 import calculate_sha256
-from .ic_py_canister import get_canister
+from .ic_py_canister import get_canister, run_dfx_command
 from .parse_args_upload import parse_args
 
 ROOT_PATH = Path(__file__).parent.parent
@@ -67,6 +67,11 @@ def main() -> int:
     hf_sha256 = args.hf_sha256
 
     dfx_json_path = ROOT_PATH / "dfx.json"
+
+    if canister_id == "":
+        canister_id = run_dfx_command(
+            f"dfx canister --network {network} id {canister_name} "
+        )
 
     print(
         f"Summary:"

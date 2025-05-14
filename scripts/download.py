@@ -13,7 +13,7 @@ Run with:
 import sys
 from pathlib import Path
 from typing import List
-from .ic_py_canister import get_canister
+from .ic_py_canister import get_canister, run_dfx_command
 from .parse_args_download import parse_args
 from .calculate_sha256 import calculate_sha256
 
@@ -44,6 +44,11 @@ def main() -> int:
     chunksize = args.chunksize
 
     dfx_json_path = ROOT_PATH / "dfx.json"
+
+    if canister_id == "":
+        canister_id = run_dfx_command(
+            f"dfx canister --network {network} id {canister_name} "
+        )
 
     print(
         f"Summary:"

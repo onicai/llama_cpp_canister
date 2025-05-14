@@ -1,8 +1,20 @@
-"""Test canister APIs
+"""Test canister
 
-   First deploy the canister, then run:
+First deploy the canister:
+$ icpp build-wasm
+$ dfx deploy --network local
 
-   $ pytest --network=[local/ic] test_apis.py
+Then get the model from Hugging Face:
+$ mkdir -p models/Qwen/Qwen2.5-0.5B-Instruct-GGUF
+$ wget -c -O models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf
+
+Then upload the model:
+$ python -m scripts.upload --network local --canister llama_cpp --canister-filename models/model.gguf --filetype gguf models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf
+
+Then run the tests for this model::
+$ pytest -vv --network local test/test_qwen2.py
+
+To run it against a deployment to the IC, just replace `local` with `ic` in the commands above.
 
 """
 # pylint: disable=missing-function-docstring, unused-import, wildcard-import, unused-wildcard-import, line-too-long
