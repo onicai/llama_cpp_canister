@@ -144,11 +144,11 @@ jobs:
           cp scripts/upload.py release/scripts/
           cp scripts/calculate_sha256.py release/scripts/
           cp scripts/requirements.txt release/scripts/
-          mkdir -p src/llama_cpp_onicai_fork
-          cp src/llama_cpp_onicai_fork/requirements.txt src/llama_cpp_onicai_fork/
-          cp -r src/llama_cpp_onicai_fork/requirements src/llama_cpp_onicai_fork/
-          mkdir test
-          cp test/*.py test/
+          mkdir -p release/src/llama_cpp_onicai_fork
+          cp src/llama_cpp_onicai_fork/requirements.txt release/src/llama_cpp_onicai_fork/
+          cp -r src/llama_cpp_onicai_fork/requirements release/src/llama_cpp_onicai_fork/
+          mkdir release/test
+          cp test/*.py release/test/
           cd release
           zip -r ../llama_cpp_canister_${{ github.event.inputs.tag }}.zip .
           cd ..
