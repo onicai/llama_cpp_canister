@@ -26,13 +26,8 @@ def run_dfx_command(cmd: str, quiet: bool = False) -> Optional[str]:
     return None
 
 
-def get_canister(
-    canister_name: str,
-    candid_path: Path,
-    network: str = "local",
-    canister_id: Optional[str] = "",
-) -> Canister:
-    """Returns an ic_py Canister instance"""
+def get_agent(network: str = "local") -> Agent:
+    """Returns an ic_py Agent instance"""
 
     # Check if the network is up
     print(f"--\nChecking if the {network} network is up...")
@@ -55,6 +50,7 @@ def get_canister(
             else:
                 print("Error: replica_port and webserver_port are both None.")
                 sys.exit(1)
+
     else:
         # https://smartcontracts.org/docs/interface-spec/index.html#http-interface
         network_url = "https://ic0.app"
@@ -64,15 +60,6 @@ def get_canister(
     # Get the name of the current identity
     identity_whoami = run_dfx_command(f"{DFX} identity whoami ")
     print(f"Using identity = {identity_whoami}")
-
-    # Try to get the id of the canister if not provided explicitly
-    # This only works from the same directory as where you deployed from.
-    # So we also provide the option to just pass in the canister_id directly
-    if canister_id == "":
-        canister_id = run_dfx_command(
-            f"{DFX} canister --network {network} id {canister_name} "
-        )
-    print(f"Canister ID = {canister_id}")
 
     # Get the private key of the current identity
     private_key = run_dfx_command(f"{DFX} identity export {identity_whoami} ")
@@ -86,6 +73,27 @@ def get_canister(
 
     # Create an IC agent to communicate with IC canisters
     agent = Agent(identity, client)
+    return agent
+
+
+def get_canister(
+    canister_name: str,
+    candid_path: Path,
+    network: str = "local",
+    canister_id: Optional[str] = "",
+) -> Canister:
+    """Returns an ic_py Canister instance"""
+
+    agent = get_agent(network=network)
+
+    # Try to get the id of the canister if not provided explicitly
+    # This only works from the same directory as where you deployed from.
+    # So we also provide the option to just pass in the canister_id directly
+    if canister_id == "":
+        canister_id = run_dfx_command(
+            f"{DFX} canister --network {network} id {canister_name} "
+        )
+    print(f"Canister ID = {canister_id}")
 
     # Read canister's candid from file
     with open(

@@ -1,8 +1,16 @@
-"""Test canister APIs
+"""Test canister
 
-   First deploy the canister, then run:
+First deploy the canister:
+$ icpp build-wasm
+$ dfx deploy --network local
 
-   $ pytest --network=[local/ic] test_apis.py
+Then upload the model:
+$ python -m scripts.upload --network local --canister llama_cpp --canister-filename models/tiny.gguf --filetype gguf models/stories260Ktok512.gguf
+
+Then run the tests for this model::
+$ pytest -vv --network local test/test_tiny_stories.py
+
+To run it against a deployment to the IC, just replace `local` with `ic` in the commands above.
 
 """
 # pylint: disable=missing-function-docstring, unused-import, wildcard-import, unused-wildcard-import, line-too-long

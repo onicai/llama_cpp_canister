@@ -1,8 +1,13 @@
 """Test promptcache APIs
 
-   First deploy the canister, then run:
+First deploy the canister:
+$ icpp build-wasm
+$ dfx deploy --network local
 
-   $ pytest -vv --network=[local/ic] test/test_promptcache.py
+Then run the tests:
+$ pytest -vv --network local test/test_promptcache.py
+
+To run it against a deployment to the IC, just replace `local` with `ic` in the commands above.
 
 """
 # pylint: disable=missing-function-docstring, unused-import, wildcard-import, unused-wildcard-import, line-too-long
