@@ -93,6 +93,12 @@ void test_qwen2(MockIC &mockIC) {
                   "4449444c026c019aa1b2f90c7a6b01bc8a0100010100c800",
                   silent_on_trap, anonymous_principal);
 
+  // '()' -> '(variant { Ok = record { status_code = 200 : nat16; } })'
+  mockIC.run_test(std::string(__func__) + ": " + "chats_resume - " + model,
+                  chats_resume, "4449444c0000",
+                  "4449444c026c019aa1b2f90c7a6b01bc8a0100010100c800",
+                  silent_on_trap, my_principal);
+
   // Let's have two chats with this model
   for (int i = 0; i < 2; ++i) {
     // -----------------------------------------------------------------------------

@@ -23,6 +23,7 @@ _(Issue a PR to get your project listed)_
 
 | Project    | Description/Tagline                                                 | GitHub                                                 | X                                                 | Token                                      | URL                                               |
 | ---------- | ------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------- | ------------------------------------------ | ------------------------------------------------- |
+| funnAI     | The next-generation AI ecosystem | -     | [@onicaiHQ](https://x.com/onicaiHQ) | $FUNNAI | [funnai.onicai.com](https://funnai.onicai.com) |
 | IConfucius | Wisdom fueled by Cycles<br>_Fully on chain AI tokenized on Bitcoin_ | [IConfucius](https://github.com/onicai/IConfucius)     | [@IConfucius_odin](https://x.com/IConfucius_odin) | [$ICONFUCIUS](https://odin.fun/token/29m8) | [onicai.com](https://www.onicai.com/#/iconfucius) |
 | Forseti    | Norse God of Justice<br>_Fully on chain AI tokenized on Bitcoin_    | [forseti.fun](https://github.com/forria64/forseti.fun) | [@forsetidotfun](https://x.com/forsetidotfun)     | [$FORSETI](https://odin.fun/token/2dld)    | [forseti.fun](https://forseti.fun)                |
 | ICGPT      | on-chain LLMs<br>_Chat with on-chain LLMs_                          | [icgpt](https://github.com/icppWorld/icgpt)            | [@onicaiHQ](https://x.com/onicaiHQ)               | -                                          | [icgpt.onicai.com](https://icgpt.onicai.com)      |
@@ -347,9 +348,16 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
       -n 512
     ```
 
-  - Retrieving saved chats
+  - Saving the chats
 
-    Up to 3 chats per principal are saved.
+    This functionality is off by default. You can turn it on/off with:
+
+    ```bash
+    dfx canister call llama_cpp chats_resume
+    dfx canister call llama_cpp chats_pause
+    ```
+
+    When on, up to 3 chats per principal are saved.
     The `get_chats` method retrieves them for the principal of the caller.
 
     ```

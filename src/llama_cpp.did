@@ -176,6 +176,8 @@ service : {
   log_resume : () -> (StatusCodeRecordResult);
 
   // Chats retrieval
+  chats_pause : () -> (StatusCodeRecordResult);
+  chats_resume : () -> (StatusCodeRecordResult);
   get_chats : () -> (GetChatsRecordResult) query;
 
   // Access level

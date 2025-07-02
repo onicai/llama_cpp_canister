@@ -38,6 +38,19 @@ def current_func_name():
 
 PRINT_RESPONSE = True
 
+def test__chats_resume(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="chats_resume",
+        canister_argument='()',
+        network=network,
+    )
+    if PRINT_RESPONSE:
+        print(f"{current_func_name()}: response: {response}")
+    expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
+    assert response == expected_response
+
 def test__log_pause(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
@@ -247,6 +260,18 @@ def test__run_update_5(network: str) -> None:
     expected_response = '(variant { Ok = record { output = " liked to"; conversation = " Joe loves writing stories. He liked"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
     assert response == expected_response
 
+def test__get_chats_ok(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_chats",
+        canister_argument='()',
+        network=network,
+    )
+    if PRINT_RESPONSE:
+        print(f"{current_func_name()}: response: {response}")
+    assert 'Ok' in response
+
 def test__remove_prompt_cache_1(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
@@ -270,6 +295,31 @@ def test__copy_prompt_cache_restore(network: str) -> None:
     if PRINT_RESPONSE:
         print(f"{current_func_name()}: response: {response}")
     assert "(variant { Ok" in response
+
+def test__chats_pause(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="chats_pause",
+        canister_argument='()',
+        network=network,
+    )
+    if PRINT_RESPONSE:
+        print(f"{current_func_name()}: response: {response}")
+    expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
+    assert response == expected_response
+
+def test__get_chats_err(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_chats",
+        canister_argument='()',
+        network=network,
+    )
+    if PRINT_RESPONSE:
+        print(f"{current_func_name()}: response: {response}")
+    assert 'Err' in response
 
 def test__new_chat_2(network: str) -> None:
     response = call_canister_api(

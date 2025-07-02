@@ -187,6 +187,89 @@ def test__run_update_2_2(network: str) -> None:
     expected_response = '(variant { Ok = record { output = "Large"; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\nLarge"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
     assert response == expected_response
 
+def test__chats_resume(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="chats_resume",
+        canister_argument='()',
+        network=network,
+    )
+    expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
+    assert response == expected_response
+
+def test__log_pause(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="log_pause",
+        canister_argument='()',
+        network=network,
+    )
+    expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
+    assert response == expected_response
+
+def test__new_chat_3(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="new_chat",
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
+        network=network,
+    )
+    assert "(variant { Ok" in response
+
+def test__get_chats_1(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_chats",
+        canister_argument='()',
+        network=network,
+    )
+    assert 'Ok' in response
+
+def test__chats_pause(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="chats_pause",
+        canister_argument='()',
+        network=network,
+    )
+    expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
+    assert response == expected_response
+
+def test__get_chats_2(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_chats",
+        canister_argument='()',
+        network=network,
+    )
+    assert 'Err' in response
+
+def test__new_chat_4(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="new_chat",
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
+        network=network,
+    )
+    assert "(variant { Ok" in response
+
+def test__get_chats_3(network: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_chats",
+        canister_argument='()',
+        network=network,
+    )
+    assert 'Err' in response
+
 def test__remove_prompt_cache_cleanup(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
