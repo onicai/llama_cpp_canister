@@ -44,15 +44,15 @@ void new_chat() {
   std::string principal_id = caller.get_text();
 
   // -----------------------------------------------------------
-  // Create a new file to save this chat for this prinicipal
-  if (!db_chats_new(principal_id, error_msg)) {
+  // Create a new file to save this chat for this principal
+  if (is_db_chats_active() && !db_chats_new(principal_id, error_msg)) {
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
   }
 
   // Each principal can only save N chats
-  if (!db_chats_clean(principal_id, error_msg)) {
+  if (is_db_chats_active() && !db_chats_clean(principal_id, error_msg)) {
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
@@ -175,7 +175,8 @@ void run(IC_API &ic_api, const uint64_t &max_tokens) {
   }
 
   // Append output to latest chat file for this prinicipal
-  if (!db_chats_save_conversation(conversation_ss.str(), principal_id,
+  if (is_db_chats_active() &&
+      !db_chats_save_conversation(conversation_ss.str(), principal_id,
                                   icpp_error_msg)) {
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, icpp_error_msg);

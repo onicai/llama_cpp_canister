@@ -14,8 +14,18 @@
 
 #include "ic_api.h"
 
+bool DB_CHATS_ACTIVE = false;
+
+bool is_db_chats_active() { return DB_CHATS_ACTIVE; }
+
 bool get_saved_chats_dir(const std::string &principal_id,
                          std::string &saved_chats_dir, std::string &error_msg) {
+  if (!DB_CHATS_ACTIVE) {
+    error_msg = std::string(__func__) +
+                ": do not call this function if DB_CHATS_ACTIVE is false";
+    return false;
+  }
+
   saved_chats_dir = ".canister_cache/" + principal_id + "/db_chats";
 
   // Make sure that the directory exists, else we cannot create the file
@@ -31,7 +41,11 @@ bool db_chats_write_conversation(const std::string &file_path,
                                  const std::string &conversation,
                                  const std::string &principal_id,
                                  std::string &error_msg) {
-
+  if (!DB_CHATS_ACTIVE) {
+    error_msg = std::string(__func__) +
+                ": do not call this function if DB_CHATS_ACTIVE is false";
+    return false;
+  }
   std::ofstream ofs(file_path);
   if (ofs.is_open()) {
     ofs << principal_id << std::endl;
@@ -58,6 +72,11 @@ bool db_chats_write_conversation(const std::string &file_path,
 }
 
 bool db_chats_new(const std::string &principal_id, std::string &error_msg) {
+  if (!DB_CHATS_ACTIVE) {
+    error_msg = std::string(__func__) +
+                ": do not call this function if DB_CHATS_ACTIVE is false";
+    return false;
+  }
   // The chats will be stored in ".saved_chats/<principal_id>"
   std::string saved_chats_dir;
   if (!get_saved_chats_dir(principal_id, saved_chats_dir, error_msg)) {
@@ -86,7 +105,11 @@ bool db_chats_new(const std::string &principal_id, std::string &error_msg) {
 }
 
 bool db_chats_clean(const std::string &principal_id, std::string &error_msg) {
-
+  if (!DB_CHATS_ACTIVE) {
+    error_msg = std::string(__func__) +
+                ": do not call this function if DB_CHATS_ACTIVE is false";
+    return false;
+  }
   // Each principal can only save max_chats
   uint64_t max_chats = 3; // Just hardcode it for now
 
@@ -143,7 +166,11 @@ bool db_chats_clean(const std::string &principal_id, std::string &error_msg) {
 bool db_chats_save_conversation(const std::string &conversation,
                                 const std::string &principal_id,
                                 std::string &error_msg) {
-
+  if (!DB_CHATS_ACTIVE) {
+    error_msg = std::string(__func__) +
+                ": do not call this function if DB_CHATS_ACTIVE is false";
+    return false;
+  }
   std::string saved_chats_dir;
   if (!get_saved_chats_dir(principal_id, saved_chats_dir, error_msg)) {
     return false;
@@ -198,6 +225,14 @@ bool db_chats_save_conversation(const std::string &conversation,
 void get_chats() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
   if (!is_caller_whitelisted(ic_api)) return;
+
+  if (!DB_CHATS_ACTIVE) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other",
+                                 CandidTypeText{std::string(__func__) + ": " +
+                                                "DB_CHATS_ACTIVE is false"}}});
+    return;
+  }
 
   CandidTypePrincipal caller = ic_api.get_caller();
 
@@ -285,4 +320,30 @@ void get_chats() {
 
   // Wrap it into a Variant: GetChatsRecordResult
   ic_api.to_wire(CandidTypeVariant{"Ok", get_chats_record});
+}
+
+void chats_resume() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!is_caller_whitelisted(ic_api)) return;
+  DB_CHATS_ACTIVE = true;
+
+  std::cout << "llama_cpp: " << std::string(__func__)
+            << " - DB_CHATS_ACTIVE set to true" << std::endl;
+
+  CandidTypeRecord status_code_record;
+  status_code_record.append("status_code", CandidTypeNat16{200});
+  ic_api.to_wire(CandidTypeVariant{"Ok", status_code_record});
+}
+
+void chats_pause() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!is_caller_whitelisted(ic_api)) return;
+  DB_CHATS_ACTIVE = false;
+
+  std::cout << "llama_cpp: " << std::string(__func__)
+            << " - DB_CHATS_ACTIVE set to false" << std::endl;
+
+  CandidTypeRecord status_code_record;
+  status_code_record.append("status_code", CandidTypeNat16{200});
+  ic_api.to_wire(CandidTypeVariant{"Ok", status_code_record});
 }
