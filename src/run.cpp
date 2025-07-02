@@ -44,7 +44,7 @@ void new_chat() {
   std::string principal_id = caller.get_text();
 
   // -----------------------------------------------------------
-  // Create a new file to save this chat for this prinicipal
+  // Create a new file to save this chat for this principal
   if (is_db_chats_active() && !db_chats_new(principal_id, error_msg)) {
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, error_msg);
