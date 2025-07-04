@@ -44,11 +44,13 @@ void filesystem_remove() {
 }
 
 bool filesystem_remove_(IC_API &ic_api, const std::string &filename,
-                        bool to_wire = true) {
+                        bool to_wire) {
   // Use the non-throwing version of std::filesystem::remove
   std::error_code ec;
   std::string msg;
   bool error = false;
+  bool removed = false;
+  std::uint64_t filesize = 0;
 
   bool exists = std::filesystem::exists(filename, ec);
   if (ec) {
@@ -57,9 +59,8 @@ bool filesystem_remove_(IC_API &ic_api, const std::string &filename,
   } else if (!exists) {
     msg = "File does not exist: " + filename + "\n";
   } else {
-    msg = "File exists: " + filename + "\n";
-    std::uint64_t filesize = filesystem_file_size_(ic_api, filename, false);
-    bool removed = std::filesystem::remove(filename, ec);
+    filesize = filesystem_file_size_(ic_api, filename, false);
+    removed = std::filesystem::remove(filename, ec);
     if (ec) {
       error = true;
       msg += "Failed to remove file: " + filename + ": " + ec.message();
@@ -95,7 +96,7 @@ bool filesystem_remove_(IC_API &ic_api, const std::string &filename,
 }
 
 std::uint64_t filesystem_file_size_(IC_API &ic_api, const std::string &filename,
-                                    bool to_wire = true) {
+                                    bool to_wire) {
   std::error_code ec;
   std::string msg;
   bool error = false;
