@@ -173,6 +173,21 @@ type FilesystemRemoveRecord = record {
 };
 
 // -----------------------------------------------------
+type DirContentInputRecord = record {
+  dir : text;
+};
+type DirContentRecordResult = variant {
+  Err : ApiError;
+  Ok : DirContentVec;
+};
+type DirContentVec = vec FileEntry;
+type FileEntry = record {
+  filename : text;
+  filetype : text; // "file" or "directory"
+  filesize : nat64;
+};
+
+// -----------------------------------------------------
 // The endpoint services of our canister
 service : {
   // canister
@@ -204,6 +219,7 @@ service : {
   // Files - general utility endpoints exposing std::filesystem functions
   filesystem_remove : (FilesystemRemoveInputRecord) -> (FilesystemRemoveRecordResult);
   filesystem_file_size : (FilesystemFileSizeInputRecord) -> (FilesystemFileSizeRecordResult) query;
+  recursive_dir_content : (DirContentInputRecord) -> (DirContentRecordResult) query;
 
   // Logging endpoints
   remove_log_file : (InputRecord) -> (OutputRecordResult);

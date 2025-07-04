@@ -26,8 +26,6 @@ bool create_random_binary_file(const std::filesystem::path &directory,
     if (!std::filesystem::exists(directory)) {
       std::filesystem::create_directory(directory);
       std::cout << "Directory created: " << directory << '\n';
-    } else {
-      std::cout << "Directory already exists: " << directory << '\n';
     }
 
     std::filesystem::path filePath = directory / filename;
@@ -53,6 +51,22 @@ bool create_random_binary_file(const std::filesystem::path &directory,
 
   } catch (const std::exception &ex) {
     std::cerr << "Exception: " << ex.what() << '\n';
+    return false;
+  }
+}
+
+bool delete_directory(const std::filesystem::path &directory) {
+  try {
+    if (std::filesystem::exists(directory)) {
+      std::filesystem::remove_all(directory);
+      std::cout << "Directory deleted: " << directory << '\n';
+      return true;
+    } else {
+      std::cout << "Directory not found: " << directory << '\n';
+      return true; // No error if directory does not exist
+    }
+  } catch (const std::exception &ex) {
+    std::cerr << "Exception while deleting directory: " << ex.what() << '\n';
     return false;
   }
 }
@@ -91,18 +105,90 @@ void test_files(MockIC &mockIC) {
   bool silent_on_trap = true;
 
   // -----------------------------------------------------------------------------
-  // Create a random binary file to the filesystem of exactly 1.01 MB
-  constexpr std::size_t file_size = 1010 * 1024; // 1.01 MB
-  std::filesystem::path directory = "Work";
-  std::string filename = "random_data.bin";
+  // Create random binary files
+  std::filesystem::path top_directory = "Work/test_files_qa";
 
-  bool success = create_random_binary_file(directory, filename, file_size);
+  bool success = delete_directory(top_directory);
   if (!success) {
-    std::cout
-        << "FATAL ERROR: Failed to create random binary file for testing.\n";
-    std::cout << "FATAL: Exiting program due to failed file creation.\n";
+    std::cout << "FATAL ERROR: Failed to delete directory " << top_directory
+              << " for testing.\n";
+    std::cout << "FATAL: Exiting program due to failed directory deletion.\n";
     std::exit(EXIT_FAILURE);
   }
+
+  std::string filename = "random_data.bin";
+  std::size_t file_size = 1010 * 1024; // 1.01 MB
+  std::filesystem::path directory = top_directory;
+  for (int i = 0; i < 10; ++i) {
+
+    if (i > 0) {
+      filename = "random_data_" + std::to_string(i) + ".bin";
+      file_size += 1010 * 1024; // Increase file size for each iteration
+    }
+    if (i > 5) {
+      // After 5 iterations, write to a new directory
+      directory = directory / ("subdir_" + std::to_string(i - 5));
+    }
+    success = create_random_binary_file(directory, filename, file_size);
+    if (!success) {
+      std::cout << "FATAL ERROR: Failed to create random binary file "
+                << filename << " for testing.\n";
+      std::cout << "FATAL: Exiting program due to failed file creation.\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  // -----------------------------------------------------------------------------
+  // recursive_dir_content test for a non-existing dir
+  // '(record {dir = "does_not_exist"})' ->
+  /*
+  (
+    variant {
+        Err = record {
+        msg = "recursive_dir_content: Directory does not exist: does_not_exist\n";
+        }
+    },
+  )
+  */
+  mockIC.run_test(
+      std::string(__func__) + ": " + "recursive_dir_content - non-existing dir",
+      recursive_dir_content,
+      "4449444c016c01cdfab0027101000e646f65735f6e6f745f6578697374",
+      "4449444c026b01b0ad8fcd0c716b01c5fed2010001010000407265637572736976655f6469725f636f6e74656e743a204469726563746f727920646f6573206e6f742065786973743a20646f65735f6e6f745f65786973740a",
+      silent_on_trap, my_principal);
+
+  // -----------------------------------------------------------------------------
+  // recursive_dir_content test for an existing dir - must fail for anonymous user
+  // '(record {dir = "Work/test_files_qa"})' -> '(variant { Err = record { Other = "Access Denied"} })'
+  mockIC.run_test(
+      std::string(__func__) + ": " +
+          "recursive_dir_content - existing dir anonymous",
+      recursive_dir_content,
+      "4449444c016c01cdfab00271010012576f726b2f746573745f66696c65735f7161",
+      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696564",
+      silent_on_trap, anonymous_principal);
+
+  // -----------------------------------------------------------------------------
+  // recursive_dir_content test for an existing dir - must fail for anonymous user
+  // '(record {dir = "Work/test_files_qa"})' -> '(variant { Err = record { Other = "Access Denied"} })'
+  mockIC.run_test(
+      std::string(__func__) + ": " +
+          "recursive_dir_content - existing dir non-controller",
+      recursive_dir_content,
+      "4449444c016c01cdfab00271010012576f726b2f746573745f66696c65735f7161",
+      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696564",
+      silent_on_trap, non_controller_principal);
+
+  // -----------------------------------------------------------------------------
+  // recursive_dir_content test for an existing dir - works for controller
+  // '(record {dir = "Work/test_files_qa"})' ->
+  mockIC.run_test(
+      std::string(__func__) + ": " +
+          "recursive_dir_content - existing dir non-controller",
+      recursive_dir_content,
+      "4449444c016c01cdfab00271010012576f726b2f746573745f66696c65735f7161",
+      "4449444c156c03c7dda8bb0701bdbaf9d50702b6decedb07016d716d786c006c03c7dda8bb0771bdbaf9d50778b6decedb07716d046c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716c03c7dda8bb0771bdbaf9d50778b6decedb07716b01bc8a01050114000e24576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174615f352e62696e00b05e00000000000466696c6524576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174615f342e62696e00e84e00000000000466696c6524576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174615f332e62696e00203f00000000000466696c6524576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174615f322e62696e00582f00000000000466696c6524576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174615f312e62696e00901f00000000000466696c6522576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e00c80f00000000000466696c651b576f726b2f746573745f66696c65735f71612f7375626469725f310000000000000000096469726563746f72792d576f726b2f746573745f66696c65735f71612f7375626469725f312f72616e646f6d5f646174615f362e62696e00786e00000000000466696c6524576f726b2f746573745f66696c65735f71612f7375626469725f312f7375626469725f320000000000000000096469726563746f727936576f726b2f746573745f66696c65735f71612f7375626469725f312f7375626469725f322f72616e646f6d5f646174615f372e62696e00407e00000000000466696c652d576f726b2f746573745f66696c65735f71612f7375626469725f312f7375626469725f322f7375626469725f330000000000000000096469726563746f727936576f726b2f746573745f66696c65735f71612f7375626469725f312f7375626469725f322f7375626469725f332f7375626469725f340000000000000000096469726563746f727948576f726b2f746573745f66696c65735f71612f7375626469725f312f7375626469725f322f7375626469725f332f7375626469725f342f72616e646f6d5f646174615f392e62696e00d09d00000000000466696c653f576f726b2f746573745f66696c65735f71612f7375626469725f312f7375626469725f322f7375626469725f332f72616e646f6d5f646174615f382e62696e00088e00000000000466696c65",
+      silent_on_trap, my_principal);
 
   // -----------------------------------------------------------------------------
   // filesystem_file_size test for a non-existing file
@@ -242,5 +328,5 @@ void test_files(MockIC &mockIC) {
 
   // -----------------------------------------------------------------------------
   // Remove the test files created for testing (If all Ok, this should not be needed. It is already removed)
-  delete_binary_file(directory, filename);
+  delete_directory(top_directory);
 }

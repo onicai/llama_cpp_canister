@@ -10,8 +10,10 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <stdio.h>
 #include <string>
+#include <vector>
 
 #include "ic_api.h"
 
@@ -41,6 +43,50 @@ void filesystem_remove() {
   ic_api.from_wire(r_in);
 
   filesystem_remove_(ic_api, filename, true);
+}
+
+void recursive_dir_content() {
+  IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
+  if (!is_caller_a_controller(ic_api)) return;
+
+  // Get directory name
+  std::string dir{""};
+
+  CandidTypeRecord r_in;
+  r_in.append("dir", CandidTypeText{&dir});
+  ic_api.from_wire(r_in);
+
+  // Check if the directory exists
+  std::error_code ec;
+  if (!std::filesystem::exists(dir, ec) ||
+      !std::filesystem::is_directory(dir, ec)) {
+    std::string msg = "Directory does not exist: " + dir + "\n";
+    std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+              << std::endl;
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +
+                                                         ": " + msg}}});
+    return;
+  }
+
+  // List the contents of the directory
+  std::vector<FileEntry> contents =
+      list_directory_contents(std::filesystem::path(dir));
+
+  // reformat it to proper output format for Candid interface
+  std::vector<std::string> filenames;
+  std::vector<std::string> filetypes;
+  std::vector<std::uint64_t> filesizes;
+  for (const auto &entry : contents) {
+    filenames.push_back(entry.filename);
+    filetypes.push_back(entry.filetype);
+    filesizes.push_back(entry.filesize);
+  }
+  CandidTypeRecord r_file_entries;
+  r_file_entries.append("filename", CandidTypeVecText{filenames});
+  r_file_entries.append("filetype", CandidTypeVecText{filetypes});
+  r_file_entries.append("filesize", CandidTypeVecNat64{filesizes});
+  ic_api.to_wire(CandidTypeVariant{"Ok", CandidTypeVecRecord{r_file_entries}});
 }
 
 bool filesystem_remove_(IC_API &ic_api, const std::string &filename,
@@ -135,4 +181,44 @@ std::uint64_t filesystem_file_size_(IC_API &ic_api, const std::string &filename,
         CandidTypeVariant{"Ok", CandidTypeRecord{filesystem_file_size_record}});
   }
   return filesize;
+}
+
+std::vector<FileEntry>
+list_directory_contents(const std::filesystem::path &dir) {
+  std::vector<FileEntry> entries;
+  std::error_code ec;
+
+  if (!std::filesystem::exists(dir, ec) ||
+      !std::filesystem::is_directory(dir, ec)) {
+    return entries;
+  }
+
+  for (const auto &entry :
+       std::filesystem::recursive_directory_iterator(dir, ec)) {
+    if (ec) continue;
+
+    FileEntry fe;
+    fe.filename = entry.path().string();
+
+    if (entry.is_directory(ec)) {
+      fe.filetype = "directory";
+      fe.filesize = 0;
+    } else if (entry.is_regular_file(ec)) {
+      fe.filetype = "file";
+
+      auto size = std::filesystem::file_size(entry.path(), ec);
+      if (ec || size > std::numeric_limits<std::uint64_t>::max()) {
+        fe.filesize = 0;
+      } else {
+        fe.filesize = static_cast<std::uint64_t>(size);
+      }
+    } else {
+      fe.filetype = "other";
+      fe.filesize = 0;
+    }
+
+    entries.push_back(fe);
+  }
+
+  return entries;
 }
