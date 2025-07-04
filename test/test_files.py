@@ -75,19 +75,21 @@ def test__filesystem_file_size_anonymous(identity_anonymous: Dict[str, str], net
     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
     assert response == expected_response
 
-def test__filesystem_file_size_non_controller(identity_default: Dict[str, str], network: str) -> None:
-    principal = identity_default["principal"]
-    filename = f".canister_cache/{principal}/sessions/prompt.cache"
+# This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
+#
+# def test__filesystem_file_size_non_controller(identity_default: Dict[str, str], network: str) -> None:
+#     principal = identity_default["principal"]
+#     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
-    response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
-        canister_name=CANISTER_NAME,
-        canister_method="filesystem_file_size",
-        canister_argument=f'(record {{filename = "{filename}"}})',
-        network=network,
-    )
-    expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
-    assert response == expected_response
+#     response = call_canister_api(
+#         dfx_json_path=DFX_JSON_PATH,
+#         canister_name=CANISTER_NAME,
+#         canister_method="filesystem_file_size",
+#         canister_argument=f'(record {{filename = "{filename}"}})',
+#         network=network,
+#     )
+#     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+#     assert response == expected_response
 
 def test__filesystem_file_size_controller(network: str, principal: str) -> None:
     filename = f".canister_cache/{principal}/sessions/prompt.cache"
@@ -131,19 +133,21 @@ def test__filesystem_remove_anonymous(identity_anonymous: Dict[str, str], networ
     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
     assert response == expected_response
 
-def test__filesystem_remove_non_controller(identity_default: Dict[str, str], network: str) -> None:
-    principal = identity_default["principal"]
-    filename = f".canister_cache/{principal}/sessions/prompt.cache"
+# This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
+# 
+# def test__filesystem_remove_non_controller(identity_default: Dict[str, str], network: str) -> None:
+#     principal = identity_default["principal"]
+#     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
-    response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
-        canister_name=CANISTER_NAME,
-        canister_method="filesystem_remove",
-        canister_argument=f'(record {{filename = "{filename}"}})',
-        network=network,
-    )
-    expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
-    assert response == expected_response
+#     response = call_canister_api(
+#         dfx_json_path=DFX_JSON_PATH,
+#         canister_name=CANISTER_NAME,
+#         canister_method="filesystem_remove",
+#         canister_argument=f'(record {{filename = "{filename}"}})',
+#         network=network,
+#     )
+#     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+#     assert response == expected_response
 
 def test__filesystem_remove_controller(network: str, principal: str) -> None:
     filename = f".canister_cache/{principal}/sessions/prompt.cache"
