@@ -43,7 +43,8 @@ void filesystem_remove() {
   filesystem_remove_(ic_api, filename, true);
 }
 
-bool filesystem_remove_(IC_API &ic_api, const std::string &filename, bool to_wire = true) {
+bool filesystem_remove_(IC_API &ic_api, const std::string &filename,
+                        bool to_wire = true) {
   // Use the non-throwing version of std::filesystem::remove
   std::error_code ec;
   std::string msg;
@@ -60,23 +61,24 @@ bool filesystem_remove_(IC_API &ic_api, const std::string &filename, bool to_wir
     std::uint64_t filesize = filesystem_file_size_(ic_api, filename, false);
     bool removed = std::filesystem::remove(filename, ec);
     if (ec) {
-        error = true;
-        msg += "Failed to remove file: " + filename + ": " + ec.message();
+      error = true;
+      msg += "Failed to remove file: " + filename + ": " + ec.message();
     } else if (!removed) {
-        msg += "File did not exist: " + filename;
+      msg += "File did not exist: " + filename;
     } else {
-        msg += "File removed successfully: " + filename;
+      msg += "File removed successfully: " + filename;
     }
   }
-  
-  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg << std::endl;
+
+  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+            << std::endl;
 
   if (to_wire) {
     if (error) {
       ic_api.to_wire(CandidTypeVariant{
-        "Err",
-        CandidTypeVariant{
-            "Other", CandidTypeText{std::string(__func__) + ": " + msg}}});
+          "Err",
+          CandidTypeVariant{
+              "Other", CandidTypeText{std::string(__func__) + ": " + msg}}});
     } else {
       // Return the status over the wire (caller must immediately return from endpoint)
       CandidTypeRecord filesystem_remove_record;
@@ -85,13 +87,15 @@ bool filesystem_remove_(IC_API &ic_api, const std::string &filename, bool to_wir
       filesystem_remove_record.append("filename", CandidTypeText{filename});
       filesystem_remove_record.append("filesize", CandidTypeNat64{filesize});
       filesystem_remove_record.append("msg", CandidTypeText{msg});
-      ic_api.to_wire(CandidTypeVariant{"Ok", CandidTypeRecord{filesystem_remove_record}});
+      ic_api.to_wire(
+          CandidTypeVariant{"Ok", CandidTypeRecord{filesystem_remove_record}});
     }
   }
   return removed;
 }
 
-std::uint64_t filesystem_file_size_(IC_API &ic_api, const std::string &filename, bool to_wire = true) {
+std::uint64_t filesystem_file_size_(IC_API &ic_api, const std::string &filename,
+                                    bool to_wire = true) {
   std::error_code ec;
   std::string msg;
   bool error = false;
@@ -116,7 +120,8 @@ std::uint64_t filesystem_file_size_(IC_API &ic_api, const std::string &filename,
     }
   }
 
-  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg << std::endl;
+  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+            << std::endl;
 
   if (to_wire) {
     // Return the filesize over the wire (caller must immediately return from endpoint)
@@ -125,7 +130,8 @@ std::uint64_t filesystem_file_size_(IC_API &ic_api, const std::string &filename,
     filesystem_file_size_record.append("filename", CandidTypeText{filename});
     filesystem_file_size_record.append("filesize", CandidTypeNat64{filesize});
     filesystem_file_size_record.append("msg", CandidTypeText{msg});
-    ic_api.to_wire(CandidTypeVariant{"Ok", CandidTypeRecord{filesystem_file_size_record}});
+    ic_api.to_wire(
+        CandidTypeVariant{"Ok", CandidTypeRecord{filesystem_file_size_record}});
   }
   return filesize;
 }
