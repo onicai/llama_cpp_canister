@@ -46,6 +46,63 @@ def test__upload_prompt_cache_file(network: str, principal: str) -> None:
     expected_response = f'(variant {{ Ok = record {{ filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filesize = 5 : nat64; filesha256 = "fd789322b6e4d1a517f1b75768f0f9ebc5747076811ee04e8a5f0731320f4884";}} }})'
     assert response == expected_response
 
+# ------------------------------------------------------------------
+def test__recursive_dir_content_non_existing(network: str, principal: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="recursive_dir_content",
+        canister_argument='(record {dir = "does_not_exist"})',
+        network=network,
+    )
+    expected_response = f'(variant {{ Err = variant {{ Other = "recursive_dir_content: Directory does not exist: does_not_exist\\n" }} }})'
+    assert response == expected_response
+
+def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
+    # double check the identity_anonymous fixture worked
+    assert identity_anonymous["identity"] == "anonymous"
+    assert identity_anonymous["principal"] == "2vxsx-fae"
+
+    principal = identity_anonymous["principal"]
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="recursive_dir_content",
+        canister_argument=f'(record {{dir = ".canister_cache"}})',
+        network=network,
+    )
+    expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+    assert response == expected_response
+
+# This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
+#
+# def test__recursive_dir_content_non_controller(identity_default: Dict[str, str], network: str) -> None:
+#     principal = identity_default["principal"]
+
+#     response = call_canister_api(
+#         dfx_json_path=DFX_JSON_PATH,
+#         canister_name=CANISTER_NAME,
+#         canister_method="recursive_dir_content",
+#         canister_argument=f'(record {{dir = ".canister_cache"}})',
+#         network=network,
+#     )
+#     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+#     assert response == expected_response
+
+def test__recursive_dir_content_controller(network: str, principal: str) -> None:
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="recursive_dir_content",
+        canister_argument=f'(record {{dir = ".canister_cache"}})',
+        network=network,
+    )
+    expected_response = f'(variant {{ Ok = vec {{ record {{ filename = ".canister_cache/{principal}"; filesize = 0 : nat64; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions"; filesize = 0 : nat64; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions/prompt.cache"; filesize = 5 : nat64; filetype = "file";}}; record {{ filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filesize = 5 : nat64; filetype = "file";}};}} }})'
+    assert response == expected_response
+
+# ------------------------------------------------------------------
 def test__filesystem_file_size_non_existing(network: str, principal: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
@@ -104,6 +161,7 @@ def test__filesystem_file_size_controller(network: str, principal: str) -> None:
     expected_response = f'(variant {{ Ok = record {{ msg = "File exists: .canister_cache/{principal}/sessions/prompt.cache\\nFile size: 5 bytes\\n"; filename = ".canister_cache/{principal}/sessions/prompt.cache"; filesize = 5 : nat64; exists = true;}} }})'
     assert response == expected_response
 
+# ------------------------------------------------------------------
 def test__filesystem_remove_non_existing(network: str, principal: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
