@@ -214,35 +214,35 @@ void test_files(MockIC &mockIC) {
 
   // -----------------------------------------------------------------------------
   // filesystem_file_size test for an existing file - must fail for anonymous user
-  // '(record {filename = "Work/random_data.bin"})' -> '(variant { Err = record { Other = "Access Denied"} })'
+  // '(record {filename = "Work/test_files_qa/random_data.bin"})' -> '(variant { Err = record { Other = "Access Denied"} })'
   mockIC.run_test(
       std::string(__func__) + ": " +
           "filesystem_file_size - existing file anonymous",
       filesystem_file_size,
-      "4449444c016c01c7dda8bb0771010014576f726b2f72616e646f6d5f646174612e62696e",
+      "4449444c016c01c7dda8bb0771010022576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e",
       "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696564",
       silent_on_trap, anonymous_principal);
 
   // -----------------------------------------------------------------------------
   // filesystem_file_size test for an existing file - must fail for non-controller user
-  // '(record {filename = "Work/random_data.bin"})' -> '(variant { Err = record { Other = "Access Denied"} })'
+  // '(record {filename = "Work/test_files_qa/random_data.bin"})' -> '(variant { Err = record { Other = "Access Denied"} })'
   mockIC.run_test(
       std::string(__func__) + ": " +
           "filesystem_file_size - existing file non-controller",
       filesystem_file_size,
-      "4449444c016c01c7dda8bb0771010014576f726b2f72616e646f6d5f646174612e62696e",
+      "4449444c016c01c7dda8bb0771010022576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e",
       "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696564",
       silent_on_trap, non_controller_principal);
 
   // -----------------------------------------------------------------------------
   // filesystem_file_size test for an existing file - works for controller
-  // '(record {filename = "Work/random_data.bin"})' ->
+  // '(record {filename = "Work/test_files_qa/random_data.bin"})' ->
   /*
   (
     variant {
         Ok = record {
-        msg = "File exists: Work/random_data.bin\nFile size: 1034240 bytes\n";
-        filename = "Work/random_data.bin";
+        msg = "File exists: Work/test_files_qa/random_data.bin\nFile size: 1034240 bytes\n";
+        filename = "Work/test_files_qa/random_data.bin";
         filesize = 1_034_240 : nat64;
         exists = true;
         }
@@ -251,10 +251,10 @@ void test_files(MockIC &mockIC) {
   */
   mockIC.run_test(
       std::string(__func__) + ": " +
-          "filesystem_file_size - existing file non-controller",
+          "filesystem_file_size - existing file controller",
       filesystem_file_size,
-      "4449444c016c01c7dda8bb0771010014576f726b2f72616e646f6d5f646174612e62696e",
-      "4449444c026c04c1b4cc0271c7dda8bb0771bdbaf9d50778dcbb80ff0b7e6b01bc8a01000101003b46696c65206578697374733a20576f726b2f72616e646f6d5f646174612e62696e0a46696c652073697a653a20313033343234302062797465730a14576f726b2f72616e646f6d5f646174612e62696e00c80f000000000001",
+      "4449444c016c01c7dda8bb0771010022576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e",
+      "4449444c026c04c1b4cc0271c7dda8bb0771bdbaf9d50778dcbb80ff0b7e6b01bc8a01000101004946696c65206578697374733a20576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e0a46696c652073697a653a20313033343234302062797465730a22576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e00c80f000000000001",
       silent_on_trap, my_principal);
 
   // -----------------------------------------------------------------------------
@@ -282,35 +282,35 @@ void test_files(MockIC &mockIC) {
 
   // -----------------------------------------------------------------------------
   // filesystem_remove test for an existing file - must fail for anonymous user
-  // '(record {filename = "Work/random_data.bin"})' -> '(variant { Err = record { Other = "Access Denied"} })'
+  // '(record {filename = "Work/test_files_qa/random_data.bin"})' -> '(variant { Err = record { Other = "Access Denied"} })'
   mockIC.run_test(
       std::string(__func__) + ": " +
           "filesystem_remove - existing file anonymous",
       filesystem_remove,
-      "4449444c016c01c7dda8bb0771010014576f726b2f72616e646f6d5f646174612e62696e",
+      "4449444c016c01c7dda8bb0771010022576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e",
       "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696564",
       silent_on_trap, anonymous_principal);
 
   // -----------------------------------------------------------------------------
   // filesystem_remove test for an existing file - must fail for non-controller user
-  // '(record {filename = "Work/random_data.bin"})' -> '(variant { Err = record { Other = "Access Denied"} })'
+  // '(record {filename = "Work/test_files_qa/random_data.bin"})' -> '(variant { Err = record { Other = "Access Denied"} })'
   mockIC.run_test(
       std::string(__func__) + ": " +
           "filesystem_remove - existing file non-controller",
       filesystem_remove,
-      "4449444c016c01c7dda8bb0771010014576f726b2f72616e646f6d5f646174612e62696e",
+      "4449444c016c01c7dda8bb0771010022576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e",
       "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696564",
       silent_on_trap, non_controller_principal);
 
   // -----------------------------------------------------------------------------
   // filesystem_remove test for an existing file - works for controller
-  // '(record {filename = "Work/random_data.bin"})' ->
+  // '(record {filename = "Work/test_files_qa/random_data.bin"})' ->
   /*
   (
     variant {
         Ok = record {
-        msg = "File removed successfully: Work/random_data.bin";
-        filename = "Work/random_data.bin";
+        msg = "File removed successfully: Work/test_files_qa/random_data.bin";
+        filename = "Work/test_files_qa/random_data.bin";
         filesize = 1_034_240 : nat64;
         exists = true;
         removed = true;
@@ -320,10 +320,10 @@ void test_files(MockIC &mockIC) {
   */
   mockIC.run_test(
       std::string(__func__) + ": " +
-          "filesystem_remove - existing file non-controller",
+          "filesystem_remove - existing file controller",
       filesystem_remove,
-      "4449444c016c01c7dda8bb0771010014576f726b2f72616e646f6d5f646174612e62696e",
-      "4449444c026c05c1b4cc0271c7dda8bb0771bdbaf9d50778dcbb80ff0b7ea0bf80980f7e6b01bc8a01000101002f46696c652072656d6f766564207375636365737366756c6c793a20576f726b2f72616e646f6d5f646174612e62696e14576f726b2f72616e646f6d5f646174612e62696e00c80f00000000000101",
+      "4449444c016c01c7dda8bb0771010022576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e",
+      "4449444c026c05c1b4cc0271c7dda8bb0771bdbaf9d50778dcbb80ff0b7ea0bf80980f7e6b01bc8a01000101003d46696c652072656d6f766564207375636365737366756c6c793a20576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e22576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e00c80f00000000000101",
       silent_on_trap, my_principal);
 
   // -----------------------------------------------------------------------------
