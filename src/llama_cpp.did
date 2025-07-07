@@ -142,6 +142,52 @@ type AccessRecord = record {
 };
 
 // -----------------------------------------------------
+type FilesystemFileSizeInputRecord = record {
+  filename : text;
+};
+type FilesystemFileSizeRecordResult = variant {
+  Err : ApiError;
+  Ok : FilesystemFileSizeRecord;
+};
+type FilesystemFileSizeRecord = record {
+  exists : bool;
+  filename : text;
+  filesize : nat64; // the total filesize in bytes
+  msg : text;
+};
+
+// -----------------------------------------------------
+type FilesystemRemoveInputRecord = record {
+  filename : text;
+};
+type FilesystemRemoveRecordResult = variant {
+  Err : ApiError;
+  Ok : FilesystemRemoveRecord;
+};
+type FilesystemRemoveRecord = record {
+  exists : bool;
+  removed : bool;
+  filename : text;
+  filesize : nat64; // the total filesize in bytes removed
+  msg : text;
+};
+
+// -----------------------------------------------------
+type DirContentInputRecord = record {
+  dir : text;
+};
+type DirContentRecordResult = variant {
+  Err : ApiError;
+  Ok : DirContentVec;
+};
+type DirContentVec = vec FileEntry;
+type FileEntry = record {
+  filename : text;
+  filetype : text; // "file" or "directory"
+  filesize : nat64;
+};
+
+// -----------------------------------------------------
 // The endpoint services of our canister
 service : {
   // canister
@@ -153,7 +199,7 @@ service : {
   set_max_tokens : (MaxTokensRecord) -> (StatusCodeRecordResult);
   get_max_tokens : () -> (MaxTokensRecord) query;
 
-  // up & down load of files
+  // upload, download & removal of files
   file_download_chunk : (FileDownloadInputRecord) -> (FileDownloadRecordResult) query;
   file_upload_chunk : (FileUploadInputRecord) -> (FileUploadRecordResult);
   uploaded_file_details : (FileDetailsInputRecord) -> (FileDetailsRecordResult) query;
@@ -169,6 +215,11 @@ service : {
   download_prompt_cache_chunk : (DownloadPromptCacheInputRecord) -> (FileDownloadRecordResult) query;
   upload_prompt_cache_chunk : (UploadPromptCacheInputRecord) -> (FileUploadRecordResult);
   uploaded_prompt_cache_details : (PromptCacheDetailsInputRecord) -> (FileDetailsRecordResult) query;
+  
+  // Files - general utility endpoints exposing std::filesystem functions
+  filesystem_remove : (FilesystemRemoveInputRecord) -> (FilesystemRemoveRecordResult);
+  filesystem_file_size : (FilesystemFileSizeInputRecord) -> (FilesystemFileSizeRecordResult) query;
+  recursive_dir_content : (DirContentInputRecord) -> (DirContentRecordResult) query;
 
   // Logging endpoints
   remove_log_file : (InputRecord) -> (OutputRecordResult);

@@ -3,12 +3,14 @@
 
 #include "main.h"
 #include "test_canister_functions.h"
+#include "test_files.h"
 #include "test_qwen2.h"
 #include "test_tiny_stories.h"
 
 #include <iostream>
 
 #include "../src/auth.h"
+#include "../src/files.h"
 #include "../src/health.h"
 #include "../src/logs.h"
 #include "../src/model.h"
@@ -25,6 +27,7 @@ int main() {
   MockIC mockIC(exit_on_fail);
 
   test_canister_functions(mockIC);
+  test_files(mockIC);
   test_tiny_stories(mockIC);
   test_qwen2(mockIC);
 
