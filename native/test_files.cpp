@@ -24,8 +24,8 @@ bool create_random_binary_file(const std::filesystem::path &directory,
   try {
     // Create the directory if it doesn't exist
     if (!std::filesystem::exists(directory)) {
-      std::filesystem::create_directory(directory);
-      std::cout << "Directory created: " << directory << '\n';
+      std::filesystem::create_directories(directory);
+      std::cout << "Directories created: " << directory << '\n';
     }
 
     std::filesystem::path filePath = directory / filename;
