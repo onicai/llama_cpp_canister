@@ -9,7 +9,7 @@ type InputRecord = record {
 // 0 = no limit (default)
 type MaxTokensRecord = record {
   max_tokens_update : nat64;
-  max_tokens_query : nat64;
+  max_tokens_query : nat64
 };
 
 type RunOutputRecord = record {
@@ -18,23 +18,23 @@ type RunOutputRecord = record {
   conversation : text;
   error : text;
   prompt_remaining : text;
-  generated_eog : bool;
+  generated_eog : bool
 };
 type OutputRecordResult = variant {
   Ok : RunOutputRecord;
-  Err : RunOutputRecord;
+  Err : RunOutputRecord
 };
 
 // -----------------------------------------
 type ApiError = variant {
   Other : text;
-  StatusCode : nat16;
+  StatusCode : nat16
 };
 
 // HTTPS status code wrapped in a Record wrapped in a Result
 type StatusCodeRecordResult = variant {
   Err : ApiError;
-  Ok : StatusCodeRecord;
+  Ok : StatusCodeRecord
 };
 type StatusCodeRecord = record { status_code : nat16 };
 
@@ -42,11 +42,11 @@ type StatusCodeRecord = record { status_code : nat16 };
 type FileDownloadInputRecord = record {
   filename : text;
   chunksize : nat64;
-  offset : nat64;
+  offset : nat64
 };
 type FileDownloadRecordResult = variant {
   Err : ApiError;
-  Ok : FileDownloadRecord;
+  Ok : FileDownloadRecord
 };
 type FileDownloadRecord = record {
   chunk : vec nat8; // the chunk read from the file, as a vec of bytes
@@ -65,7 +65,7 @@ type FileUploadInputRecord = record {
 };
 type FileUploadRecordResult = variant {
   Err : ApiError;
-  Ok : FileUploadRecord;
+  Ok : FileUploadRecord
 };
 type FileUploadRecord = record {
   filename : text; // the total filesize in bytes
@@ -75,11 +75,11 @@ type FileUploadRecord = record {
 
 // -----------------------------------------------------
 type FileDetailsInputRecord = record {
-  filename : text;
+  filename : text
 };
 type FileDetailsRecordResult = variant {
   Err : ApiError;
-  Ok : FileDetailsRecord;
+  Ok : FileDetailsRecord
 };
 type FileDetailsRecord = record {
   filename : text;
@@ -90,26 +90,26 @@ type FileDetailsRecord = record {
 // -----------------------------------------------------
 type GetChatsRecordResult = variant {
   Err : ApiError;
-  Ok : GetChatsRecord;
+  Ok : GetChatsRecord
 };
 type GetChatsRecord = record {
   chats : vec record {
     timestamp : text;
-    chat : text;
-  };
+    chat : text
+  }
 };
 
 // -----------------------------------------------------
 type CopyPromptCacheInputRecord = record {
   from : text;
-  to : text;
+  to : text
 };
 
 // -----------------------------------------------------
 type DownloadPromptCacheInputRecord = record {
   promptcache : text;
   chunksize : nat64;
-  offset : nat64;
+  offset : nat64
 };
 
 // -----------------------------------------------------
@@ -117,12 +117,12 @@ type UploadPromptCacheInputRecord = record {
   promptcache : text;
   chunk : vec nat8;
   chunksize : nat64;
-  offset : nat64;
+  offset : nat64
 };
 
 // -----------------------------------------------------
 type PromptCacheDetailsInputRecord = record {
-  promptcache : text;
+  promptcache : text
 };
 
 // -----------------------------------------------------
@@ -130,61 +130,60 @@ type PromptCacheDetailsInputRecord = record {
 // 0 = only controllers
 // 1 = all except anonymous
 type AccessInputRecord = record {
-  level : nat16;
+  level : nat16
 };
 type AccessRecordResult = variant {
   Err : ApiError;
-  Ok : AccessRecord;
+  Ok : AccessRecord
 };
 type AccessRecord = record {
   level : nat16;
-  explanation : text;
+  explanation : text
 };
 
 // -----------------------------------------------------
 type FilesystemFileSizeInputRecord = record {
-  filename : text;
+  filename : text
 };
 type FilesystemFileSizeRecordResult = variant {
   Err : ApiError;
-  Ok : FilesystemFileSizeRecord;
+  Ok : FilesystemFileSizeRecord
 };
 type FilesystemFileSizeRecord = record {
   exists : bool;
   filename : text;
   filesize : nat64; // the total filesize in bytes
-  msg : text;
+  msg : text
 };
 
 // -----------------------------------------------------
 type FilesystemRemoveInputRecord = record {
-  filename : text;
+  filename : text
 };
 type FilesystemRemoveRecordResult = variant {
   Err : ApiError;
-  Ok : FilesystemRemoveRecord;
+  Ok : FilesystemRemoveRecord
 };
 type FilesystemRemoveRecord = record {
   exists : bool;
   removed : bool;
   filename : text;
-  filesize : nat64; // the total filesize in bytes removed
-  msg : text;
+  msg : text
 };
 
 // -----------------------------------------------------
 type DirContentInputRecord = record {
   dir : text;
+  max_entries : nat64; // the maximum number of entries to return; 0 = no limit
 };
 type DirContentRecordResult = variant {
   Err : ApiError;
-  Ok : DirContentVec;
+  Ok : DirContentVec
 };
 type DirContentVec = vec FileEntry;
 type FileEntry = record {
   filename : text;
   filetype : text; // "file" or "directory"
-  filesize : nat64;
 };
 
 // -----------------------------------------------------
@@ -215,11 +214,12 @@ service : {
   download_prompt_cache_chunk : (DownloadPromptCacheInputRecord) -> (FileDownloadRecordResult) query;
   upload_prompt_cache_chunk : (UploadPromptCacheInputRecord) -> (FileUploadRecordResult);
   uploaded_prompt_cache_details : (PromptCacheDetailsInputRecord) -> (FileDetailsRecordResult) query;
-  
+
   // Files - general utility endpoints exposing std::filesystem functions
   filesystem_remove : (FilesystemRemoveInputRecord) -> (FilesystemRemoveRecordResult);
   filesystem_file_size : (FilesystemFileSizeInputRecord) -> (FilesystemFileSizeRecordResult) query;
-  recursive_dir_content : (DirContentInputRecord) -> (DirContentRecordResult) query;
+  recursive_dir_content_query : (DirContentInputRecord) -> (DirContentRecordResult) query;
+  recursive_dir_content_update : (DirContentInputRecord) -> (DirContentRecordResult);
 
   // Logging endpoints
   remove_log_file : (InputRecord) -> (OutputRecordResult);
@@ -239,4 +239,4 @@ service : {
   // Other admin endpoints
   whoami : () -> (text) query;
 
-};
+}

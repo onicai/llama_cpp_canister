@@ -51,11 +51,21 @@ def test__recursive_dir_content_non_existing(network: str, principal: str) -> No
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
-        canister_method="recursive_dir_content",
-        canister_argument='(record {dir = "does_not_exist"})',
+        canister_method="recursive_dir_content_query",
+        canister_argument='(record {dir = "does_not_exist"; max_entries = 0 : nat64})',
         network=network,
     )
-    expected_response = f'(variant {{ Err = variant {{ Other = "recursive_dir_content: Directory does not exist: does_not_exist\\n" }} }})'
+    expected_response = '(variant { Err = variant { Other = "recursive_dir_content_: Directory does not exist: does_not_exist\\n" } })'
+    assert response == expected_response
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="recursive_dir_content_update",
+        canister_argument='(record {dir = "does_not_exist"; max_entries = 0 : nat64})',
+        network=network,
+    )
+    expected_response = '(variant { Err = variant { Other = "recursive_dir_content_: Directory does not exist: does_not_exist\\n" } })'
     assert response == expected_response
 
 def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -68,11 +78,21 @@ def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], ne
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
-        canister_method="recursive_dir_content",
-        canister_argument=f'(record {{dir = ".canister_cache"}})',
+        canister_method="recursive_dir_content_query",
+        canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
         network=network,
     )
-    expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+    expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
+    assert response == expected_response
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="recursive_dir_content_update",
+        canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
+        network=network,
+    )
+    expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
     assert response == expected_response
 
 # This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
@@ -83,11 +103,21 @@ def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], ne
 #     response = call_canister_api(
 #         dfx_json_path=DFX_JSON_PATH,
 #         canister_name=CANISTER_NAME,
-#         canister_method="recursive_dir_content",
-#         canister_argument=f'(record {{dir = ".canister_cache"}})',
+#         canister_method="recursive_dir_content_query",
+#         canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
 #         network=network,
 #     )
-#     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+#     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
+#     assert response == expected_response
+
+#     response = call_canister_api(
+#         dfx_json_path=DFX_JSON_PATH,
+#         canister_name=CANISTER_NAME,
+#         canister_method="recursive_dir_content_update",
+#         canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
+#         network=network,
+#     )
+#     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
 #     assert response == expected_response
 
 def test__recursive_dir_content_controller(network: str, principal: str) -> None:
@@ -95,11 +125,21 @@ def test__recursive_dir_content_controller(network: str, principal: str) -> None
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,
         canister_name=CANISTER_NAME,
-        canister_method="recursive_dir_content",
-        canister_argument=f'(record {{dir = ".canister_cache"}})',
+        canister_method="recursive_dir_content_query",
+        canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
         network=network,
     )
-    expected_response = f'(variant {{ Ok = vec {{ record {{ filename = ".canister_cache/{principal}"; filesize = 0 : nat64; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions"; filesize = 0 : nat64; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions/prompt.cache"; filesize = 5 : nat64; filetype = "file";}}; record {{ filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filesize = 5 : nat64; filetype = "file";}};}} }})'
+    expected_response = f'(variant {{ Ok = vec {{ record {{ filename = ".canister_cache/{principal}"; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions"; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions/prompt.cache"; filetype = "file";}}; record {{ filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filetype = "file";}};}} }})'
+    assert response == expected_response
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="recursive_dir_content_update",
+        canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
+        network=network,
+    )
+    expected_response = f'(variant {{ Ok = vec {{ record {{ filename = ".canister_cache/{principal}"; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions"; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions/prompt.cache"; filetype = "file";}}; record {{ filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filetype = "file";}};}} }})'
     assert response == expected_response
 
 # ------------------------------------------------------------------
@@ -170,7 +210,7 @@ def test__filesystem_remove_non_existing(network: str, principal: str) -> None:
         canister_argument='(record {filename = "does_not_exist.bin"})',
         network=network,
     )
-    expected_response = f'(variant {{ Ok = record {{ msg = "File does not exist: does_not_exist.bin\\n"; filename = "does_not_exist.bin"; filesize = 0 : nat64; exists = false; removed = false;}} }})'
+    expected_response = f'(variant {{ Ok = record {{ msg = "Path does not exist: does_not_exist.bin\\n"; filename = "does_not_exist.bin"; exists = false; removed = false;}} }})'
     assert response == expected_response
 
 def test__filesystem_remove_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -217,7 +257,7 @@ def test__filesystem_remove_controller(network: str, principal: str) -> None:
         canister_argument=f'(record {{filename = "{filename}"}})',
         network=network,
     )
-    expected_response = f'(variant {{ Ok = record {{ msg = "File removed successfully: .canister_cache/{principal}/sessions/prompt.cache"; filename = ".canister_cache/{principal}/sessions/prompt.cache"; filesize = 5 : nat64; exists = true; removed = true;}} }})'
+    expected_response = f'(variant {{ Ok = record {{ msg = "Path removed successfully: .canister_cache/{principal}/sessions/prompt.cache"; filename = ".canister_cache/{principal}/sessions/prompt.cache"; exists = true; removed = true;}} }})'
     assert response == expected_response
 
 # The other file should still be there after removing the first one
@@ -232,17 +272,4 @@ def test__filesystem_file_size_controller_another_prompt(network: str, principal
         network=network,
     )
     expected_response = f'(variant {{ Ok = record {{ msg = "File exists: .canister_cache/{principal}/sessions/another_prompt.cache\\nFile size: 5 bytes\\n"; filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filesize = 5 : nat64; exists = true;}} }})'
-    assert response == expected_response
-
-def test__filesystem_remove_controller_another_prompt(network: str, principal: str) -> None:
-    filename = f".canister_cache/{principal}/sessions/another_prompt.cache"
-
-    response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
-        canister_name=CANISTER_NAME,
-        canister_method="filesystem_remove",
-        canister_argument=f'(record {{filename = "{filename}"}})',
-        network=network,
-    )
-    expected_response = f'(variant {{ Ok = record {{ msg = "File removed successfully: .canister_cache/{principal}/sessions/another_prompt.cache"; filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filesize = 5 : nat64; exists = true; removed = true;}} }})'
     assert response == expected_response

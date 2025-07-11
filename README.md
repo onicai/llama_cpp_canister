@@ -595,6 +595,29 @@ dfx canister call llama_cpp get_access
 dfx canister call llama_cpp check_access
 ```
 
+# File Management
+
+A C++ canister on the Internet Computer uses a virtual file system, stored in Stable Memory.
+
+Several endpoints are exposed that allows you to interact & manage the files.
+
+For example, you can explore what is stored in the `.canister_cache` folder:
+
+```bash
+# Query call to list all files & directories in a folder
+dfx canister call llama_cpp recursive_dir_content_query '(record {dir = ".canister_cache"; max_entries = 0 : nat64})' --output json
+# Update call in case you hit the instruction limit
+dfx canister call llama_cpp recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 0 : nat64})' --output json
+# Update call to get eg. the first 5000 entries, in case you still hit the instruction limit
+dfx canister call llama_cpp recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 5000 : nat64})' --output json
+
+# Get the size of a file in bytes
+dfx canister --network $NETWORK call $llm filesystem_file_size '(record {filename = "<filename>"})'
+
+# remove a file or empty directory
+dfx canister --network $NETWORK call $llm filesystem_remove '(record {filename = "<filename>"})'
+```
+
 # Appendix A: max_tokens
 
 The size and settings for models impact the number of tokens that can be generated

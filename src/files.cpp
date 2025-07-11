@@ -42,18 +42,31 @@ void filesystem_remove() {
   r_in.append("filename", CandidTypeText{&filename});
   ic_api.from_wire(r_in);
 
-  filesystem_remove_(ic_api, filename, true);
+  bool all{false};    // remove a single file or empty directory
+  bool to_wire{true}; // Return the status over the wire
+  filesystem_remove_(ic_api, filename, all, to_wire);
 }
 
-void recursive_dir_content() {
+void recursive_dir_content_update() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!is_caller_a_controller(ic_api)) return;
+  recursive_dir_content_(ic_api);
+}
+
+void recursive_dir_content_query() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
   if (!is_caller_a_controller(ic_api)) return;
+  recursive_dir_content_(ic_api);
+}
 
+void recursive_dir_content_(IC_API &ic_api) {
   // Get directory name
   std::string dir{""};
+  std::uint64_t max_entries{0}; // 0 = no limit
 
   CandidTypeRecord r_in;
   r_in.append("dir", CandidTypeText{&dir});
+  r_in.append("max_entries", CandidTypeNat64{&max_entries});
   ic_api.from_wire(r_in);
 
   // Check if the directory exists
@@ -71,49 +84,59 @@ void recursive_dir_content() {
 
   // List the contents of the directory
   std::vector<FileEntry> contents =
-      list_directory_contents(std::filesystem::path(dir));
+      list_directory_contents(std::filesystem::path(dir), max_entries);
 
   // reformat it to proper output format for Candid interface
   std::vector<std::string> filenames;
   std::vector<std::string> filetypes;
-  std::vector<std::uint64_t> filesizes;
   for (const auto &entry : contents) {
     filenames.push_back(entry.filename);
     filetypes.push_back(entry.filetype);
-    filesizes.push_back(entry.filesize);
   }
   CandidTypeRecord r_file_entries;
   r_file_entries.append("filename", CandidTypeVecText{filenames});
   r_file_entries.append("filetype", CandidTypeVecText{filetypes});
-  r_file_entries.append("filesize", CandidTypeVecNat64{filesizes});
   ic_api.to_wire(CandidTypeVariant{"Ok", CandidTypeVecRecord{r_file_entries}});
 }
 
-bool filesystem_remove_(IC_API &ic_api, const std::string &filename,
+bool filesystem_remove_(IC_API &ic_api, const std::string &filename, bool all,
                         bool to_wire) {
   // Use the non-throwing version of std::filesystem::remove
   std::error_code ec;
   std::string msg;
   bool error = false;
   bool removed = false;
-  std::uint64_t filesize = 0;
 
+  // TODO: remove_all is not working in a canister. It works natively, but not in a canister.
   bool exists = std::filesystem::exists(filename, ec);
   if (ec) {
     error = true;
     msg = "Error: " + ec.message() + "\n";
   } else if (!exists) {
-    msg = "File does not exist: " + filename + "\n";
+    msg = "Path does not exist: " + filename + "\n";
   } else {
-    filesize = filesystem_file_size_(ic_api, filename, false);
-    removed = std::filesystem::remove(filename, ec);
+    if (all) {
+      msg =
+          "The std::filesystem::remove_all function is not working in a canister. "
+          "You must first empty out all contents of directory: " +
+          filename;
+      error = true;
+      // // Use std::filesystem::remove_all to remove directories and their contents
+      // std::cout << "llama_cpp: " << std::string(__func__)
+      //           << " - Removing all contents of directory: " << filename
+      //           << std::endl;
+      // removed = std::filesystem::remove_all(filename, ec);
+    } else {
+      // Use std::filesystem::remove to remove a single file or empty directory
+      removed = std::filesystem::remove(filename, ec);
+    }
     if (ec) {
       error = true;
-      msg += "Failed to remove file: " + filename + ": " + ec.message();
+      msg += "Failed to remove: " + filename + ": " + ec.message();
     } else if (!removed) {
-      msg += "File did not exist: " + filename;
+      msg += "Path did not exist: " + filename;
     } else {
-      msg += "File removed successfully: " + filename;
+      msg += "Path removed successfully: " + filename;
     }
   }
 
@@ -132,7 +155,6 @@ bool filesystem_remove_(IC_API &ic_api, const std::string &filename,
       filesystem_remove_record.append("exists", CandidTypeBool{exists});
       filesystem_remove_record.append("removed", CandidTypeBool{removed});
       filesystem_remove_record.append("filename", CandidTypeText{filename});
-      filesystem_remove_record.append("filesize", CandidTypeNat64{filesize});
       filesystem_remove_record.append("msg", CandidTypeText{msg});
       ic_api.to_wire(
           CandidTypeVariant{"Ok", CandidTypeRecord{filesystem_remove_record}});
@@ -184,7 +206,8 @@ std::uint64_t filesystem_file_size_(IC_API &ic_api, const std::string &filename,
 }
 
 std::vector<FileEntry>
-list_directory_contents(const std::filesystem::path &dir) {
+list_directory_contents(const std::filesystem::path &dir,
+                        const std::uint64_t &max_entries) {
   std::vector<FileEntry> entries;
   std::error_code ec;
 
@@ -202,23 +225,30 @@ list_directory_contents(const std::filesystem::path &dir) {
 
     if (entry.is_directory(ec)) {
       fe.filetype = "directory";
-      fe.filesize = 0;
     } else if (entry.is_regular_file(ec)) {
       fe.filetype = "file";
-
-      auto size = std::filesystem::file_size(entry.path(), ec);
-      if (ec || size > std::numeric_limits<std::uint64_t>::max()) {
-        fe.filesize = 0;
-      } else {
-        fe.filesize = static_cast<std::uint64_t>(size);
-      }
     } else {
       fe.filetype = "other";
-      fe.filesize = 0;
     }
 
     entries.push_back(fe);
+
+    // print size of entries every 100 entries
+    if (entries.size() % 1000 == 0) {
+      std::cout << "llama_cpp: " << std::string(__func__) << " - " << dir
+                << ": found " << entries.size() << " entries." << std::endl;
+    }
+
+    if (max_entries > 0 && entries.size() >= max_entries) {
+      std::cout << "llama_cpp: " << std::string(__func__)
+                << " - Warning: Limiting directory listing contents to "
+                << max_entries << " entries.\n";
+      break;
+    }
   }
+
+  std::cout << "llama_cpp: " << std::string(__func__) << " - " << dir
+            << ": found " << entries.size() << " entries." << std::endl;
 
   return entries;
 }
