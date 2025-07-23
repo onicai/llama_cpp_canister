@@ -280,7 +280,7 @@ std::uint64_t get_creation_timestamp_ns_(IC_API &ic_api,
       ic_api.to_wire(CandidTypeVariant{
           "Err", CandidTypeVariant{"Other", CandidTypeText{msg}}});
     } else {
-      // Return the filesize over the wire (caller must immediately return from endpoint)
+      // Return the timestamp & age over the wire (caller must immediately return from endpoint)
       CandidTypeRecord filesystem_timestamp_record;
       filesystem_timestamp_record.append("exists", CandidTypeBool{exists});
       filesystem_timestamp_record.append("filename", CandidTypeText{filename});
