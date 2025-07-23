@@ -612,10 +612,13 @@ dfx canister call llama_cpp recursive_dir_content_update '(record {dir = ".canis
 dfx canister call llama_cpp recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 5000 : nat64})' --output json
 
 # Get the size of a file in bytes
-dfx canister --network $NETWORK call $llm filesystem_file_size '(record {filename = "<filename>"})'
+dfx canister call llama_cpp filesystem_file_size '(record {filename = "<filename>"})' --output json
+
+# Get the creation timestamp of a file in nanoseconds (also returns age of file in seconds)
+dfx canister call llama_cpp get_creation_timestamp_ns '(record {filename = "<filename>"})' --output json
 
 # remove a file or empty directory
-dfx canister --network $NETWORK call $llm filesystem_remove '(record {filename = "<filename>"})'
+dfx canister call llama_cpp filesystem_remove '(record {filename = "<filename>"})'
 ```
 
 # Appendix A: max_tokens

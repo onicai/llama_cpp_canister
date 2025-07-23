@@ -94,7 +94,7 @@ type GetChatsRecordResult = variant {
 };
 type GetChatsRecord = record {
   chats : vec record {
-    timestamp : text;
+    timestamp_ns : text;
     chat : text
   }
 };
@@ -153,6 +153,22 @@ type FilesystemFileSizeRecord = record {
   exists : bool;
   filename : text;
   filesize : nat64; // the total filesize in bytes
+  msg : text
+};
+
+// -----------------------------------------------------
+type FilesystemTimestampInputRecord = record {
+  filename : text
+};
+type FilesystemTimestampRecordResult = variant {
+  Err : ApiError;
+  Ok : FilesystemTimestampRecord
+};
+type FilesystemTimestampRecord = record {
+  exists : bool;
+  filename : text;
+  timestamp_ns : nat64; // the file creation timestamp in nanoseconds
+  age_seconds : nat64; // the file creation age in seconds
   msg : text
 };
 
@@ -218,6 +234,7 @@ service : {
   // Files - general utility endpoints exposing std::filesystem functions
   filesystem_remove : (FilesystemRemoveInputRecord) -> (FilesystemRemoveRecordResult);
   filesystem_file_size : (FilesystemFileSizeInputRecord) -> (FilesystemFileSizeRecordResult) query;
+  get_creation_timestamp_ns : (FilesystemTimestampInputRecord) -> (FilesystemTimestampRecordResult) query;
   recursive_dir_content_query : (DirContentInputRecord) -> (DirContentRecordResult) query;
   recursive_dir_content_update : (DirContentInputRecord) -> (DirContentRecordResult);
 

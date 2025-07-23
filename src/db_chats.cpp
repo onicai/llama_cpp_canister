@@ -1,6 +1,7 @@
 #include "db_chats.h"
 #include "auth.h"
 #include "common.h"
+#include "files.h"
 #include "http.h"
 #include "main_.h"
 #include "max_tokens.h"

@@ -87,9 +87,3 @@ void send_output_record_result_error_to_wire(IC_API &ic_api,
   r_out.append("generated_eog", CandidTypeBool{false});
   ic_api.to_wire(CandidTypeVariant{"Err", r_out});
 }
-
-// Helper function to retrieve the last write time of a file
-std::filesystem::file_time_type
-get_last_write_time(const std::filesystem::path &file, std::error_code &ec) {
-  return std::filesystem::last_write_time(file, ec);
-}

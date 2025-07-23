@@ -151,7 +151,7 @@ def test__filesystem_file_size_non_existing(network: str, principal: str) -> Non
         canister_argument='(record {filename = "does_not_exist.bin"})',
         network=network,
     )
-    expected_response = f'(variant {{ Ok = record {{ msg = "File does not exist: does_not_exist.bin\\n"; filename = "does_not_exist.bin"; filesize = 0 : nat64; exists = false;}} }})'
+    expected_response = '(variant { Err = variant { Other = "File does not exist: does_not_exist.bin" } })'
     assert response == expected_response
 
 def test__filesystem_file_size_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -200,6 +200,65 @@ def test__filesystem_file_size_controller(network: str, principal: str) -> None:
     )
     expected_response = f'(variant {{ Ok = record {{ msg = "File exists: .canister_cache/{principal}/sessions/prompt.cache\\nFile size: 5 bytes\\n"; filename = ".canister_cache/{principal}/sessions/prompt.cache"; filesize = 5 : nat64; exists = true;}} }})'
     assert response == expected_response
+
+# ------------------------------------------------------------------
+def test__get_creation_timestamp_ns_non_existing(network: str, principal: str) -> None:
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_creation_timestamp_ns",
+        canister_argument='(record {filename = "does_not_exist.bin"})',
+        network=network,
+    )
+    expected_response = '(variant { Err = variant { Other = "File does not exist: does_not_exist.bin" } })'
+    assert response == expected_response
+
+def test__get_creation_timestamp_ns_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
+    # double check the identity_anonymous fixture worked
+    assert identity_anonymous["identity"] == "anonymous"
+    assert identity_anonymous["principal"] == "2vxsx-fae"
+
+    principal = identity_anonymous["principal"]
+    filename = f".canister_cache/{principal}/sessions/prompt.cache"
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_creation_timestamp_ns",
+        canister_argument=f'(record {{filename = "{filename}"}})',
+        network=network,
+    )
+    expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+    assert response == expected_response
+
+# This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
+#
+# def test__get_creation_timestamp_ns_non_controller(identity_default: Dict[str, str], network: str) -> None:
+#     principal = identity_default["principal"]
+#     filename = f".canister_cache/{principal}/sessions/prompt.cache"
+
+#     response = call_canister_api(
+#         dfx_json_path=DFX_JSON_PATH,
+#         canister_name=CANISTER_NAME,
+#         canister_method="get_creation_timestamp_ns",
+#         canister_argument=f'(record {{filename = "{filename}"}})',
+#         network=network,
+#     )
+#     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+#     assert response == expected_response
+
+def test__get_creation_timestamp_ns_controller(network: str, principal: str) -> None:
+    filename = f".canister_cache/{principal}/sessions/prompt.cache"
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_creation_timestamp_ns",
+        canister_argument=f'(record {{filename = "{filename}"}})',
+        network=network,
+    )
+    expected_response_startswith = f'(variant {{ Ok = record {{ msg = "File exists: .canister_cache/{principal}/sessions/prompt.cache\\nFile creation timestamp_ns: '
+    assert response.startswith(expected_response_startswith)
 
 # ------------------------------------------------------------------
 def test__filesystem_remove_non_existing(network: str, principal: str) -> None:

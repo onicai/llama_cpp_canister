@@ -7,6 +7,7 @@
 // This library is included with icpp-pro
 #include "hash-library/sha256.h"
 
+#include <chrono>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -29,6 +30,20 @@ void filesystem_file_size() {
   ic_api.from_wire(r_in);
 
   filesystem_file_size_(ic_api, filename, true);
+}
+
+void get_creation_timestamp_ns() {
+  IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
+  if (!is_caller_a_controller(ic_api)) return;
+
+  // Get filename
+  std::string filename{""};
+
+  CandidTypeRecord r_in;
+  r_in.append("filename", CandidTypeText{&filename});
+  ic_api.from_wire(r_in);
+
+  get_creation_timestamp_ns_(ic_api, filename, true);
 }
 
 void filesystem_remove() {
@@ -175,7 +190,8 @@ std::uint64_t filesystem_file_size_(IC_API &ic_api, const std::string &filename,
     error = true;
     msg = "Error: " + ec.message() + "\n";
   } else if (!exists) {
-    msg = "File does not exist: " + filename + "\n";
+    error = true;
+    msg = "File does not exist: " + filename;
   } else {
     msg = "File exists: " + filename + "\n";
     // Use the non-throwing version of std::filesystem::file_size
@@ -193,16 +209,91 @@ std::uint64_t filesystem_file_size_(IC_API &ic_api, const std::string &filename,
             << std::endl;
 
   if (to_wire) {
-    // Return the filesize over the wire (caller must immediately return from endpoint)
-    CandidTypeRecord filesystem_file_size_record;
-    filesystem_file_size_record.append("exists", CandidTypeBool{exists});
-    filesystem_file_size_record.append("filename", CandidTypeText{filename});
-    filesystem_file_size_record.append("filesize", CandidTypeNat64{filesize});
-    filesystem_file_size_record.append("msg", CandidTypeText{msg});
-    ic_api.to_wire(
-        CandidTypeVariant{"Ok", CandidTypeRecord{filesystem_file_size_record}});
+    if (error) {
+      ic_api.to_wire(CandidTypeVariant{
+          "Err", CandidTypeVariant{"Other", CandidTypeText{msg}}});
+    } else {
+      // Return the filesize over the wire (caller must immediately return from endpoint)
+      CandidTypeRecord filesystem_file_size_record;
+      filesystem_file_size_record.append("exists", CandidTypeBool{exists});
+      filesystem_file_size_record.append("filename", CandidTypeText{filename});
+      filesystem_file_size_record.append("filesize", CandidTypeNat64{filesize});
+      filesystem_file_size_record.append("msg", CandidTypeText{msg});
+      ic_api.to_wire(CandidTypeVariant{
+          "Ok", CandidTypeRecord{filesystem_file_size_record}});
+    }
   }
   return filesize;
+}
+
+std::uint64_t get_creation_timestamp_ns_(IC_API &ic_api,
+                                         const std::string &filename,
+                                         bool to_wire) {
+  std::error_code ec;
+  std::string msg;
+  bool error = false;
+  std::uint64_t timestamp_ns = 0;
+  std::uint64_t age_seconds = 0;
+
+  bool exists = std::filesystem::exists(filename, ec);
+  if (ec) {
+    error = true;
+    msg = "Error: " + ec.message() + "\n";
+  } else if (!exists) {
+    error = true;
+    msg = "File does not exist: " + filename;
+  } else {
+    msg = "File exists: " + filename + "\n";
+    // Use the non-throwing version of std::filesystem::last_write_time
+    // NOTE: on the IC, this is actually the creation time, not the last write time
+    auto ftime = std::filesystem::last_write_time(filename, ec);
+    if (ec) {
+      error = true;
+      msg += "Error: " + ec.message() + "\n";
+    } else {
+      // Get time since epoch in nanoseconds
+      auto nanos_since_epoch =
+          std::chrono::duration_cast<std::chrono::nanoseconds>(
+              ftime.time_since_epoch())
+              .count();
+      timestamp_ns = static_cast<std::uint64_t>(nanos_since_epoch);
+
+      // Calculate age in seconds
+      auto now = std::chrono::system_clock::now();
+      auto age = std::chrono::duration_cast<std::chrono::seconds>(
+                     now.time_since_epoch() - ftime.time_since_epoch())
+                     .count();
+      age_seconds = static_cast<std::uint64_t>(age);
+
+      msg +=
+          "File creation timestamp_ns: " + std::to_string(nanos_since_epoch) +
+          " ns" + "\n" + "File creation age: " + std::to_string(age_seconds) +
+          " seconds" + "\n";
+    }
+  }
+
+  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+            << std::endl;
+
+  if (to_wire) {
+    if (error) {
+      ic_api.to_wire(CandidTypeVariant{
+          "Err", CandidTypeVariant{"Other", CandidTypeText{msg}}});
+    } else {
+      // Return the filesize over the wire (caller must immediately return from endpoint)
+      CandidTypeRecord filesystem_timestamp_record;
+      filesystem_timestamp_record.append("exists", CandidTypeBool{exists});
+      filesystem_timestamp_record.append("filename", CandidTypeText{filename});
+      filesystem_timestamp_record.append("timestamp_ns",
+                                         CandidTypeNat64{timestamp_ns});
+      filesystem_timestamp_record.append("age_seconds",
+                                         CandidTypeNat64{age_seconds});
+      filesystem_timestamp_record.append("msg", CandidTypeText{msg});
+      ic_api.to_wire(CandidTypeVariant{
+          "Ok", CandidTypeRecord{filesystem_timestamp_record}});
+    }
+  }
+  return timestamp_ns;
 }
 
 std::vector<FileEntry>
@@ -251,4 +342,11 @@ list_directory_contents(const std::filesystem::path &dir,
             << ": found " << entries.size() << " entries." << std::endl;
 
   return entries;
+}
+
+// Helper function to retrieve the last write time of a file
+// NOTE: on the IC, this is actually the creation time, not the last write time
+std::filesystem::file_time_type
+get_last_write_time(const std::filesystem::path &file, std::error_code &ec) {
+  return std::filesystem::last_write_time(file, ec);
 }
