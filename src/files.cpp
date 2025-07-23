@@ -259,7 +259,7 @@ std::uint64_t get_creation_timestamp_ns_(IC_API &ic_api,
       timestamp_ns = static_cast<std::uint64_t>(nanos_since_epoch);
 
       // Calculate age in seconds
-      auto now = std::chrono::system_clock::now();
+      auto now = std::chrono::file_clock::now();
       auto age = std::chrono::duration_cast<std::chrono::seconds>(
                      now.time_since_epoch() - ftime.time_since_epoch())
                      .count();
