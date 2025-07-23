@@ -230,7 +230,7 @@ void test_files(MockIC &mockIC) {
       std::string(__func__) + ": " + "filesystem_file_size - non-existing file",
       filesystem_file_size,
       "4449444c016c01c7dda8bb0771010012646f65735f6e6f745f65786973742e62696e",
-      "4449444c026c04c1b4cc0271c7dda8bb0771bdbaf9d50778dcbb80ff0b7e6b01bc8a01000101002846696c6520646f6573206e6f742065786973743a20646f65735f6e6f745f65786973742e62696e0a12646f65735f6e6f745f65786973742e62696e000000000000000000",
+      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100002746696c6520646f6573206e6f742065786973743a20646f65735f6e6f745f65786973742e62696e",
       silent_on_trap, my_principal);
 
   // -----------------------------------------------------------------------------
