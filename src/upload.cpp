@@ -263,6 +263,17 @@ void file_upload_chunk_(IC_API &ic_api, const std::string &filename,
   of_stream.seekp(offset);
   of_stream.write(reinterpret_cast<const char *>(v.data()), v.size());
 
+  // Check for integer overflow before calculating filesize
+  if (offset > UINT64_MAX - v.size()) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err",
+        CandidTypeVariant{
+            "Other",
+            CandidTypeText{std::string(__func__) +
+                           ": Integer overflow in filesize calculation"}}});
+    return;
+  }
+
   // Update the file metadata, including the SHA256 hash using the streaming interface
   uint64_t filesize = offset + v.size();
 
