@@ -61,12 +61,11 @@ void file_download_chunk_(IC_API &ic_api, const std::string &filename,
   // Validate chunksize before allocation
   if (chunksize > MAX_CHUNK_SIZE) {
     ic_api.to_wire(CandidTypeVariant{
-        "Err",
-        CandidTypeVariant{
-            "Other",
-            CandidTypeText{std::string(__func__) + ": chunksize " +
-                           std::to_string(chunksize) + " exceeds limit " +
-                           std::to_string(MAX_CHUNK_SIZE)}}});
+        "Err", CandidTypeVariant{
+                   "Other", CandidTypeText{
+                                std::string(__func__) + ": chunksize " +
+                                std::to_string(chunksize) + " exceeds limit " +
+                                std::to_string(MAX_CHUNK_SIZE)}}});
     return;
   }
 

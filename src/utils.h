@@ -7,9 +7,9 @@
 #include "ic_api.h"
 
 // Security limits to prevent unbounded memory allocation from user input
-const uint64_t MAX_CHUNK_SIZE = 2 * 1024 * 1024;  // ICP message size limit
-const uint64_t MAX_FILENAME_SIZE = 4096;          // Linux PATH_MAX
-const uint64_t MAX_SHA256_SIZE = 64;              // SHA256 hex string length
+const uint64_t MAX_CHUNK_SIZE = 2 * 1024 * 1024; // ICP message size limit
+const uint64_t MAX_FILENAME_SIZE = 4096;         // Linux PATH_MAX
+const uint64_t MAX_SHA256_SIZE = 64;             // SHA256 hex string length
 
 bool open_ifstream(const std::string &f_name,
                    const std::ios_base::openmode &mode,
