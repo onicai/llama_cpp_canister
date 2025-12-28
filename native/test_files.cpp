@@ -4,6 +4,7 @@
 #include <random>
 
 #include "../src/auth.h"
+#include "../src/download.h"
 #include "../src/files.h"
 #include "../src/health.h"
 #include "../src/logs.h"
@@ -343,6 +344,18 @@ void test_files(MockIC &mockIC) {
       filesystem_remove,
       "4449444c016c01c7dda8bb0771010022576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e",
       "4449444c026c04c1b4cc0271c7dda8bb0771dcbb80ff0b7ea0bf80980f7e6b01bc8a01000101003d506174682072656d6f766564207375636365737366756c6c793a20576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e22576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174612e62696e0101",
+      silent_on_trap, my_principal);
+
+  // -----------------------------------------------------------------------------
+  // file_download_chunk test: chunksize exceeds MAX_CHUNK_SIZE (security test)
+  // '(record { filename = "Work/test_files_qa/random_data_1.bin"; chunksize = 3145728 : nat64; offset = 0 : nat64 })'
+  // -> '(variant { Err = variant { Other = "file_download_chunk_: chunksize 3145728 exceeds limit 2097152" } })'
+  mockIC.run_test(
+      std::string(__func__) + ": " +
+          "file_download_chunk - chunksize exceeds MAX_CHUNK_SIZE",
+      file_download_chunk,
+      "4449444c016c0393affe810678c7dda8bb0771aec3faa40b780100000000000000000024576f726b2f746573745f66696c65735f71612f72616e646f6d5f646174615f312e62696e0000300000000000",
+      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100003d66696c655f646f776e6c6f61645f6368756e6b5f3a206368756e6b73697a6520333134353732382065786365656473206c696d69742032303937313532",
       silent_on_trap, my_principal);
 
   // -----------------------------------------------------------------------------

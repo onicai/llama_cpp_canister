@@ -98,6 +98,11 @@ void load_file_metadata() {
     // Read filename
     uint64_t filename_size = 0;
     file.read(reinterpret_cast<char *>(&filename_size), sizeof(filename_size));
+    if (filename_size > MAX_FILENAME_SIZE) {
+      std::cout << "Corrupted metadata: filename_size " << filename_size
+                << " exceeds limit " << MAX_FILENAME_SIZE << std::endl;
+      break;
+    }
     metadata.filename.resize(filename_size);
     file.read(&metadata.filename[0], filename_size);
 
@@ -108,6 +113,11 @@ void load_file_metadata() {
     // Read SHA256 hash
     uint64_t sha256_size = 0;
     file.read(reinterpret_cast<char *>(&sha256_size), sizeof(sha256_size));
+    if (sha256_size > MAX_SHA256_SIZE) {
+      std::cout << "Corrupted metadata: sha256_size " << sha256_size
+                << " exceeds limit " << MAX_SHA256_SIZE << std::endl;
+      break;
+    }
     metadata.sha256.resize(sha256_size);
     file.read(&metadata.sha256[0], sha256_size);
 
@@ -262,6 +272,17 @@ void file_upload_chunk_(IC_API &ic_api, const std::string &filename,
   // Write 'v' to 'filename', starting at 'offset'
   of_stream.seekp(offset);
   of_stream.write(reinterpret_cast<const char *>(v.data()), v.size());
+
+  // Check for integer overflow before calculating filesize
+  if (offset > UINT64_MAX - v.size()) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err",
+        CandidTypeVariant{
+            "Other",
+            CandidTypeText{std::string(__func__) +
+                           ": Integer overflow in filesize calculation"}}});
+    return;
+  }
 
   // Update the file metadata, including the SHA256 hash using the streaming interface
   uint64_t filesize = offset + v.size();
