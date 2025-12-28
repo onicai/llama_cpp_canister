@@ -4,6 +4,24 @@
 
 This is a C++ canister for running llama.cpp on the Internet Computer (ICP), built with icpp-pro.
 
+## Filesystem Architecture
+
+**Important:** ICP canisters do NOT have access to a traditional host filesystem. Instead, icpp-pro provides a virtual filesystem backed by stable memory through:
+
+- [ic-wasi-polyfill](https://github.com/wasm-forge/ic-wasi-polyfill)
+- [wasi2ic](https://github.com/wasm-forge/wasi2ic)
+
+**Key characteristics:**
+- Standard file operations (`fopen`, `std::ifstream`, etc.) work on mainnet
+- Files persist across canister upgrades (stored in stable memory)
+- No access to host OS filesystem (`/etc/passwd`, etc. don't exist)
+- The virtual filesystem is contained entirely within the canister's stable memory
+
+**Security implications:**
+- Path traversal attacks cannot escape to the host system
+- File operations are sandboxed within the canister's virtual filesystem
+- Controllers already have full access to all canister data, so path traversal by controllers is not a privilege escalation
+
 ## Build Commands
 
 ```bash
