@@ -332,3 +332,21 @@ def test__filesystem_file_size_controller_another_prompt(network: str, principal
     )
     expected_response = f'(variant {{ Ok = record {{ msg = "File exists: .canister_cache/{principal}/sessions/another_prompt.cache\\nFile size: 5 bytes\\n"; filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filesize = 5 : nat64; exists = true;}} }})'
     assert response == expected_response
+
+# ------------------------------------------------------------------
+# Security test: MAX_CHUNK_SIZE validation
+def test__file_download_chunk_exceeds_max_chunk_size(network: str, principal: str) -> None:
+    """Test that file_download_chunk rejects chunksize exceeding MAX_CHUNK_SIZE (2MB)"""
+    filename = f".canister_cache/{principal}/sessions/another_prompt.cache"
+    # 3MB chunksize exceeds the 2MB MAX_CHUNK_SIZE limit
+    chunksize_3mb = 3 * 1024 * 1024
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="file_download_chunk",
+        canister_argument=f'(record {{filename = "{filename}"; chunksize = {chunksize_3mb} : nat64; offset = 0 : nat64}})',
+        network=network,
+    )
+    expected_response = f'(variant {{ Err = variant {{ Other = "file_download_chunk_: chunksize {chunksize_3mb} exceeds limit 2097152" }} }})'
+    assert response == expected_response

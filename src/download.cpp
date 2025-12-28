@@ -58,6 +58,18 @@ void file_download_chunk_(IC_API &ic_api, const std::string &filename,
   std::uint64_t filesize = if_stream.tellg();
   if_stream.seekg(0, std::ios::beg);
 
+  // Validate chunksize before allocation
+  if (chunksize > MAX_CHUNK_SIZE) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err",
+        CandidTypeVariant{
+            "Other",
+            CandidTypeText{std::string(__func__) + ": chunksize " +
+                           std::to_string(chunksize) + " exceeds limit " +
+                           std::to_string(MAX_CHUNK_SIZE)}}});
+    return;
+  }
+
   // Read 'chunksize' bytes from 'filename', starting at 'offset' and store them in 'v'
   std::vector<uint8_t> v(chunksize);
   if_stream.seekg(offset, std::ios::beg);
