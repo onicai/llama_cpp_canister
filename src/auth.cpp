@@ -58,8 +58,8 @@ void send_access_denied_api_error(IC_API &ic_api) {
 
 void send_access_denied_output_record(IC_API &ic_api) {
   std::string error_msg = "Access Denied";
-  send_output_record_result_error_to_wire(ic_api, Http::StatusCode::Unauthorized,
-                                          error_msg);
+  send_output_record_result_error_to_wire(
+      ic_api, Http::StatusCode::Unauthorized, error_msg);
 }
 
 // Admin RBAC helper
@@ -211,11 +211,11 @@ void assignAdminRole() {
 
   // Upsert: remove existing assignment if any
   admin_role_assignments.erase(
-      std::remove_if(
-          admin_role_assignments.begin(), admin_role_assignments.end(),
-          [&](const AdminRoleAssignment &a) {
-            return a.principal == principal_to_assign;
-          }),
+      std::remove_if(admin_role_assignments.begin(),
+                     admin_role_assignments.end(),
+                     [&](const AdminRoleAssignment &a) {
+                       return a.principal == principal_to_assign;
+                     }),
       admin_role_assignments.end());
 
   // Create new assignment
@@ -251,11 +251,11 @@ void revokeAdminRole() {
   std::string principal_to_revoke;
   ic_api.from_wire(CandidTypeText{&principal_to_revoke});
 
-  auto it = std::find_if(
-      admin_role_assignments.begin(), admin_role_assignments.end(),
-      [&](const AdminRoleAssignment &a) {
-        return a.principal == principal_to_revoke;
-      });
+  auto it =
+      std::find_if(admin_role_assignments.begin(), admin_role_assignments.end(),
+                   [&](const AdminRoleAssignment &a) {
+                     return a.principal == principal_to_revoke;
+                   });
 
   if (it == admin_role_assignments.end()) {
     ic_api.to_wire(CandidTypeVariant{
@@ -267,8 +267,7 @@ void revokeAdminRole() {
   admin_role_assignments.erase(it);
 
   ic_api.to_wire(CandidTypeVariant{
-      "Ok",
-      CandidTypeText{"Admin role revoked for " + principal_to_revoke}});
+      "Ok", CandidTypeText{"Admin role revoked for " + principal_to_revoke}});
 }
 
 void getAdminRoles() {
@@ -289,8 +288,9 @@ void getAdminRoles() {
 
   for (const auto &assignment : admin_role_assignments) {
     principals.push_back(assignment.principal);
-    std::string role_label =
-        (assignment.role == AdminRole::AdminQuery) ? "AdminQuery" : "AdminUpdate";
+    std::string role_label = (assignment.role == AdminRole::AdminQuery)
+                                 ? "AdminQuery"
+                                 : "AdminUpdate";
     roles.push_back(role_label);
     assignedBys.push_back(assignment.assignedBy);
     assignedAts.push_back(assignment.assignedAt);

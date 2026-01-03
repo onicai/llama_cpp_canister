@@ -78,10 +78,10 @@ void test_admin_rbac(MockIC &mockIC) {
                   ACCESS_DENIED_API_ERROR, silent_on_trap, anonymous_principal);
 
   // log_pause - anonymous -> ApiError Access Denied
-  mockIC.run_test(
-      std::string(__func__) + ": log_pause - anonymous denied (ApiError)",
-      log_pause, EMPTY_INPUT, ACCESS_DENIED_API_ERROR, silent_on_trap,
-      anonymous_principal);
+  mockIC.run_test(std::string(__func__) +
+                      ": log_pause - anonymous denied (ApiError)",
+                  log_pause, EMPTY_INPUT, ACCESS_DENIED_API_ERROR,
+                  silent_on_trap, anonymous_principal);
 
   // ===========================================================================
   // Test 3: OutputRecordResult endpoints - NOT ApiError format
@@ -113,7 +113,8 @@ void test_admin_rbac(MockIC &mockIC) {
   // We don't check exact Ok response (contains dynamic timestamp)
   // Just run and verify it doesn't trap
   mockIC.run_test(
-      std::string(__func__) + ": assignAdminRole - controller assigns AdminQuery",
+      std::string(__func__) +
+          ": assignAdminRole - controller assigns AdminQuery",
       assignAdminRole, ASSIGN_ADMIN_QUERY_INPUT,
       "", // Don't check exact Ok response (contains dynamic timestamp)
       silent_on_trap, controller_principal);
