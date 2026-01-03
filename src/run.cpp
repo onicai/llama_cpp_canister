@@ -33,10 +33,8 @@ static void print_usage(int argc, char **argv) {
 void new_chat() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   std::string error_msg;
-  if (!is_caller_whitelisted(ic_api, false)) {
-    error_msg = "Access Denied.";
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::Unauthorized, error_msg);
+  if (!has_admin_update_or_whitelisted(ic_api)) {
+    send_access_denied_output_record(ic_api);
     return;
   }
 
@@ -117,12 +115,12 @@ void new_chat() {
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
 }
 
-void run(IC_API &ic_api, const uint64_t &max_tokens) {
+void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   std::string error_msg;
-  if (!is_caller_whitelisted(ic_api, false)) {
-    error_msg = "Access Denied.";
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::Unauthorized, error_msg);
+  bool authorized = is_query ? has_admin_query_or_whitelisted(ic_api)
+                             : has_admin_update_or_whitelisted(ic_api);
+  if (!authorized) {
+    send_access_denied_output_record(ic_api);
     return;
   }
 
@@ -196,9 +194,9 @@ void run(IC_API &ic_api, const uint64_t &max_tokens) {
 
 void run_query() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  run(ic_api, max_tokens_query);
+  run(ic_api, max_tokens_query, true);
 }
 void run_update() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  run(ic_api, max_tokens_update);
+  run(ic_api, max_tokens_update, false);
 }

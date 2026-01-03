@@ -74,10 +74,8 @@ bool get_canister_path_session(const std::string &path_session,
 void remove_prompt_cache() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   std::string error_msg;
-  if (!is_caller_whitelisted(ic_api, false)) {
-    error_msg = "Access Denied.";
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::Unauthorized, error_msg);
+  if (!has_admin_update_or_whitelisted(ic_api)) {
+    send_access_denied_output_record(ic_api);
     return;
   }
 
@@ -145,10 +143,8 @@ void remove_prompt_cache() {
 void copy_prompt_cache() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   std::string error_msg;
-  if (!is_caller_whitelisted(ic_api, false)) {
-    error_msg = "Access Denied";
-    ic_api.to_wire(CandidTypeVariant{
-        "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
+  if (!has_admin_update_or_whitelisted(ic_api)) {
+    send_access_denied_api_error(ic_api);
     return;
   }
 
@@ -212,7 +208,10 @@ void copy_prompt_cache() {
 
 void download_prompt_cache_chunk() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_query_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   CandidTypePrincipal caller = ic_api.get_caller();
   std::string principal_id = caller.get_text();
@@ -243,7 +242,10 @@ void download_prompt_cache_chunk() {
 
 void upload_prompt_cache_chunk() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_update_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   CandidTypePrincipal caller = ic_api.get_caller();
   std::string principal_id = caller.get_text();
@@ -278,7 +280,10 @@ void uploaded_prompt_cache_details() {
   // Returns the metadata for an uploaded prompt cache
 
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_query_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   CandidTypePrincipal caller = ic_api.get_caller();
   std::string principal_id = caller.get_text();

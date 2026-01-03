@@ -225,7 +225,10 @@ bool db_chats_save_conversation(const std::string &conversation,
 // Canister API to retrieve saved chats for authenticated caller
 void get_chats() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  if (!is_caller_whitelisted(ic_api)) return;
+  if (!has_admin_query_or_whitelisted(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   if (!DB_CHATS_ACTIVE) {
     ic_api.to_wire(CandidTypeVariant{
@@ -325,7 +328,10 @@ void get_chats() {
 
 void chats_resume() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_whitelisted(ic_api)) return;
+  if (!has_admin_update_or_whitelisted(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
   DB_CHATS_ACTIVE = true;
 
   std::cout << "llama_cpp: " << std::string(__func__)
@@ -338,7 +344,10 @@ void chats_resume() {
 
 void chats_pause() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_whitelisted(ic_api)) return;
+  if (!has_admin_update_or_whitelisted(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
   DB_CHATS_ACTIVE = false;
 
   std::cout << "llama_cpp: " << std::string(__func__)

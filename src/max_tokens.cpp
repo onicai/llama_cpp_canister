@@ -12,7 +12,10 @@ uint64_t max_tokens_query{0};  // 0 = no limit
 
 void set_max_tokens() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_update_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   CandidTypeRecord r_in;
   r_in.append("max_tokens_update", CandidTypeNat64{&max_tokens_update});

@@ -24,10 +24,8 @@ static void print_usage(int argc, char **argv) {
 void remove_log_file() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   std::string error_msg;
-  if (!is_caller_a_controller(ic_api)) {
-    error_msg = "Access Denied.";
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::Unauthorized, error_msg);
+  if (!has_admin_update_role(ic_api)) {
+    send_access_denied_output_record(ic_api);
     return;
   }
 
@@ -65,7 +63,10 @@ void remove_log_file() {
 
 void log_pause() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_update_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   common_log_pause(common_log_main());
 
@@ -76,7 +77,10 @@ void log_pause() {
 
 void log_resume() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_update_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   common_log_resume(common_log_main());
 

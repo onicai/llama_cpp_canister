@@ -25,7 +25,10 @@ void print_file_download_summary(const std::string &filename,
 
 void file_download_chunk() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_query_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   // Get filename to download and the chunksize
   std::string filename{""};

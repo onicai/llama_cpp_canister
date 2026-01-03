@@ -2,6 +2,7 @@
 // Build it with: `icpp build-native` from the parent folder where 'icpp.toml' resides
 
 #include "main.h"
+#include "test_admin_rbac.h"
 #include "test_canister_functions.h"
 #include "test_files.h"
 #include "test_qwen2.h"
@@ -26,6 +27,7 @@ int main() {
   bool exit_on_fail = true;
   MockIC mockIC(exit_on_fail);
 
+  test_admin_rbac(mockIC);
   test_canister_functions(mockIC);
   test_files(mockIC);
   test_tiny_stories(mockIC);

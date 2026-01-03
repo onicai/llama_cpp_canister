@@ -20,7 +20,10 @@
 
 void filesystem_file_size() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_query_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   // Get filename
   std::string filename{""};
@@ -34,7 +37,10 @@ void filesystem_file_size() {
 
 void get_creation_timestamp_ns() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_query_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   // Get filename
   std::string filename{""};
@@ -48,7 +54,10 @@ void get_creation_timestamp_ns() {
 
 void filesystem_remove() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_update_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   // Get filename
   std::string filename{""};
@@ -64,13 +73,19 @@ void filesystem_remove() {
 
 void recursive_dir_content_update() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_update_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
   recursive_dir_content_(ic_api);
 }
 
 void recursive_dir_content_query() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_query_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
   recursive_dir_content_(ic_api);
 }
 
