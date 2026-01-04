@@ -13,7 +13,8 @@ permissions:
 jobs:
   check-cicd-mac-status:
     name: Check if cicd-mac succeeded
-    runs-on: macos-latest
+    # Use Intel runner to match local x86_64 development environment
+    runs-on: macos-15-intel
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4  # ✅ This ensures GitHub CLI can detect the repo
@@ -39,7 +40,8 @@ jobs:
     strategy:
       matrix:
         python-version: [3.11]
-        os: [macos-latest]
+        # Use Intel runner to match local x86_64 development environment
+        os: [macos-15-intel]
 
     runs-on: ${{ matrix.os }}
     
