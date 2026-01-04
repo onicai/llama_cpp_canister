@@ -35,6 +35,8 @@ endif
 VERSION_DIDC := $(shell curl --silent "https://api.github.com/repos/dfinity/candid/releases/latest" | grep -e '"tag_name"' | cut -c 16-25)
 # version to install for clang
 VERSION_CLANG := $(shell cat version_clang.txt)
+# version to install for dfx
+VERSION_DFX := 0.29.2
 
 ###########################################################################
 # Use some clang tools that come with wasi-sdk
@@ -153,7 +155,7 @@ install-clang-ubuntu:
 # Make sure to source ~/.profile afterwards -> it adds ~/bin to the path if it exists
 .PHONY: install-dfx
 install-dfx:
-	DFXVM_INIT_YES=true sh -ci "$$(curl -fsSL https://sdk.dfinity.org/install.sh)"
+	DFX_VERSION=$(VERSION_DFX) DFXVM_INIT_YES=true sh -ci "$$(curl -fsSL https://sdk.dfinity.org/install.sh)"
 
 .PHONY: install-didc
 install-didc:
