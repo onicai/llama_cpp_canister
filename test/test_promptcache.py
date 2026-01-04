@@ -24,6 +24,62 @@ DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
 CANISTER_NAME = "llama_cpp"
 
 
+# =============================================================================
+# Anonymous Access Denial Tests
+# =============================================================================
+
+def test__upload_prompt_cache_chunk_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
+    """Test that upload_prompt_cache_chunk rejects anonymous caller"""
+    assert identity_anonymous["identity"] == "anonymous"
+    assert identity_anonymous["principal"] == "2vxsx-fae"
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="upload_prompt_cache_chunk",
+        canister_argument='(record { promptcache = "test.cache"; chunk = blob "\\01\\02\\03"; chunksize = 3 : nat64; offset = 0 : nat64 })',
+        network=network,
+    )
+    expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
+    assert response == expected_response
+
+
+def test__download_prompt_cache_chunk_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
+    """Test that download_prompt_cache_chunk rejects anonymous caller"""
+    assert identity_anonymous["identity"] == "anonymous"
+    assert identity_anonymous["principal"] == "2vxsx-fae"
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="download_prompt_cache_chunk",
+        canister_argument='(record { promptcache = "test.cache"; chunksize = 1024 : nat64; offset = 0 : nat64 })',
+        network=network,
+    )
+    expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
+    assert response == expected_response
+
+
+def test__uploaded_prompt_cache_details_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
+    """Test that uploaded_prompt_cache_details rejects anonymous caller"""
+    assert identity_anonymous["identity"] == "anonymous"
+    assert identity_anonymous["principal"] == "2vxsx-fae"
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="uploaded_prompt_cache_details",
+        canister_argument='(record { promptcache = "test.cache" })',
+        network=network,
+    )
+    expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
+    assert response == expected_response
+
+
+# =============================================================================
+# Controller Success Tests
+# =============================================================================
+
 def test__upload_prompt_cache_chunk_0(network: str, principal: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,

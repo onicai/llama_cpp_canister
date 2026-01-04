@@ -24,7 +24,10 @@ static void print_usage(int argc, char **argv) {
 
 void load_model() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_update_role(ic_api)) {
+    send_access_denied_output_record(ic_api);
+    return;
+  }
 
   CandidTypePrincipal caller = ic_api.get_caller();
   std::string principal_id = caller.get_text();

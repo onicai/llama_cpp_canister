@@ -142,6 +142,46 @@ type AccessRecord = record {
 };
 
 // -----------------------------------------------------
+// Admin RBAC Types (match PoAIW structure, use existing ApiError)
+// -----------------------------------------------------
+type AdminRole = variant {
+  AdminQuery;
+  AdminUpdate
+};
+
+type AdminRoleAssignment = record {
+  assignedAt : nat64;
+  assignedBy : text;
+  note : text;
+  "principal" : text;
+  role : AdminRole
+};
+
+type AssignAdminRoleInputRecord = record {
+  note : text;
+  "principal" : text;
+  role : AdminRole
+};
+
+// Uses EXISTING ApiError type (NOT modified)
+type AdminRoleAssignmentResult = variant {
+  Err : ApiError;
+  Ok : AdminRoleAssignment
+};
+
+// Uses EXISTING ApiError type (NOT modified)
+type AdminRoleAssignmentsResult = variant {
+  Err : ApiError;
+  Ok : vec AdminRoleAssignment
+};
+
+// Uses EXISTING ApiError type (NOT modified)
+type TextResult = variant {
+  Err : ApiError;
+  Ok : text
+};
+
+// -----------------------------------------------------
 type FilesystemFileSizeInputRecord = record {
   filename : text
 };
@@ -255,5 +295,10 @@ service : {
 
   // Other admin endpoints
   whoami : () -> (text) query;
+
+  // Admin RBAC Management (Controller-only)
+  assignAdminRole : (AssignAdminRoleInputRecord) -> (AdminRoleAssignmentResult);
+  revokeAdminRole : (text) -> (TextResult);
+  getAdminRoles : () -> (AdminRoleAssignmentsResult) query;
 
 }

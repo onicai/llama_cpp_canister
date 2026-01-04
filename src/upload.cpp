@@ -190,7 +190,10 @@ void print_file_upload_summary(const std::string &filename,
 
 void file_upload_chunk() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_update_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   // Get filename and the chunk to write to it
   std::string filename{""};
@@ -309,7 +312,10 @@ void uploaded_file_details() {
   // Returns the metadata for an uploaded file
 
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
-  if (!is_caller_a_controller(ic_api)) return;
+  if (!has_admin_query_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
 
   // Get filename
   std::string filename{""};
