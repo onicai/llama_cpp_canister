@@ -24,9 +24,8 @@ static void print_usage(int argc, char **argv) {
 
 void load_model() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  // Note: Uses ApiError format for access denied (preserving existing behavior)
   if (!has_admin_update_role(ic_api)) {
-    send_access_denied_api_error(ic_api);
+    send_access_denied_output_record(ic_api);
     return;
   }
 

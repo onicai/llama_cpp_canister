@@ -193,7 +193,10 @@ void assignAdminRole() {
   r_in.append("principal", CandidTypeText{&principal_to_assign});
   r_in.append("note", CandidTypeText{&note});
 
+  // Set up variant with expected options for proper deserialization
   CandidTypeVariant role_variant{&role_label};
+  role_variant.append("AdminQuery", CandidTypeNull{});
+  role_variant.append("AdminUpdate", CandidTypeNull{});
   r_in.append("role", role_variant);
   ic_api.from_wire(r_in);
 
@@ -281,7 +284,7 @@ void getAdminRoles() {
 
   // Build vectors for each field
   std::vector<std::string> principals;
-  std::vector<std::string> roles;
+  std::vector<std::string> role_labels;
   std::vector<std::string> assignedBys;
   std::vector<uint64_t> assignedAts;
   std::vector<std::string> notes;
@@ -291,16 +294,21 @@ void getAdminRoles() {
     std::string role_label = (assignment.role == AdminRole::AdminQuery)
                                  ? "AdminQuery"
                                  : "AdminUpdate";
-    roles.push_back(role_label);
+    role_labels.push_back(role_label);
     assignedBys.push_back(assignment.assignedBy);
     assignedAts.push_back(assignment.assignedAt);
     notes.push_back(assignment.note);
   }
 
+  // Create variant template for AdminRole
+  CandidTypeVariant role_template;
+  role_template.append("AdminQuery", CandidTypeNull{});
+  role_template.append("AdminUpdate", CandidTypeNull{});
+
   // Create a record template with vector fields
   CandidTypeRecord r_out;
   r_out.append("principal", CandidTypeVecText{principals});
-  r_out.append("role", CandidTypeVecText{roles});
+  r_out.append("role", CandidTypeVecVariant{role_template, role_labels});
   r_out.append("assignedBy", CandidTypeVecText{assignedBys});
   r_out.append("assignedAt", CandidTypeVecNat64{assignedAts});
   r_out.append("note", CandidTypeVecText{notes});
