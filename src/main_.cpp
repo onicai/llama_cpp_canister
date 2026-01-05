@@ -42,14 +42,14 @@
 
 static const char *DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant";
 
-static llama_context **g_ctx;
+static llama_context **g_ctx = nullptr;
 // static llama_model             ** g_model; // Make this a global variable, accessible from common.cpp
-llama_model **g_model;
-static common_sampler **g_smpl;
-static common_params *g_params;
-static std::vector<llama_token> *g_input_tokens;
-static std::ostringstream *g_output_ss;
-static std::vector<llama_token> *g_output_tokens;
+llama_model **g_model = nullptr;
+static common_sampler **g_smpl = nullptr;
+static common_params *g_params = nullptr;
+static std::vector<llama_token> *g_input_tokens = nullptr;
+static std::ostringstream *g_output_ss = nullptr;
+static std::vector<llama_token> *g_output_tokens = nullptr;
 static bool is_interacting = false;
 static bool need_insert_eot = false;
 
@@ -170,7 +170,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   llama_backend_init();
   llama_numa_init(params.numa);
 
-  static llama_model *model; // ICPP-PATCH: use static to preserve across calls
+  static llama_model *model = nullptr; // ICPP-PATCH: use static to preserve across calls
   llama_context *ctx;
   common_sampler *smpl = nullptr;
 
@@ -233,6 +233,12 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   auto *ggml_threadpool_free_fn =
       (decltype(ggml_threadpool_free) *)ggml_backend_reg_get_proc_address(
           reg, "ggml_threadpool_free");
+
+  // Validate function pointers before use
+  if (!ggml_threadpool_new_fn || !ggml_threadpool_free_fn) {
+    LOG_ERR("%s: failed to get threadpool function pointers\n", __func__);
+    return 1;
+  }
 
   struct ggml_threadpool_params tpp_batch =
       ggml_threadpool_params_from_cpu_params(params.cpuparams_batch);

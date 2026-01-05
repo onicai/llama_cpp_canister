@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <stdio.h>
 #include <string>
 
@@ -93,7 +94,7 @@ void load_file_metadata() {
 
   // Read each entry
   for (uint64_t i = 0; i < count; i++) {
-    FileMetadata metadata;
+    FileMetadata metadata = {};
 
     // Read filename
     uint64_t filename_size = 0;
@@ -150,16 +151,16 @@ void update_file_metadata(const std::string &filename, uint64_t filesize,
 }
 
 // Get file metadata by filename
-const FileMetadata *get_file_metadata(const std::string &filename) {
+std::optional<FileMetadata> get_file_metadata(const std::string &filename) {
   // Always load the metadata from disk first
   load_file_metadata();
 
   for (const auto &metadata : uploaded_files) {
     if (metadata.filename == filename) {
-      return &metadata;
+      return metadata;  // Return by value, not pointer
     }
   }
-  return nullptr;
+  return std::nullopt;
 }
 
 // Delete file metadata by filename
@@ -215,7 +216,18 @@ void file_upload_chunk_(IC_API &ic_api, const std::string &filename,
                         const std::vector<uint8_t> &v,
                         const uint64_t &chunksize, const uint64_t &offset) {
 
-  // Make sure there’s a session entry for this filename
+  // Validate chunksize before processing
+  if (chunksize > MAX_CHUNK_SIZE) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{
+                   "Other", CandidTypeText{
+                                std::string(__func__) + ": chunksize " +
+                                std::to_string(chunksize) + " exceeds limit " +
+                                std::to_string(MAX_CHUNK_SIZE)}}});
+    return;
+  }
+
+  // Make sure there's a session entry for this filename
   auto &session = upload_sessions[filename];
   if (offset == 0) {
     // First chunk for this file: (re)initialize
@@ -248,8 +260,8 @@ void file_upload_chunk_(IC_API &ic_api, const std::string &filename,
               << std::endl;
     // This is OK, just send back the current status!
     // Get the metadata for the file
-    const FileMetadata *metadata = get_file_metadata(filename);
-    if (metadata == nullptr) {
+    auto metadata = get_file_metadata(filename);
+    if (!metadata.has_value()) {
       std::string msg =
           "Already handled this chunk, but Metadata for this file are not found: " +
           filename;
@@ -333,8 +345,8 @@ void uploaded_file_details_(IC_API &ic_api, const std::string &filename) {
             << std::endl;
 
   // Get the metadata for the file
-  const FileMetadata *metadata = get_file_metadata(filename);
-  if (metadata == nullptr) {
+  auto metadata = get_file_metadata(filename);
+  if (!metadata.has_value()) {
     std::string msg = "Metadata for this file are not found: " + filename;
     ic_api.to_wire(CandidTypeVariant{
         "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +

@@ -49,7 +49,9 @@ cpp_include_dirs = [
 #           // SIMD-specific code here
 #       }
 cpp_compile_flags = ["-DNDEBUG", "-DGGML_USE_CPU"]
-cpp_link_flags = []
+# 8MB stack to prevent "heap out of bounds" (actually stack overflow)
+# -> This is sufficient for the Qwen2.5 model, but you might need to increase it for larger models
+cpp_link_flags = ["-Wl,-z,stack-size=8388608"]
 c_paths = [
     "src/llama_cpp_onicai_fork/ggml/src/ggml.c",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-alloc.c",
