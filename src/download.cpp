@@ -79,7 +79,8 @@ void file_download_chunk_(IC_API &ic_api, const std::string &filename,
   v.resize(if_stream.gcount()); // Adjust vector size to actual bytes read
 
   // Are we done for this file (with overflow check)
-  bool done = (offset > UINT64_MAX - chunksize) || (offset + chunksize >= filesize);
+  bool done =
+      (offset > UINT64_MAX - chunksize) || (offset + chunksize >= filesize);
 
   print_file_download_summary(filename, filesize, v, offset, done);
 

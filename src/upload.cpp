@@ -157,7 +157,7 @@ std::optional<FileMetadata> get_file_metadata(const std::string &filename) {
 
   for (const auto &metadata : uploaded_files) {
     if (metadata.filename == filename) {
-      return metadata;  // Return by value, not pointer
+      return metadata; // Return by value, not pointer
     }
   }
   return std::nullopt;
