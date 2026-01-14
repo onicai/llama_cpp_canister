@@ -23,9 +23,8 @@ _(Issue a PR to get your project listed)_
 
 | Project    | Description/Tagline                                                 | GitHub                                                 | X                                                 | Token                                      | URL                                               |
 | ---------- | ------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------- | ------------------------------------------ | ------------------------------------------------- |
-| funnAI     | The next-generation AI ecosystem | -     | [@onicaiHQ](https://x.com/onicaiHQ) | $FUNNAI | [funnai.onicai.com](https://funnai.onicai.com) |
+| funnAI     | Truly Open AI with Bitcoin Tokenomics, plus much more! | -     | [@onicaiHQ](https://x.com/onicaiHQ) | $FUNNAI | [funnai.onicai.com](https://funnai.onicai.com) |
 | IConfucius | Wisdom fueled by Cycles<br>_Fully on chain AI tokenized on Bitcoin_ | [IConfucius](https://github.com/onicai/IConfucius)     | [@IConfucius_odin](https://x.com/IConfucius_odin) | [$ICONFUCIUS](https://odin.fun/token/29m8) | [onicai.com](https://www.onicai.com/#/iconfucius) |
-| Forseti    | Norse God of Justice<br>_Fully on chain AI tokenized on Bitcoin_    | [forseti.fun](https://github.com/forria64/forseti.fun) | [@forsetidotfun](https://x.com/forsetidotfun)     | [$FORSETI](https://odin.fun/token/2dld)    | [forseti.fun](https://forseti.fun)                |
 | ICGPT      | on-chain LLMs<br>_Chat with on-chain LLMs_                          | [icgpt](https://github.com/icppWorld/icgpt)            | [@onicaiHQ](https://x.com/onicaiHQ)               | -                                          | [icgpt.onicai.com](https://icgpt.onicai.com)      |
 
 # Need help or have feedback? ❤️
@@ -221,7 +220,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   ```bash
   dfx canister call llama_cpp set_max_tokens '(record {
     max_tokens_query = 1 : nat64;
-    max_tokens_update = 13 : nat64
+    max_tokens_update = 12 : nat64
   })'
 
   dfx canister call llama_cpp get_max_tokens
@@ -634,7 +633,7 @@ We tested several LLM models available on HuggingFace:
 | ------------------------------------------------------------------------------------------------------------------------ | --------- | --------- | -------------- | -------------- | ----------------------------- | ------------------------------ |
 | [SmolLM2-135M-Instruct-Q8_0.gguf](https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF)                         | 135 M     | 0.15 GB   | q8_0           | f16            | -                             | 40                             |
 | [qwen2.5-0.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                              | 630 M     | 0.49 GB   | q4_k_m         | f16            | -                             | 14                             |
-| [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                                | 630 M     | 0.68 GB   | q8_0           | q8_0           | -                             | 13                             |
+| [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                                | 630 M     | 0.68 GB   | q8_0           | q8_0           | -                             | 12                             |
 | [Llama-3.2-1B-Instruct-Q4_K_M.gguf](https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF)                           | 1.24 B    | 0.81 GB   | q4_k_m         | q5_0           | 5                             | 4                              |
 | [qwen2.5-1.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF)                              | 1.78 B    | 1.10 GB   | q4_k_m         | q8_0           | -                             | 3                              |
 | [DeepSeek-R1-Distill-Qwen-1.5B-NexaQuant.gguf](https://huggingface.co/NexaAIDev/DeepSeek-R1-Distill-Qwen-1.5B-NexaQuant) | 1.78 B    | 1.34 GB   | NexaQuant-4Bit | f16            | 4                             | 3                              |
