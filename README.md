@@ -62,15 +62,31 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
   _(skip when using the [release](https://github.com/onicai/llama_cpp_canister/releases))_
 
-  ```bash
-  # Clone this repo
-  git clone git@github.com:onicai/llama_cpp_canister.git
+  Approach 1: HTTPS — no GitHub SSH keys required
 
-  # Clone llama_cpp_onicai_fork, our forked version of llama.cpp
-  # Into the ./src folder
+  ```bash
+  # Clone this repository
+  git clone https://github.com/onicai/llama_cpp_canister.git
+  cd llama_cpp_canister
+
+  # Clone llama_cpp_onicai_fork (our fork of llama.cpp) into ./src
+  cd src
+  git clone https://github.com/onicai/llama_cpp_onicai_fork.git
+  ```
+
+  Approach 2: SSH — requires a configured GitHub SSH key
+  ```bash
+  # Clone this repository
+  git clone git@github.com:onicai/llama_cpp_canister.git
+  cd llama_cpp_canister
+
+  # Clone llama_cpp_onicai_fork into ./src
   cd src
   git clone git@github.com:onicai/llama_cpp_onicai_fork.git
   ```
+
+  Note: If you see Permission denied (publickey) errors, use the HTTPS method above or configure an SSH key in your GitHub account.
+
 
 - Create a Python environment with dependencies installed
 
@@ -619,6 +635,38 @@ dfx canister call llama_cpp get_creation_timestamp_ns '(record {filename = "<fil
 # remove a file or empty directory
 dfx canister call llama_cpp filesystem_remove '(record {filename = "<filename>"})'
 ```
+
+# Wasm Verification (pre onicai SNS)
+
+> **NOTE:** This workflow was created for the **pre onicai SNS verification
+> process** ([NNS Proposal 140268](https://dashboard.internetcomputer.org/proposal/140268)).
+> It pins the build environment to icpp-pro 5.3.0 / Rust 1.86.0 to reproduce the
+> exact wasm from the v0.7.3 release that is currently deployed to the funnAI LLM
+> canisters. **Post onicai SNS, the build process and pinned versions must be
+> updated** to match the then-current release and toolchain.
+
+The GitHub Actions workflow [verify-funnAI-LLMs](.github/workflows/verify-funnAI-LLMs.yml) verifies that the `llama_cpp.wasm` built from this repo matches the wasm deployed to the funnAI LLM canisters on the Internet Computer mainnet.
+
+Anyone can independently verify that the on-chain LLM canisters are running the exact code from this open-source repo.
+
+**What it does:**
+
+1. Builds `llama_cpp.wasm` from source (same build steps as the release workflow)
+2. Computes the sha256 hash of the built wasm
+3. Queries the module hash of each deployed funnAI LLM canister on IC mainnet via `dfx canister info`
+4. Compares the hashes and reports pass/fail for each canister
+
+**Canisters verified (30 total):**
+
+| Category                        | Count | Description                                |
+| ------------------------------- | ----- | ------------------------------------------ |
+| funnAI Challenger LLM           | 1     | Generates challenges for the funnAI game   |
+| funnAI Judge LLMs               | 16    | Judge responses in the funnAI game         |
+| funnAI mAIner ShareService LLMs | 13    | Provide LLM inference for mAIner services  |
+
+**How to run:**
+
+Trigger the workflow manually from the Actions tab on GitHub (`workflow_dispatch`).
 
 # Appendix A: max_tokens
 

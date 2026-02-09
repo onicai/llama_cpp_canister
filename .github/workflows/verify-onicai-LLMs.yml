@@ -1,0 +1,175 @@
+# =============================================================================
+# Pre onicai SNS verification workflow
+# (NNS Proposal 140268: https://dashboard.internetcomputer.org/proposal/140268)
+#
+# Downloads the llama_cpp.wasm from the v0.7.3 GitHub release and verifies
+# that the deployed onicai SNS LLM canisters are running the exact same wasm.
+#
+# POST ONICAI SNS: Update the release tag and canister list to match the
+# then-current release.
+# =============================================================================
+
+name: verify-wasm-onicai-SNS-LLMs
+
+on:
+  workflow_dispatch:
+
+env:
+  DFX_WARNING: "-mainnet_plaintext_identity"
+
+jobs:
+  verify-wasm:
+    name: Verify onicai SNS LLM canisters
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: install dfx
+        run: |
+          DFXVM_INIT_YES=true sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
+          echo "$HOME/.local/share/dfx/bin" >> "$GITHUB_PATH"
+
+      - name: download release wasm
+        run: |
+          echo "Downloading llama_cpp_canister v0.7.3 release..."
+          curl -sL \
+            "https://github.com/onicai/llama_cpp_canister/releases/download/v0.7.3/llama_cpp_canister_v0.7.3.zip" \
+            -o release.zip
+          unzip -o release.zip build/llama_cpp.wasm
+          ls -la build/llama_cpp.wasm
+
+      - name: compute release wasm hash
+        id: wasm_hash
+        run: |
+          RELEASE_HASH=$(shasum -a 256 build/llama_cpp.wasm | awk '{print $1}')
+          echo "release_hash=${RELEASE_HASH}" >> "$GITHUB_OUTPUT"
+          echo "=============================================="
+          echo "Release v0.7.3 llama_cpp.wasm sha256:"
+          echo "  ${RELEASE_HASH}"
+          echo "=============================================="
+
+      - name: create default identity
+        run: dfx identity get-principal > /dev/null 2>&1
+
+      - name: verify onicai SNS LLM canisters
+        run: |
+          RELEASE_HASH="${{ steps.wasm_hash.outputs.release_hash }}"
+          echo "=============================================="
+          echo "Release v0.7.3 llama_cpp.wasm sha256:"
+          echo "  ${RELEASE_HASH}"
+          echo "=============================================="
+          echo ""
+
+          PASS=0
+          FAIL=0
+          ERRORS=""
+
+          verify_canister() {
+            local CANISTER_ID="$1"
+            local LABEL="$2"
+
+            echo "----------------------------------------------"
+            echo "Verifying: ${LABEL}"
+            echo "Canister : ${CANISTER_ID}"
+
+            # Get the deployed module hash
+            INFO_OUTPUT=$(dfx canister info "${CANISTER_ID}" --network ic 2>&1) || true
+            DEPLOYED_HASH=$(echo "${INFO_OUTPUT}" | grep "Module hash" | awk '{print $3}' | sed 's/^0x//')
+
+            if [ -z "${DEPLOYED_HASH}" ]; then
+              echo "  ERROR: Could not retrieve module hash"
+              echo "  dfx output: ${INFO_OUTPUT}"
+              FAIL=$((FAIL + 1))
+              ERRORS="${ERRORS}\n  FAIL: ${LABEL} (${CANISTER_ID}) - could not retrieve module hash"
+              return
+            fi
+
+            echo "  Deployed : ${DEPLOYED_HASH}"
+            echo "  Release  : ${RELEASE_HASH}"
+
+            if [ "${DEPLOYED_HASH}" = "${RELEASE_HASH}" ]; then
+              echo "  Result   : PASS ✅"
+              PASS=$((PASS + 1))
+            else
+              echo "  Result   : FAIL ❌"
+              FAIL=$((FAIL + 1))
+              ERRORS="${ERRORS}\n  FAIL: ${LABEL} (${CANISTER_ID})\n    deployed=${DEPLOYED_HASH}\n    release=${RELEASE_HASH}"
+            fi
+            echo ""
+          }
+
+          # ---------------------------------------------------------
+          # funnAI Challenger LLM (1)
+          # ---------------------------------------------------------
+          verify_canister "vofho-bqaaa-aaaac-qalyq-cai" "funnAI Challenger LLM"
+
+          # ---------------------------------------------------------
+          # funnAI Judge LLMs (16)
+          # ---------------------------------------------------------
+          verify_canister "vahkg-2aaaa-aaaac-qalzq-cai" "funnAI Judge LLM 1"
+          verify_canister "vva3l-3iaaa-aaaac-qal2a-cai" "funnAI Judge LLM 2"
+          verify_canister "kg5kw-bqaaa-aaaam-aeltq-cai" "funnAI Judge LLM 3"
+          verify_canister "lltoy-oyaaa-aaaam-aelua-cai" "funnAI Judge LLM 4"
+          verify_canister "ouoa7-paaaa-aaaah-arfwq-cai" "funnAI Judge LLM 5"
+          verify_canister "o5nld-ziaaa-aaaah-arfxa-cai" "funnAI Judge LLM 6"
+          verify_canister "o2mnx-uqaaa-aaaah-arfxq-cai" "funnAI Judge LLM 7"
+          verify_canister "v7zwd-iqaaa-aaaad-aapqa-cai" "funnAI Judge LLM 8"
+          verify_canister "vyyqx-fiaaa-aaaad-aapqq-cai" "funnAI Judge LLM 9"
+          verify_canister "vr33l-taaaa-aaaad-aapra-cai" "funnAI Judge LLM 10"
+          verify_canister "vl3dc-4yaaa-aaaaj-qnpwq-cai" "funnAI Judge LLM 11"
+          verify_canister "vcyi6-kqaaa-aaaaj-qnpxa-cai" "funnAI Judge LLM 12"
+          verify_canister "vfzok-hiaaa-aaaaj-qnpxq-cai" "funnAI Judge LLM 13"
+          verify_canister "nnrl2-3iaaa-aaaai-atkjq-cai" "funnAI Judge LLM 14"
+          verify_canister "nyw2x-2aaaa-aaaai-atkka-cai" "funnAI Judge LLM 15"
+          verify_canister "n7x4d-xyaaa-aaaai-atkkq-cai" "funnAI Judge LLM 16"
+
+          # ---------------------------------------------------------
+          # funnAI mAIner ShareService LLMs (13)
+          # ---------------------------------------------------------
+          verify_canister "4yuew-ziaaa-aaaag-auc7a-cai" "funnAI mAIner ShareService LLM 1"
+          verify_canister "47vcc-uqaaa-aaaag-auc7q-cai" "funnAI mAIner ShareService LLM 2"
+          verify_canister "xbdq4-pyaaa-aaaag-audaa-cai" "funnAI mAIner ShareService LLM 3"
+          verify_canister "6eiml-cqaaa-aaaai-q3yna-cai" "funnAI mAIner ShareService LLM 4"
+          verify_canister "6djk7-piaaa-aaaai-q3ynq-cai" "funnAI mAIner ShareService LLM 5"
+          verify_canister "6wo3s-oaaaa-aaaai-q3yoa-cai" "funnAI mAIner ShareService LLM 6"
+          verify_canister "tiw5l-siaaa-aaaac-awb2q-cai" "funnAI mAIner ShareService LLM 7"
+          verify_canister "sl2un-gqaaa-aaaac-awb4a-cai" "funnAI mAIner ShareService LLM 8"
+          verify_canister "sm3sz-liaaa-aaaac-awb4q-cai" "funnAI mAIner ShareService LLM 9"
+          verify_canister "ipvn5-tqaaa-aaaan-qz4ra-cai" "funnAI mAIner ShareService LLM 10"
+          verify_canister "iiulj-6iaaa-aaaan-qz4rq-cai" "funnAI mAIner ShareService LLM 11"
+          verify_canister "i5t2e-7aaaa-aaaan-qz4sa-cai" "funnAI mAIner ShareService LLM 12"
+          verify_canister "xgcwi-caaaa-aaaag-audaq-cai" "funnAI mAIner ShareService LLM 13"
+
+          # ---------------------------------------------------------
+          # ICGPT LLM (1)
+          # ---------------------------------------------------------
+          verify_canister "6uwoh-vaaaa-aaaag-amema-cai" "ICGPT LLM (Qwen2.5)"
+
+          # ---------------------------------------------------------
+          # IConfucius LLM (1)
+          # ---------------------------------------------------------
+          verify_canister "dikpv-oqaaa-aaaaa-qafsa-cai" "IConfucius LLM (Qwen2.5)"
+
+          # ---------------------------------------------------------
+          # Summary
+          # ---------------------------------------------------------
+          echo "=============================================="
+          echo "VERIFICATION SUMMARY"
+          echo "=============================================="
+          echo "Total canisters : $((PASS + FAIL))"
+          echo "Passed          : ${PASS}"
+          echo "Failed          : ${FAIL}"
+          echo ""
+
+          if [ "${FAIL}" -gt 0 ]; then
+            echo "FAILURES:"
+            echo -e "${ERRORS}"
+            echo ""
+            echo "=============================================="
+            echo "VERIFICATION FAILED ❌"
+            echo "=============================================="
+            exit 1
+          else
+            echo "=============================================="
+            echo "ALL CANISTERS VERIFIED ✅"
+            echo "=============================================="
+          fi
