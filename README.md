@@ -49,14 +49,20 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
 # Set up
 
-- Install dfx:
+- Install dfx (version 0.31.0 or later is required):
 
   ```bash
   sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
 
   # Configure your shell
   source "$HOME/.local/share/dfx/env"
+
+  # Verify the version (must be >= 0.31.0)
+  dfx --version
   ```
+
+  > **Note:** dfx 0.31+ is required because `icp-py-core` uses the `/api/v3/`
+  > endpoint, which is not supported by older dfx versions.
 
 - Clone the repo and it's children:
 
