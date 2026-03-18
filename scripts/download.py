@@ -13,7 +13,7 @@ Run with:
 import sys
 from pathlib import Path
 from typing import List
-from .ic_py_canister import get_canister, run_dfx_command
+from .ic_py_canister import extract_variant, get_canister, run_dfx_command
 from .parse_args_download import parse_args
 from .calculate_sha256 import calculate_sha256
 
@@ -64,13 +64,14 @@ def main() -> int:
     )
 
     # ---------------------------------------------------------------------------
-    # get ic-py based Canister instance
+    # get icp-py-core based Canister instance
     canister_instance = get_canister(canister_name, candid_path, network, canister_id)
 
     # check health (liveness)
     print("--\nChecking liveness of canister (did we deploy it!)")
     response = canister_instance.health()
-    if "Ok" in response[0].keys():
+    result = extract_variant(response)
+    if "Ok" in result:
         print("Ok!")
     else:
         print("Not OK, response is:")
@@ -104,11 +105,12 @@ def main() -> int:
                     }
                 )
 
-            if "Ok" in response[0].keys():
-                r_filesize = response[0]["Ok"]["filesize"]
-                r_chunk: List[int] = response[0]["Ok"]["chunk"]
-                r_chunksize = response[0]["Ok"]["chunksize"]
-                r_offset = response[0]["Ok"]["offset"]
+            result = extract_variant(response)
+            if "Ok" in result:
+                r_filesize = result["Ok"]["filesize"]
+                r_chunk: List[int] = result["Ok"]["chunk"]
+                r_chunksize = result["Ok"]["chunksize"]
+                r_offset = result["Ok"]["offset"]
                 total_received = offset + len(r_chunk)
                 print(
                     "--"
@@ -123,7 +125,7 @@ def main() -> int:
 
                 f.write(bytearray(r_chunk))
 
-                done = response[0]["Ok"]["done"]
+                done = result["Ok"]["done"]
             else:
                 print("Something went wrong:")
                 print(response)
