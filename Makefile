@@ -36,7 +36,7 @@ VERSION_DIDC := $(shell curl --silent "https://api.github.com/repos/dfinity/cand
 # version to install for clang
 VERSION_CLANG := $(shell cat version_clang.txt)
 # version to install for dfx
-VERSION_DFX := 0.29.2
+VERSION_DFX := 0.31.0
 
 ###########################################################################
 # Use some clang tools that come with wasi-sdk
