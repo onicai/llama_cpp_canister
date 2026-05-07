@@ -34,7 +34,8 @@ def load_wasm(wasm_path: Path) -> binaryen.module.Module:
     """Load a WebAssembly binary into a binaryen module"""
 
     # Read the binary wasm into a bytes array
-    wasm_bytes = open(wasm_path, "rb").read()
+    with open(wasm_path, "rb") as f:
+        wasm_bytes = f.read()
 
     # Convert the binary data to a C data type that Binaryen can understand
     wasm_ptr = ffi.new("char[]", wasm_bytes)
