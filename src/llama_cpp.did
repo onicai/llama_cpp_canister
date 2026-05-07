@@ -243,6 +243,53 @@ type FileEntry = record {
 };
 
 // -----------------------------------------------------
+// Recurring prompt-cache cleanup timer
+type CacheCleanupResult = variant {
+  Err : ApiError;
+  Ok : CacheCleanupActionRecord
+};
+type CacheCleanupActionRecord = record {
+  ok : bool;
+  is_running : bool
+};
+
+type CacheCleanupStatsResult = variant {
+  Err : ApiError;
+  Ok : CacheCleanupStatsRecord
+};
+type CacheCleanupStatsRecord = record {
+  runs : nat64;
+  files_examined : nat64;
+  files_deleted : nat64;
+  files_failed : nat64;
+  last_run_ns : nat64;       // host-clock timestamp via IC_API::time(); reporting only
+  period_seconds : nat64;
+  ttl_seconds : nat64;
+  max_files_per_run : nat64;
+  is_running : bool
+};
+
+type CacheCleanupConfigInput = record {
+  // Each opt: null = no change.
+  // period_seconds : opt 0 silently rejected (preserves prior).
+  // ttl_seconds    : opt 0 valid ("delete everything older than 0 ns").
+  // max_files_per_run : opt 0 clamped to floor (1).
+  period_seconds : opt nat64;
+  ttl_seconds : opt nat64;
+  max_files_per_run : opt nat64
+};
+type CacheCleanupConfigResult = variant {
+  Err : ApiError;
+  Ok : CacheCleanupConfigRecord
+};
+type CacheCleanupConfigRecord = record {
+  period_seconds : nat64;
+  ttl_seconds : nat64;
+  max_files_per_run : nat64;
+  is_running : bool
+};
+
+// -----------------------------------------------------
 // The endpoint services of our canister
 service : {
   // canister
@@ -277,6 +324,13 @@ service : {
   get_creation_timestamp_ns : (FilesystemTimestampInputRecord) -> (FilesystemTimestampRecordResult) query;
   recursive_dir_content_query : (DirContentInputRecord) -> (DirContentRecordResult) query;
   recursive_dir_content_update : (DirContentInputRecord) -> (DirContentRecordResult);
+
+  // Recurring prompt-cache cleanup timer (admin-only)
+  cache_cleanup_start_timer : () -> (CacheCleanupResult);
+  cache_cleanup_stop_timer : () -> (CacheCleanupResult);
+  cache_cleanup_now : () -> (CacheCleanupStatsResult);
+  get_cache_cleanup_stats : () -> (CacheCleanupStatsResult) query;
+  set_cache_cleanup_config : (CacheCleanupConfigInput) -> (CacheCleanupConfigResult);
 
   // Logging endpoints
   remove_log_file : (InputRecord) -> (OutputRecordResult);

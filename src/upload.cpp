@@ -163,18 +163,19 @@ std::optional<FileMetadata> get_file_metadata(const std::string &filename) {
   return std::nullopt;
 }
 
-// Delete file metadata by filename
-void delete_file_metadata(const std::string &filename) {
-  // Always load the metadata from disk first
+// Delete file metadata by filename. Returns true if a matching record was
+// found and removed from the in-memory vector, false otherwise.
+bool delete_file_metadata(const std::string &filename) {
   load_file_metadata();
 
   for (auto it = uploaded_files.begin(); it != uploaded_files.end(); ++it) {
     if (it->filename == filename) {
       uploaded_files.erase(it);
       save_file_metadata();
-      return;
+      return true;
     }
   }
+  return false;
 }
 
 void print_file_upload_summary(const std::string &filename,
