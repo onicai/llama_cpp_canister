@@ -1,5 +1,6 @@
 """Returns the icp-py-core Canister instance, for calling the endpoints."""
 
+import re
 import sys
 import subprocess
 from pathlib import Path
@@ -11,6 +12,20 @@ ROOT_PATH = Path(__file__).parent.parent
 
 # We use dfx to get some information.
 DFX = "dfx"
+
+# dfx 0.32.0 emits this deprecation banner on every invocation. Because
+# run_shell_cmd merges stderr into stdout, the banner ends up in the
+# captured output and gets glued onto things like the identity name —
+# corrupting the next dfx call's arguments. Strip exactly this known line.
+# Mirrors the fix in icpp-pro src/icpp/smoketest.py (commit 6f401c4).
+_DFX_DEPRECATION_RE = re.compile(
+    r"^WARNING: dfx is deprecated.*$\n?", flags=re.MULTILINE
+)
+
+
+def _strip_dfx_warnings(s: str) -> str:
+    """Remove the known dfx deprecation banner from captured shell output."""
+    return _DFX_DEPRECATION_RE.sub("", s)
 
 
 def extract_variant(response: List[Any]) -> Any:
@@ -29,7 +44,9 @@ def extract_variant(response: List[Any]) -> Any:
 def run_dfx_command(cmd: str, quiet: bool = False) -> Optional[str]:
     """Runs dfx command as a subprocess"""
     try:
-        return run_shell_cmd(cmd, capture_output=True).rstrip("\n")
+        return _strip_dfx_warnings(
+            run_shell_cmd(cmd, capture_output=True)
+        ).rstrip("\n")
     except subprocess.CalledProcessError as e:
         if not quiet:
             print(f"Failed dfx command: '{cmd}' with error: \n{e.output}")
