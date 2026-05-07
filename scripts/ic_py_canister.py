@@ -44,9 +44,7 @@ def extract_variant(response: List[Any]) -> Any:
 def run_dfx_command(cmd: str, quiet: bool = False) -> Optional[str]:
     """Runs dfx command as a subprocess"""
     try:
-        return _strip_dfx_warnings(
-            run_shell_cmd(cmd, capture_output=True)
-        ).rstrip("\n")
+        return _strip_dfx_warnings(run_shell_cmd(cmd, capture_output=True)).rstrip("\n")
     except subprocess.CalledProcessError as e:
         if not quiet:
             print(f"Failed dfx command: '{cmd}' with error: \n{e.output}")
