@@ -17,10 +17,11 @@
 // --- Defaults & bounds ---------------------------------------------------
 namespace {
 constexpr uint64_t NS_PER_SEC = 1'000'000'000ULL;
-constexpr uint64_t MAX_SECONDS = std::numeric_limits<uint64_t>::max() / NS_PER_SEC;
+constexpr uint64_t MAX_SECONDS =
+    std::numeric_limits<uint64_t>::max() / NS_PER_SEC;
 
-constexpr uint64_t DEFAULT_PERIOD_NS = 600ULL * NS_PER_SEC;       // 10 min
-constexpr uint64_t DEFAULT_TTL_NS = 6ULL * 3600 * NS_PER_SEC;     // 6 h
+constexpr uint64_t DEFAULT_PERIOD_NS = 600ULL * NS_PER_SEC;   // 10 min
+constexpr uint64_t DEFAULT_TTL_NS = 6ULL * 3600 * NS_PER_SEC; // 6 h
 constexpr uint64_t DEFAULT_MAX_FILES_PER_RUN = 256;
 
 constexpr uint64_t MAX_FILES_PER_RUN_FLOOR = 1;
@@ -109,9 +110,9 @@ CandidTypeRecord build_action_record_() {
 // cap, the next tick continues from the start of the directory tree
 // (bounded repeated scanning, not cursor-based — acceptable for v1).
 void run_cache_cleanup_body() {
+  using std::chrono::duration_cast;
   using std::chrono::file_clock;
   using std::chrono::nanoseconds;
-  using std::chrono::duration_cast;
 
   uint64_t examined = 0, deleted = 0, failed = 0;
 
@@ -186,11 +187,11 @@ void run_cache_cleanup_body() {
       // Age in nanoseconds, computed in file_clock domain.
       // Pattern mirrors src/files.cpp:276-281.
       auto now_tp = file_clock::now();
-      auto age_ns = duration_cast<nanoseconds>(
-                        now_tp.time_since_epoch() - mtime.time_since_epoch())
+      auto age_ns = duration_cast<nanoseconds>(now_tp.time_since_epoch() -
+                                               mtime.time_since_epoch())
                         .count();
-      bool stale = (age_ns >= 0) &&
-                   static_cast<uint64_t>(age_ns) >= g_cleanup_ttl_ns;
+      bool stale =
+          (age_ns >= 0) && static_cast<uint64_t>(age_ns) >= g_cleanup_ttl_ns;
 
       if (stale) {
         std::error_code ec_rm;
@@ -333,8 +334,7 @@ void set_cache_cleanup_config() {
       g_cleanup_max_files_per_run = MAX_FILES_PER_RUN_FLOOR;
     else if (v > MAX_FILES_PER_RUN_CEILING)
       g_cleanup_max_files_per_run = MAX_FILES_PER_RUN_CEILING;
-    else
-      g_cleanup_max_files_per_run = v;
+    else g_cleanup_max_files_per_run = v;
   }
 
   // If currently armed, transparently re-arm with the new period.

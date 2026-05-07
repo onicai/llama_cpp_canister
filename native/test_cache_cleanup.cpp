@@ -142,8 +142,8 @@ void test_cache_cleanup(MockIC &mockIC) {
 
     // runs is a lifetime counter — assert delta. files_* are last-run only —
     // assert absolute (overwritten on every cleanup invocation).
-    extra_failures += expect_eq_u64(
-        "[no-op fresh] runs delta", g_cleanup_runs - runs_before, 1);
+    extra_failures += expect_eq_u64("[no-op fresh] runs delta",
+                                    g_cleanup_runs - runs_before, 1);
     extra_failures += expect_eq_u64("[no-op fresh] files_deleted (last run)",
                                     g_cleanup_files_deleted, 0);
     extra_failures += expect_eq_u64("[no-op fresh] files_failed (last run)",
@@ -159,8 +159,8 @@ void test_cache_cleanup(MockIC &mockIC) {
   // -----------------------------------------------------------------------
   clear_test_dir();
   {
-    auto fresh = file_clock::now() - hours{1};   // 1h
-    auto stale = file_clock::now() - hours{7};   // 7h, > 6h TTL
+    auto fresh = file_clock::now() - hours{1}; // 1h
+    auto stale = file_clock::now() - hours{7}; // 7h, > 6h TTL
     create_test_file(session_path("fresh_1.cache"), fresh);
     create_test_file(session_path("fresh_2.cache"), fresh);
     create_test_file(session_path("stale_1.cache"), stale);
@@ -196,12 +196,12 @@ void test_cache_cleanup(MockIC &mockIC) {
     extra_failures += expect_eq_u64(
         "[scope] files_deleted (last run, only sessions/* counted)",
         g_cleanup_files_deleted, 1);
-    extra_failures += expect_file_exists(
-        "[scope] sessions/stale removed",
-        session_path("stale_in_sessions.cache"), false);
-    extra_failures += expect_file_exists(
-        "[scope] db_chats/stale UNTOUCHED",
-        db_chats_path("stale_in_db_chats.txt"), true);
+    extra_failures +=
+        expect_file_exists("[scope] sessions/stale removed",
+                           session_path("stale_in_sessions.cache"), false);
+    extra_failures +=
+        expect_file_exists("[scope] db_chats/stale UNTOUCHED",
+                           db_chats_path("stale_in_db_chats.txt"), true);
   }
 
   // -----------------------------------------------------------------------
@@ -212,8 +212,8 @@ void test_cache_cleanup(MockIC &mockIC) {
   {
     auto stale = file_clock::now() - hours{7};
     for (int i = 0; i < 10; ++i) {
-      create_test_file(
-          session_path("capped_" + std::to_string(i) + ".cache"), stale);
+      create_test_file(session_path("capped_" + std::to_string(i) + ".cache"),
+                       stale);
     }
 
     uint64_t saved_cap = g_cleanup_max_files_per_run;
@@ -221,12 +221,12 @@ void test_cache_cleanup(MockIC &mockIC) {
 
     run_cache_cleanup_body();
 
-    extra_failures += expect_eq_u64(
-        "[cap=3] files_deleted (last run) after one tick",
-        g_cleanup_files_deleted, 3);
-    extra_failures += expect_eq_u64(
-        "[cap=3] files_examined (last run) bounded by cap",
-        g_cleanup_files_examined, 3);
+    extra_failures +=
+        expect_eq_u64("[cap=3] files_deleted (last run) after one tick",
+                      g_cleanup_files_deleted, 3);
+    extra_failures +=
+        expect_eq_u64("[cap=3] files_examined (last run) bounded by cap",
+                      g_cleanup_files_examined, 3);
 
     // Restore the default cap so subsequent tests are not affected.
     g_cleanup_max_files_per_run = saved_cap;
@@ -297,11 +297,11 @@ void test_cache_cleanup(MockIC &mockIC) {
 
     // Arm the recurring timer at IC time 1000.
     mockIC.run_test("cache_cleanup_start_timer (timer-fires scenario)",
-                    cache_cleanup_start_timer, EMPTY_INPUT, "",
-                    silent_on_trap, controller_principal);
-    extra_failures += expect_eq_u64(
-        "[timer-fires] timer registered after start_timer",
-        IcTimers::instance().size(), 1);
+                    cache_cleanup_start_timer, EMPTY_INPUT, "", silent_on_trap,
+                    controller_principal);
+    extra_failures +=
+        expect_eq_u64("[timer-fires] timer registered after start_timer",
+                      IcTimers::instance().size(), 1);
 
     // Advance IC time past the deadline (1000 + 1 = 1001) and dispatch.
     ic0mock_set_time_override(2000);
@@ -335,31 +335,31 @@ void test_cache_cleanup(MockIC &mockIC) {
   clear_test_dir();
   IC_API::cancel_all_timers(); // start each scenario from a clean registry
   {
-    extra_failures += expect_eq_u64(
-        "[start] timer registry empty pre-start",
-        IcTimers::instance().size(), 0);
+    extra_failures += expect_eq_u64("[start] timer registry empty pre-start",
+                                    IcTimers::instance().size(), 0);
 
-    mockIC.run_test("cache_cleanup_start_timer", cache_cleanup_start_timer, EMPTY_INPUT,
-                    "", silent_on_trap, controller_principal);
+    mockIC.run_test("cache_cleanup_start_timer", cache_cleanup_start_timer,
+                    EMPTY_INPUT, "", silent_on_trap, controller_principal);
 
-    extra_failures += expect_eq_u64(
-        "[start] timer registry size == 1 after start",
-        IcTimers::instance().size(), 1);
+    extra_failures +=
+        expect_eq_u64("[start] timer registry size == 1 after start",
+                      IcTimers::instance().size(), 1);
 
     // Idempotent: second start should not double-register.
-    mockIC.run_test("cache_cleanup_start_timer (idempotent)", cache_cleanup_start_timer,
-                    EMPTY_INPUT, "", silent_on_trap, controller_principal);
+    mockIC.run_test("cache_cleanup_start_timer (idempotent)",
+                    cache_cleanup_start_timer, EMPTY_INPUT, "", silent_on_trap,
+                    controller_principal);
 
     extra_failures += expect_eq_u64(
         "[idempotent] timer registry size still 1 after second start",
         IcTimers::instance().size(), 1);
 
-    mockIC.run_test("cache_cleanup_stop_timer", cache_cleanup_stop_timer, EMPTY_INPUT, "",
-                    silent_on_trap, controller_principal);
+    mockIC.run_test("cache_cleanup_stop_timer", cache_cleanup_stop_timer,
+                    EMPTY_INPUT, "", silent_on_trap, controller_principal);
 
-    extra_failures += expect_eq_u64(
-        "[stop] timer registry size == 0 after stop",
-        IcTimers::instance().size(), 0);
+    extra_failures +=
+        expect_eq_u64("[stop] timer registry size == 0 after stop",
+                      IcTimers::instance().size(), 0);
   }
 
   // -----------------------------------------------------------------------
@@ -371,11 +371,13 @@ void test_cache_cleanup(MockIC &mockIC) {
   {
     uint64_t runs_before = g_cleanup_runs;
 
-    mockIC.run_test("cache_cleanup_start_timer (anon denied)", cache_cleanup_start_timer,
-                    EMPTY_INPUT, ACCESS_DENIED_API_ERROR, silent_on_trap,
+    mockIC.run_test("cache_cleanup_start_timer (anon denied)",
+                    cache_cleanup_start_timer, EMPTY_INPUT,
+                    ACCESS_DENIED_API_ERROR, silent_on_trap,
                     anonymous_principal);
-    mockIC.run_test("cache_cleanup_stop_timer (anon denied)", cache_cleanup_stop_timer,
-                    EMPTY_INPUT, ACCESS_DENIED_API_ERROR, silent_on_trap,
+    mockIC.run_test("cache_cleanup_stop_timer (anon denied)",
+                    cache_cleanup_stop_timer, EMPTY_INPUT,
+                    ACCESS_DENIED_API_ERROR, silent_on_trap,
                     anonymous_principal);
     mockIC.run_test("cache_cleanup_now (anon denied)", cache_cleanup_now,
                     EMPTY_INPUT, ACCESS_DENIED_API_ERROR, silent_on_trap,
@@ -392,12 +394,10 @@ void test_cache_cleanup(MockIC &mockIC) {
                     ACCESS_DENIED_API_ERROR, silent_on_trap,
                     anonymous_principal);
 
-    extra_failures += expect_eq_u64(
-        "[anon-denied] no cleanup runs occurred",
-        g_cleanup_runs - runs_before, 0);
-    extra_failures += expect_eq_u64(
-        "[anon-denied] timer registry still empty",
-        IcTimers::instance().size(), 0);
+    extra_failures += expect_eq_u64("[anon-denied] no cleanup runs occurred",
+                                    g_cleanup_runs - runs_before, 0);
+    extra_failures += expect_eq_u64("[anon-denied] timer registry still empty",
+                                    IcTimers::instance().size(), 0);
   }
 
   // Final cleanup so leftover state from this test does not affect later
