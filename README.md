@@ -642,6 +642,73 @@ dfx canister call llama_cpp get_creation_timestamp_ns '(record {filename = "<fil
 dfx canister call llama_cpp filesystem_remove '(record {filename = "<filename>"})'
 ```
 
+# Prompt-Cache Cleanup Timer
+
+The canister can self-maintain its prompt-cache directory on a recurring
+schedule, deleting files in `.canister_cache/<principal>/sessions/` whose
+`mtime` is older than a configurable Time to Live (TTL). Once you start the
+timer, the canister handles prompt-cache hygiene on its own.
+
+**Defaults:**
+- period: 600 seconds (10 minutes between cleanup ticks)
+- TTL: 21600 seconds (6 hours — older files are deleted)
+- per-tick cap: 256 files (caps work-per-tick to stay under the IC's
+  per-message instruction budget; the next tick continues)
+
+**Operator-driven lifecycle.** The timer is **not** auto-armed in
+`canister_init` or `canister_post_upgrade`. After every install / upgrade
+you must explicitly call `cache_cleanup_start_timer`. Timer state is
+in-memory only and does not survive an upgrade.
+
+All endpoints below require **admin role**:
+- `cache_cleanup_start_timer`, `cache_cleanup_stop_timer`,
+  `cache_cleanup_now`, `set_cache_cleanup_config` need `AdminUpdate` role
+  (controller or whitelisted via `assignAdminRole`).
+- `get_cache_cleanup_stats` needs `AdminQuery` role.
+
+```bash
+# ------------------------------------------------------------------
+# Arm the recurring timer (REQUIRED after every install / upgrade)
+dfx canister call llama_cpp cache_cleanup_start_timer '()'
+# -> (variant { Ok = record { ok = true; is_running = true } })
+
+# Stop the recurring timer
+dfx canister call llama_cpp cache_cleanup_stop_timer '()'
+# -> (variant { Ok = record { ok = true; is_running = false } })
+
+# Trigger one cleanup pass immediately (independent of the timer state)
+dfx canister call llama_cpp cache_cleanup_now '()'
+# -> (variant { Ok = record { runs = ...; files_examined = ...;
+#                             files_deleted = ...; files_failed = ...;
+#                             last_run_ns = ...; period_seconds = 600;
+#                             ttl_seconds = 21_600;
+#                             max_files_per_run = 256;
+#                             is_running = ... } })
+
+# Inspect stats (query, fast). `runs` and `last_run_ns` are lifetime
+# counters; `files_examined`, `files_deleted`, `files_failed` reflect the
+# MOST RECENT cleanup run only.
+dfx canister call llama_cpp get_cache_cleanup_stats '()'
+
+# Adjust config (each field is `opt nat64`; null = no change).
+#   - period_seconds: must be > 0; opt 0 is silently rejected.
+#   - ttl_seconds   : 0 is valid ("delete every file under sessions/").
+#   - max_files_per_run: clamped to [1, 10000].
+# If the timer is already running, the new period is applied transparently.
+dfx canister call llama_cpp set_cache_cleanup_config '(record {
+  period_seconds    = opt (300 : nat64);
+  ttl_seconds       = opt (3600 : nat64);
+  max_files_per_run = opt (128 : nat64)
+})'
+
+# Same call to update only the TTL, leaving period and cap unchanged
+dfx canister call llama_cpp set_cache_cleanup_config '(record {
+  period_seconds    = null;
+  ttl_seconds       = opt (3600 : nat64);
+  max_files_per_run = null
+})'
+```
+
 # Wasm Verification (pre onicai SNS)
 
 > **NOTE:** This workflow was created for the **pre onicai SNS verification
