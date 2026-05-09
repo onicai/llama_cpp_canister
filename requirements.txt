@@ -5,4 +5,8 @@
 -r src/llama_cpp_onicai_fork/requirements.txt
 icpp-pro>=5.4.1
 icp-py-core==2.3.0
+# Pin cbor2<6: cbor2 6.x decodes tag-55799-wrapped maps to frozendict, which
+# breaks icp-py-core's isinstance(response, dict) check.
+# See https://github.com/eliezhao/icp-py-core/issues/14.
+cbor2<6
 binaryen.py
