@@ -2,6 +2,11 @@ ipykernel
 jupyter_black
 requests
 python-dotenv
-black
-mypy
-pylint==2.13.9
+
+# Pinned to the same versions used by icpp-pro after its Python 3.10–3.14
+# matrix bump. Keeping all three repos on the same toolchain avoids style/
+# check drift across PRs. Older pylint+astroid crashed on Python 3.12+
+# syntax (PEP 695 `type X = ...`).
+black==24.10.0
+pylint==3.3.4
+mypy==1.13.0

@@ -9,6 +9,7 @@ on:
       - "src/**"
       - "test/**"
       - "Makefile"
+      - "requirements.txt"
       - ".github/trigger.txt"
       - ".github/workflows/cicd-mac.yml"
 
