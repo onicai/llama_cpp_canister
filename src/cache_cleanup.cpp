@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <iostream>
 #include <limits>
 #include <optional>
 #include <system_error>
@@ -125,6 +126,9 @@ void run_cache_cleanup_body() {
     g_cleanup_files_deleted = 0;
     g_cleanup_files_failed = 0;
     g_cleanup_last_run_ns = IC_API::time();
+    std::string msg = "no .canister_cache directory yet — nothing to clean";
+    std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+              << std::endl;
     return;
   }
 
@@ -225,6 +229,15 @@ void run_cache_cleanup_body() {
   g_cleanup_files_deleted = deleted;
   g_cleanup_files_failed = failed;
   g_cleanup_last_run_ns = IC_API::time(); // reporting only, not for age math.
+
+  std::string msg = "run #" + std::to_string(g_cleanup_runs) +
+                    ": examined=" + std::to_string(examined) +
+                    " deleted=" + std::to_string(deleted) +
+                    " failed=" + std::to_string(failed) +
+                    " ttl_s=" + std::to_string(g_cleanup_ttl_ns / NS_PER_SEC) +
+                    " cap=" + std::to_string(g_cleanup_max_files_per_run);
+  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+            << std::endl;
 }
 
 // --- Endpoints ------------------------------------------------------------
@@ -243,6 +256,11 @@ void cache_cleanup_start_timer() {
   }
   arm_timer_();
 
+  std::string msg = "timer armed; period_seconds=" +
+                    std::to_string(g_cleanup_period_ns / NS_PER_SEC);
+  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+            << std::endl;
+
   ic_api.to_wire(
       CandidTypeVariant{"Ok", CandidTypeRecord{build_action_record_()}});
 }
@@ -258,6 +276,9 @@ void cache_cleanup_stop_timer() {
   if (g_cleanup_timer_id != 0) {
     IC_API::cancel_timer(g_cleanup_timer_id);
     g_cleanup_timer_id = 0;
+    std::string msg = "timer cancelled";
+    std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+              << std::endl;
   }
 
   ic_api.to_wire(
@@ -271,6 +292,10 @@ void cache_cleanup_now() {
     return;
   }
   ic_api.from_wire();
+
+  std::string msg = "manual cleanup triggered";
+  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+            << std::endl;
 
   run_cache_cleanup_body();
 
@@ -342,6 +367,17 @@ void set_cache_cleanup_config() {
     IC_API::cancel_timer(g_cleanup_timer_id);
     arm_timer_();
   }
+
+  std::string msg = "config updated; period_seconds=" +
+                    std::to_string(g_cleanup_period_ns / NS_PER_SEC) +
+                    " ttl_seconds=" +
+                    std::to_string(g_cleanup_ttl_ns / NS_PER_SEC) +
+                    " max_files_per_run=" +
+                    std::to_string(g_cleanup_max_files_per_run) +
+                    " is_running=" +
+                    (g_cleanup_timer_id != 0 ? "true" : "false");
+  std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
+            << std::endl;
 
   ic_api.to_wire(
       CandidTypeVariant{"Ok", CandidTypeRecord{build_config_record_()}});
