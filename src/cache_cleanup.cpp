@@ -368,14 +368,12 @@ void set_cache_cleanup_config() {
     arm_timer_();
   }
 
-  std::string msg = "config updated; period_seconds=" +
-                    std::to_string(g_cleanup_period_ns / NS_PER_SEC) +
-                    " ttl_seconds=" +
-                    std::to_string(g_cleanup_ttl_ns / NS_PER_SEC) +
-                    " max_files_per_run=" +
-                    std::to_string(g_cleanup_max_files_per_run) +
-                    " is_running=" +
-                    (g_cleanup_timer_id != 0 ? "true" : "false");
+  std::string msg =
+      "config updated; period_seconds=" +
+      std::to_string(g_cleanup_period_ns / NS_PER_SEC) +
+      " ttl_seconds=" + std::to_string(g_cleanup_ttl_ns / NS_PER_SEC) +
+      " max_files_per_run=" + std::to_string(g_cleanup_max_files_per_run) +
+      " is_running=" + (g_cleanup_timer_id != 0 ? "true" : "false");
   std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
             << std::endl;
 
