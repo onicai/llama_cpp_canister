@@ -37,6 +37,7 @@ def main() -> int:
         test_path_canister = "test/test_canister_functions.py"
         test_path_promptcache = "test/test_promptcache.py"
         test_path_files = "test/test_files.py"
+        test_path_cycle_balance = "test/test_cycle_balance.py"
         for test in tests:
             filename = test["filename"]
             canister_filename = test["canister_filename"]
@@ -46,6 +47,7 @@ def main() -> int:
                 test_path_canister,
                 test_path_promptcache,
                 test_path_files,
+                test_path_cycle_balance,
                 test_path_model,
             ]
 

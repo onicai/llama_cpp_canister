@@ -5,6 +5,7 @@
 #include "test_admin_rbac.h"
 #include "test_cache_cleanup.h"
 #include "test_canister_functions.h"
+#include "test_cycle_balance.h"
 #include "test_files.h"
 #include "test_qwen2.h"
 #include "test_tiny_stories.h"
@@ -31,6 +32,7 @@ int main() {
   test_admin_rbac(mockIC);
   test_cache_cleanup(mockIC);
   test_canister_functions(mockIC);
+  test_cycle_balance(mockIC);
   test_files(mockIC);
   test_tiny_stories(mockIC);
   test_qwen2(mockIC);
