@@ -290,6 +290,17 @@ type CacheCleanupConfigRecord = record {
 };
 
 // -----------------------------------------------------
+// Recurring cycle-balance monitor
+type CycleBalanceRecord = record {
+  cycle_balance : nat;       // cached canister cycle balance (128-bit)
+  updated_at_ns : nat64      // IC_API::time() when the snapshot was taken
+};
+type CycleBalanceRecordResult = variant {
+  Err : ApiError;            // includes "tracking is off" when timer not armed
+  Ok : CycleBalanceRecord
+};
+
+// -----------------------------------------------------
 // The endpoint services of our canister
 service : {
   // canister
@@ -331,6 +342,11 @@ service : {
   cache_cleanup_now : () -> (CacheCleanupStatsResult);
   get_cache_cleanup_stats : () -> (CacheCleanupStatsResult) query;
   set_cache_cleanup_config : (CacheCleanupConfigInput) -> (CacheCleanupConfigResult);
+
+  // Recurring cycle-balance monitor (admin-only)
+  cycle_balance_start_timer : () -> (StatusCodeRecordResult);
+  cycle_balance_stop_timer : () -> (StatusCodeRecordResult);
+  get_cycle_balance : () -> (CycleBalanceRecordResult) query;
 
   // Logging endpoints
   remove_log_file : (InputRecord) -> (OutputRecordResult);

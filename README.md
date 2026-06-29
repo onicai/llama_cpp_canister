@@ -709,6 +709,47 @@ dfx canister call llama_cpp set_cache_cleanup_config '(record {
 })'
 ```
 
+# Cycle Balance Monitoring
+
+The canister can track its own cycle balance on a recurring schedule. An
+hourly timer refreshes a cached snapshot of the balance (via the IC's
+`canister_cycle_balance128` system call), which admins read cheaply through
+the `get_cycle_balance` query — no need for a live system call on every check.
+
+**Defaults:**
+- period: 3600 seconds (refreshed once per hour)
+
+**Operator-driven lifecycle.** The timer is **not** auto-armed in
+`canister_init` or `canister_post_upgrade`. After every install / upgrade you
+must explicitly call `cycle_balance_start_timer`. Timer state and the cached
+balance are in-memory only and do not survive an upgrade. While tracking is
+off, `get_cycle_balance` returns a clear error instead of a stale value.
+
+All endpoints below require **admin role**:
+- `cycle_balance_start_timer`, `cycle_balance_stop_timer` need `AdminUpdate`
+  role (controller or whitelisted via `assignAdminRole`).
+- `get_cycle_balance` needs `AdminQuery` role.
+
+```bash
+# ------------------------------------------------------------------
+# Turn ON cycle-balance tracking (REQUIRED after every install / upgrade).
+# Refreshes the balance once immediately, then re-reads it hourly.
+dfx canister call llama_cpp cycle_balance_start_timer '()'
+# -> (variant { Ok = record { status_code = 200 : nat16 } })
+
+# Read the cached balance (admin query, fast). updated_at_ns is the
+# IC_API::time() at which the snapshot was taken.
+dfx canister call llama_cpp get_cycle_balance '()'
+# -> (variant { Ok = record { cycle_balance = ... : nat; updated_at_ns = ... : nat64 } })
+
+# If tracking is OFF, the query returns a clear error instead of a stale value:
+# -> (variant { Err = variant { Other = "cycle balance tracking is off — an admin must call cycle_balance_start_timer" } })
+
+# Turn OFF cycle-balance tracking
+dfx canister call llama_cpp cycle_balance_stop_timer '()'
+# -> (variant { Ok = record { status_code = 200 : nat16 } })
+```
+
 # Wasm Verification (pre onicai SNS)
 
 > **NOTE:** This workflow was created for the **pre onicai SNS verification
