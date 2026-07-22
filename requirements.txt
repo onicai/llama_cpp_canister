@@ -1,8 +1,13 @@
-# Note: many packages are already installed by llama_cpp_onicai_fork/requirements.txt
-#       do not add them here again
+# These are all the Python deps needed to build, deploy & test the canister.
+#
+# We intentionally do NOT pull `-r src/llama_cpp_onicai_fork/requirements.txt`:
+# those are llama.cpp's model-CONVERSION deps (torch, numpy, transformers, ...),
+# which the canister never uses — it uploads pre-made gguf files. Since b10076
+# they pin `torch==2.11.0`, which has no x86_64-macOS wheel (Intel-Mac torch
+# stops at 2.2.2) and breaks CI. If you need to convert models, install that
+# file separately.
 
 -r scripts/requirements.txt
--r src/llama_cpp_onicai_fork/requirements.txt
 icpp-pro>=5.4.2
 icp-py-core==2.3.1
 # cbor2 is intentionally unpinned: icp-py-core 2.3.1 adds cbor2 6.x compatibility,
