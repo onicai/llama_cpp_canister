@@ -63,7 +63,7 @@ void new_chat() {
   // (-) gets the cache filename from --prompt-cache in args
   // (-) opens log file from --log-file in args
   common_params params;
-  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN,
+  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_COMPLETION,
                            print_usage)) {
     error_msg = "Cannot parse args.";
     send_output_record_result_error_to_wire(
@@ -86,10 +86,22 @@ void new_chat() {
   std::string msg;
   if (!path_session.empty()) {
 
+    // A prompt-cache written by an older llama.cpp passes llama.cpp's own
+    // magic+version check (b4531 and b10076 are both 'ggsn' v9) but its
+    // KV-cache layout changed, so it would be misparsed silently. Discard it.
+    std::string stale_msg;
+    if (prompt_cache_discard_if_stale(path_session, stale_msg)) {
+      std::cout << "llama_cpp: " << std::string(__func__) << " - " << stale_msg
+                << std::endl;
+    }
+
     if (std::filesystem::exists(path_session)) {
       msg = "Re-using existing prompt-cache file " + path_session;
     } else {
       msg = "Will create new prompt-cache file " + path_session;
+      // Stamp now so the file llama.cpp is about to create is recognized as
+      // written by this build.
+      prompt_cache_write_format_stamp(path_session);
     }
   } else {
     error_msg = "ERROR: path_session is empty ";
@@ -131,7 +143,7 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   auto [argc, argv, args] = get_args_for_main(ic_api);
 
   common_params params;
-  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN,
+  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_COMPLETION,
                            print_usage)) {
     error_msg = "Cannot parse args.";
     send_output_record_result_error_to_wire(

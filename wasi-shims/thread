@@ -1,0 +1,63 @@
+// WASI shim: <thread> — single-threaded stub
+//
+// ICP canisters cannot spawn threads. Constructing a std::thread is a bug,
+// so it traps immediately rather than failing somewhere less obvious later.
+//
+// Adapted from instruction-bounded-inference-artifact
+// MIT (c) 2026 Julien Aerni, Simeon Fluck, Dustin Becker
+#pragma once
+
+// Only shim on WASI. On native builds this directory is still on the
+// include path, so fall through to the real system header.
+#ifndef __wasi__
+#include_next <thread>
+#else
+
+
+#include <functional>
+
+namespace std {
+
+class thread {
+public:
+    class id {
+        unsigned long id_ = 0;
+    public:
+        id() noexcept = default;
+        explicit id(unsigned long i) : id_(i) {}
+        friend bool operator==(id a, id b) noexcept { return a.id_ == b.id_; }
+        friend bool operator!=(id a, id b) noexcept { return a.id_ != b.id_; }
+        friend bool operator<(id a, id b) noexcept { return a.id_ < b.id_; }
+    };
+
+    thread() noexcept = default;
+
+    // Accepts any callable, but never runs it. With GGML_DEFAULT_N_THREADS=1
+    // and the n_threads clamp in main_.cpp, nothing should reach this.
+    template <class F, class... Args>
+    explicit thread(F&& f, Args&&... args) {
+        __builtin_trap();
+    }
+
+    ~thread() = default;
+    thread(thread&&) noexcept = default;
+    thread& operator=(thread&&) noexcept = default;
+
+    bool joinable() const noexcept { return false; }
+    void join() {}
+    void detach() {}
+    id get_id() const noexcept { return id{}; }
+
+    static unsigned int hardware_concurrency() noexcept { return 1; }
+};
+
+namespace this_thread {
+    inline thread::id get_id() noexcept { return thread::id{1}; }
+    inline void yield() noexcept {}
+    template <class Rep, class Period>
+    void sleep_for(const Rep&) {}
+}
+
+} // namespace std
+
+#endif // __wasi__

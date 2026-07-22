@@ -76,6 +76,38 @@ brew install --cask dehesselle-meld
 
 See the files: README-<upgrade #>-<llama.cpp sha>.md
 
+## Recommended porting/validation order
+
+Established during the b10076 upgrade (see `README-0003-305ba519.md`). Native tests pass
+almost everything the real canister will reject, so escalate through four gates in order —
+do NOT skip to a dfx deploy:
+
+1. **Native** (`make all-tests` / MockIC) — fastest loop; catches API/merge/link errors and
+   verifies exact-token output. But native has real mmap, threads, exceptions, stack and
+   getenv, so a green native suite proves almost nothing about canister *runtime* behavior.
+   (In b10076, native was 111/111 while five wasm-only bugs were still live.)
+
+2. **Faithful wasmtime harness** (`scripts/wasm_harness.py`) — BEFORE touching dfx. The IC
+   gives no wasm backtrace for a trap; this does.
+   - Run the **pre-optimize** wasm `build/llama_cpp_before_opt.wasm` so backtraces show
+     function NAMES (binaryen's `optimize()` strips the name section from the deployed wasm).
+   - Just instantiating runs the C++ ctors → catches static-init faults. Pass `--method` (and
+     a `didc encode`d arg) to reach faults deeper inside `load_model`/`run_update`.
+   - Then run the optimized `build/llama_cpp.wasm` too, to confirm `optimize()` did not change
+     behavior.
+
+3. **Local IC replica** — confirmation, not primary debugging.
+   - ALWAYS `dfx deploy` or `dfx canister install --wasm build/llama_cpp.wasm`; the `.dfx`
+     cache can serve a stale binary. Verify the module hash changed after install.
+   - Run the full pipeline: upload → `load_model` → `new_chat` → `run_update`.
+
+4. **Mainnet** — throughput / behavior under the real 40B instruction cap.
+
+**Interpretation rule that saves the most time:** if `scripts/wasm_harness.py` says the binary
+is clean but the IC traps, suspect the DEPLOY PIPELINE (stale `.dfx` cache, wrong `--wasm`),
+not the binary. In b10076, a multi-hour "install trap" chase was ultimately dfx installing a
+stale cached wasm.
+
 ## Branch management
 
 We need to rethink this logic, but for now it is ok...

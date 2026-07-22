@@ -15,6 +15,7 @@
 #include "log.h"
 
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <system_error>
@@ -31,6 +32,56 @@ optimize performance & cost
 
 static void print_usage(int argc, char **argv) {
   // do nothing function
+}
+
+// --- prompt-cache format versioning -----------------------------------------
+// See promptcache.h for why llama.cpp's own magic+version check is insufficient.
+
+// Bump this whenever a llama.cpp upgrade changes the session serialization.
+//   1 = llama.cpp b4531 (6152129d) and earlier -- never actually stamped
+//   2 = llama.cpp b10076 (305ba519), llama_memory_* refactor
+static const char *PROMPT_CACHE_FORMAT = "llama_cpp_canister-prompt-cache-v2";
+
+static std::string
+prompt_cache_stamp_path(const std::string &canister_path_session) {
+  return canister_path_session + ".icppfmt";
+}
+
+bool prompt_cache_format_is_current(const std::string &canister_path_session) {
+  const std::string stamp_path = prompt_cache_stamp_path(canister_path_session);
+
+  std::ifstream f(stamp_path);
+  if (!f.is_open()) return false; // unstamped => written by an older build
+
+  std::string stamp;
+  std::getline(f, stamp);
+  return stamp == PROMPT_CACHE_FORMAT;
+}
+
+void prompt_cache_write_format_stamp(const std::string &canister_path_session) {
+  std::ofstream f(prompt_cache_stamp_path(canister_path_session),
+                  std::ios::trunc);
+  if (f.is_open()) {
+    f << PROMPT_CACHE_FORMAT << std::endl;
+  }
+}
+
+bool prompt_cache_discard_if_stale(const std::string &canister_path_session,
+                                   std::string &msg) {
+  if (canister_path_session.empty()) return false;
+  if (!std::filesystem::exists(canister_path_session)) return false;
+  if (prompt_cache_format_is_current(canister_path_session)) return false;
+
+  // Written by an older llama.cpp. llama.cpp would ACCEPT it (same magic and
+  // version) and then misparse it, so delete it rather than let that happen.
+  std::error_code ec;
+  std::filesystem::remove(canister_path_session, ec);
+  std::filesystem::remove(prompt_cache_stamp_path(canister_path_session), ec);
+
+  msg = "Discarded prompt-cache file written by an older llama.cpp build "
+        "(incompatible session format): " +
+        canister_path_session;
+  return true;
 }
 
 bool get_canister_path_session(const std::string &path_session,
@@ -86,7 +137,7 @@ void remove_prompt_cache() {
 
   // Get the cache filename from --prompt-cache in args
   common_params params;
-  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN,
+  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_COMPLETION,
                            print_usage)) {
     error_msg = "Cannot parse args.";
     send_output_record_result_error_to_wire(

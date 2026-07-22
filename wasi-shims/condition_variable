@@ -1,0 +1,63 @@
+// WASI shim: <condition_variable> — single-threaded no-op
+//
+// With no other thread to signal, a wait whose predicate is false can never
+// become true. Upstream would spin; here we trap so the failure is legible
+// instead of surfacing as an instruction-limit trap far from the cause.
+//
+// Adapted from instruction-bounded-inference-artifact
+// MIT (c) 2026 Julien Aerni, Simeon Fluck, Dustin Becker
+#pragma once
+
+// Only shim on WASI. On native builds this directory is still on the
+// include path, so fall through to the real system header.
+#ifndef __wasi__
+#include_next <condition_variable>
+#else
+
+
+#include "mutex"
+#include <chrono>
+
+namespace std {
+
+enum class cv_status { no_timeout, timeout };
+
+class condition_variable {
+public:
+    condition_variable() = default;
+    ~condition_variable() = default;
+    condition_variable(const condition_variable&) = delete;
+    condition_variable& operator=(const condition_variable&) = delete;
+
+    void notify_one() noexcept {}
+    void notify_all() noexcept {}
+
+    void wait(unique_lock<mutex>&) {}
+
+    template <class Predicate>
+    void wait(unique_lock<mutex>& lock, Predicate pred) {
+        // Single-threaded: nothing can flip the predicate while we wait.
+        if (!pred()) {
+            __builtin_trap();
+        }
+    }
+
+    template <class Rep, class Period>
+    cv_status wait_for(unique_lock<mutex>&, const chrono::duration<Rep, Period>&) {
+        return cv_status::no_timeout;
+    }
+
+    template <class Rep, class Period, class Predicate>
+    bool wait_for(unique_lock<mutex>&, const chrono::duration<Rep, Period>&, Predicate pred) {
+        return pred();
+    }
+
+    template <class Clock, class Duration>
+    cv_status wait_until(unique_lock<mutex>&, const chrono::time_point<Clock, Duration>&) {
+        return cv_status::no_timeout;
+    }
+};
+
+} // namespace std
+
+#endif // __wasi__

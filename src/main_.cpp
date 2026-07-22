@@ -1,19 +1,32 @@
 // ICPP-PATCH-START
-// Internet Computer SmartContract version of: examples/main/main.cpp
-// See: https://github.com/onicai/llama_cpp_onicai_fork/tree/master/examples/main/README.md
+// Internet Computer SmartContract version of: tools/completion/completion.cpp
+// See: https://github.com/onicai/llama_cpp_onicai_fork/tree/master/tools/completion/README.md
 #include "main_.h"
 #include "ic_api.h"
 #include "promptcache.h"
 #include "utils.h"
 // ICPP-PATCH-END
+
+// ICPP-PATCH-START
+// common/chat*.cpp, common/jinja/*, common/json-schema-to-grammar.cpp and
+// common/console.cpp are NOT compiled into the canister (they blow through
+// ICP's WASM globals limit - see icpp.toml). The stubs in wasi-chat-stubs.cpp
+// trap when called, so every chat-template code path must stay compiled out.
+// Conversation mode is not supported in a canister anyway.
+#define LLAMA_ICP_NO_CHAT_TEMPLATES
+// ICPP-PATCH-END
+
 #include "arg.h"
-#include "chat-template.hpp"
+#ifndef LLAMA_ICP_NO_CHAT_TEMPLATES
+#include "chat.h"
+#endif
 #include "common.h"
 #include "console.h"
 #include "llama.h"
 #include "log.h"
 #include "sampling.h"
 
+#include <clocale>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -40,7 +53,9 @@
 #pragma warning(disable : 4244 4267) // possible loss of data
 #endif
 
+#ifndef LLAMA_ICP_NO_CHAT_TEMPLATES
 static const char *DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant";
+#endif
 
 static llama_context **g_ctx = nullptr;
 // static llama_model             ** g_model; // Make this a global variable, accessible from common.cpp
@@ -52,6 +67,21 @@ static std::ostringstream *g_output_ss = nullptr;
 static std::vector<llama_token> *g_output_tokens = nullptr;
 static bool is_interacting = false;
 static bool need_insert_eot = false;
+
+// ICPP-PATCH-START
+// The model & context must survive across canister update calls (Orthogonal
+// Persistence). Upstream's common_init_result owns both, so we keep the owning
+// pointer alive in static memory instead of release()-ing the model out of it.
+// They are freed together in icpp_free_model().
+static common_init_result_ptr g_llama_init;
+static llama_model *g_model_persistent = nullptr;
+static llama_context *g_ctx_persistent = nullptr;
+
+// The ggml backend owns the quantization tables that the persisted model
+// references, so llama_backend_free() must NOT be called at the end of main_().
+// It is called from icpp_free_model(), together with freeing the model.
+static bool g_backend_initialized = false;
+// ICPP-PATCH-END
 
 static void print_usage(int argc, char **argv) {
   (void)argc;
@@ -113,13 +143,35 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
   g_params = &params;
 
-  if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_MAIN,
+  if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMPLETION,
                            print_usage)) {
     // ICPP-PATCH-START
     icpp_error_msg = "Error in common_params_parse.";
     // ICPP-PATCH-END
     return 1;
   }
+
+  // ICPP-PATCH-START
+  // A canister is single threaded. Constructing a std::thread traps at runtime
+  // in this build, so clamp the thread counts right after parsing the CLI args.
+  params.cpuparams.n_threads = 1;
+  params.cpuparams_batch.n_threads = 1;
+
+  // b10076 defaults params.use_jinja to true (common.h), but common/jinja/* and
+  // common/chat*.cpp are not compiled into the canister (WASM globals limit) --
+  // src/wasi-chat-stubs.cpp traps if a template path is actually taken. Force it
+  // off so every downstream use_jinja branch is consistent with what is linked.
+  //
+  // This also keeps tokenization identical to b4531: upstream computes
+  //   add_bos = llama_vocab_get_add_bos(vocab) && !params.use_jinja
+  // which would silently flip add_bos to false and change tokenization.
+  params.use_jinja = false;
+
+  // A canister has no network. Force offline so the model-resolution path in
+  // common_params_handle_model (arg.cpp) skips common_download_run_tasks
+  // entirely. Models are uploaded into the virtual filesystem, never fetched.
+  params.offline = true;
+  // ICPP-PATCH-END
 
   common_init();
 
@@ -130,15 +182,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   //icpp-patch console::init(params.simple_io, params.use_color);
   //icpp-patch atexit([]() { console::cleanup(); });
 
-  if (params.logits_all) {
-    LOG_ERR("************\n");
-    LOG_ERR(
-        "%s: please use the 'perplexity' tool for perplexity calculations\n",
-        __func__);
-    LOG_ERR("************\n\n");
-
-    return 0;
-  }
+  // Note: upstream removed params.logits_all (and with it the 'please use the
+  //       perplexity tool' guard), so there is nothing to check here anymore.
 
   if (params.embedding) {
     LOG_ERR("************\n");
@@ -165,13 +210,22 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
             params.rope_freq_scale);
   }
 
-  LOG_INF("%s: llama backend init\n", __func__);
+  // ICPP-PATCH-START
+  // Initialize the backend only once. It must stay alive for as long as the
+  // persisted model exists (llama_backend_free is called by icpp_free_model).
+  if (!g_backend_initialized) {
+    LOG_INF("%s: llama backend init\n", __func__);
 
-  llama_backend_init();
-  llama_numa_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
-  static llama_model *model = nullptr; // ICPP-PATCH: use static to preserve across calls
-  llama_context *ctx;
+    g_backend_initialized = true;
+  }
+  // ICPP-PATCH-END
+
+  // ICPP-PATCH: model & context live in static memory, to preserve across calls
+  llama_model *&model = g_model_persistent;
+  llama_context *&ctx = g_ctx_persistent;
   common_sampler *smpl = nullptr;
 
   // ICPP-PATCH-START
@@ -184,15 +238,37 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   g_model = &model;
   g_ctx = &ctx;
   g_smpl = &smpl;
+  // ICPP-PATCH-END
 
+#ifndef LLAMA_ICP_NO_CHAT_TEMPLATES
   std::vector<common_chat_msg> chat_msgs;
+#endif
 
   // load the model and apply lora adapter, if any
   LOG_INF("%s: load the model and apply lora adapter, if any\n", __func__);
-  common_init_result llama_init = common_init_from_params(params);
 
-  model = llama_init.model.get();
-  ctx = llama_init.context.get();
+  // ICPP-PATCH-START
+  // Load the model & context only once and keep them alive in Orthogonal
+  // Persisted memory. Ownership stays with the static g_llama_init, so that
+  // icpp_free_model() can release model + context together.
+  if (model == nullptr) {
+    g_llama_init = common_init_from_params(params);
+
+    if (!g_llama_init) {
+      LOG_ERR("%s: error: common_init_from_params returned null\n", __func__);
+      icpp_error_msg =
+          std::format("{}: error: common_init_from_params returned null)",
+                      __func__);
+      return 1;
+    }
+
+    model = g_llama_init->model();
+    ctx = g_llama_init->context();
+  } else {
+    LOG_INF("%s: reusing the model & context loaded in a previous call\n",
+            __func__);
+  }
+  // ICPP-PATCH-END
 
   if (model == NULL) {
     LOG_ERR("%s: error: unable to load model\n", __func__);
@@ -202,31 +278,44 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     return 1;
   }
 
+  if (ctx == NULL) {
+    LOG_ERR("%s: error: unable to create context\n", __func__);
+    // ICPP-PATCH-START
+    icpp_error_msg =
+        std::format("{}: error: unable to create context)", __func__);
+    // ICPP-PATCH-END
+    return 1;
+  }
+
   // ICPP-PATCH-START
-
-  // Transfer the ownership of the model pointer. so it persists across calls in Orthogonal Persistence.
-  // We manually take control over the memory management of the model pointer, using icpp_free_model() to free it.
-  // NOTE: The release() method of std::unique_ptr relinquishes ownership of the managed
-  //       object and returns the raw pointer to it.
-  //       After the call to release(), the std::unique_ptr becomes empty
-  //       (i.e., it no longer manages any object).
-  model = llama_init.model.release();
-
   // Return if we are asked to ONLY load the model
   if (load_model_only) {
     return 0;
   }
+
+  // The context is reused across calls, so we must start each inference call
+  // from a clean memory. When a prompt-cache is used, the KV cache is restored
+  // from the session file further down (llama_state_load_file).
+  llama_memory_t mem = llama_get_memory(ctx);
+  llama_memory_clear(mem, true);
   // ICPP-PATCH-END
 
   const llama_vocab *vocab = llama_model_get_vocab(model);
-  auto chat_templates =
-      common_chat_templates_from_model(model, params.chat_template);
+
+#ifndef LLAMA_ICP_NO_CHAT_TEMPLATES
+  // note: the time for chat template initialization is not negligible:
+  auto chat_templates = common_chat_templates_init(model, params.chat_template);
+#endif
 
   LOG_INF("%s: llama threadpool init, n_threads = %d\n", __func__,
           (int)params.cpuparams.n_threads);
 
-  auto *reg = ggml_backend_dev_backend_reg(
-      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU));
+  auto *cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  if (!cpu_dev) {
+    LOG_ERR("%s: no CPU backend found\n", __func__);
+    return 1;
+  }
+  auto *reg = ggml_backend_dev_backend_reg(cpu_dev);
   auto *ggml_threadpool_new_fn =
       (decltype(ggml_threadpool_new) *)ggml_backend_reg_get_proc_address(
           reg, "ggml_threadpool_new");
@@ -280,9 +369,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
             __func__, n_ctx_train, n_ctx);
   }
 
+#ifndef LLAMA_ICP_NO_CHAT_TEMPLATES
   // auto enable conversation mode if chat template is available
   const bool has_chat_template =
-      chat_templates.has_explicit_template && chat_templates.template_default;
+      common_chat_templates_was_explicit(chat_templates.get());
   if (params.conversation_mode == COMMON_CONVERSATION_MODE_AUTO) {
     if (has_chat_template) {
       // ICPP-PATCH-START
@@ -310,8 +400,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   if (params.conversation_mode) {
     if (params.enable_chat_template) {
       LOG_INF("%s: chat template example:\n%s\n", __func__,
-              common_chat_format_example(*chat_templates.template_default,
-                                         params.use_jinja)
+              common_chat_format_example(chat_templates.get(), params.use_jinja,
+                                         params.default_template_kwargs)
                   .c_str());
     } else {
       LOG_INF(
@@ -319,6 +409,13 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           __func__);
     }
   }
+#else
+  // ICPP-PATCH-START
+  // The chat template machinery is not compiled into the canister, so
+  // conversation mode is always off.
+  params.conversation_mode = COMMON_CONVERSATION_MODE_DISABLED;
+  // ICPP-PATCH-END
+#endif
 
   // print system information
   {
@@ -370,7 +467,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     }
   }
 
-  const bool add_bos = llama_vocab_get_add_bos(vocab);
+  // ICPP-PATCH: upstream added '&& !params.use_jinja', but jinja/chat templates
+  //             are not compiled into the canister, so we keep our own logic.
+  // Upstream formula, kept verbatim so there is less to re-merge next upgrade.
+  // params.use_jinja is forced false above, so this equals b4531's behavior.
+  const bool add_bos = llama_vocab_get_add_bos(vocab) && !params.use_jinja;
   if (!llama_model_has_encoder(model)) {
     GGML_ASSERT(!llama_vocab_get_add_eos(vocab));
   }
@@ -379,19 +480,24 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
   std::vector<llama_token> embd_inp;
 
+#ifndef LLAMA_ICP_NO_CHAT_TEMPLATES
   auto chat_add_and_format = [&chat_msgs,
                               &chat_templates](const std::string &role,
                                                const std::string &content) {
-    common_chat_msg new_msg{role, content};
+    common_chat_msg new_msg;
+    new_msg.role = role;
+    new_msg.content = content;
     auto formatted =
-        common_chat_format_single(*chat_templates.template_default, chat_msgs,
-                                  new_msg, role == "user", g_params->use_jinja);
-    chat_msgs.push_back({role, content});
+        common_chat_format_single(chat_templates.get(), chat_msgs, new_msg,
+                                  role == "user", g_params->use_jinja);
+    chat_msgs.push_back(new_msg);
     LOG_DBG("formatted: '%s'\n", formatted.c_str());
     return formatted;
   };
+#endif
 
   {
+#ifndef LLAMA_ICP_NO_CHAT_TEMPLATES
     auto prompt =
         (params.conversation_mode && params.enable_chat_template)
             // format the system prompt in conversation mode (fallback to default if empty)
@@ -400,6 +506,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
                                                 : params.prompt)
             // otherwise use the prompt as is
             : params.prompt;
+#else
+    // ICPP-PATCH: no chat templates in a canister -> use the prompt as is
+    std::string prompt = params.prompt;
+#endif
     if (params.interactive_first || !params.prompt.empty() ||
         session_tokens.empty()) {
       LOG_DBG("tokenize the prompt\n");
@@ -454,6 +564,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   // ICPP-PATCH-END
 
   // debug message about similarity of saved session, if applicable
+  // ICPP-PATCH: upstream b10076 dropped n_matching_session_tokens and
+  //             restructured this around 'session_do_save'. Our multi-call
+  //             state machine (max_tokens budget) depends on it, so we keep
+  //             our own logic and only migrate the KV cache API.
   size_t n_matching_session_tokens = 0;
   if (!session_tokens.empty()) {
     for (llama_token id : session_tokens) {
@@ -477,7 +591,12 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     }
 
     // remove any "future" tokens that we might have inherited from the previous session
-    llama_kv_cache_seq_rm(ctx, -1, n_matching_session_tokens, -1);
+    if (!llama_memory_seq_rm(mem, -1, (llama_pos)n_matching_session_tokens,
+                             -1)) {
+      LOG_WRN(
+          "%s: unable to reuse common prefix (for example, when the memory is recurrent)\n",
+          __func__);
+    }
   }
 
   LOG_DBG(
@@ -592,6 +711,9 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     }
   }
 
+  // ICPP-PATCH: upstream now takes the sampler from common_init_result, but
+  //             that one is owned by the persisted g_llama_init. We create &
+  //             free our own sampler for each call instead.
   smpl = common_sampler_init(model, sparams);
   if (!smpl) {
     LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
@@ -764,10 +886,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
               "context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
               n_past, n_left, n_ctx, params.n_keep, n_discard);
 
-          llama_kv_cache_seq_rm(ctx, 0, params.n_keep,
-                                params.n_keep + n_discard);
-          llama_kv_cache_seq_add(ctx, 0, params.n_keep + n_discard, n_past,
-                                 -n_discard);
+          llama_memory_seq_rm(mem, 0, params.n_keep,
+                              params.n_keep + n_discard);
+          llama_memory_seq_add(mem, 0, params.n_keep + n_discard, n_past,
+                               -n_discard);
 
           n_past -= n_discard;
 
@@ -795,11 +917,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
                   ga_i + ib * bd + ga_w, n_past + ib * bd, dd,
                   ga_i + ib * bd + ga_w + dd, n_past + ib * bd + dd);
 
-          llama_kv_cache_seq_add(ctx, 0, ga_i, n_past, ib * bd);
-          llama_kv_cache_seq_div(ctx, 0, ga_i + ib * bd, ga_i + ib * bd + ga_w,
-                                 ga_n);
-          llama_kv_cache_seq_add(ctx, 0, ga_i + ib * bd + ga_w,
-                                 n_past + ib * bd, dd);
+          llama_memory_seq_add(mem, 0, ga_i, n_past, ib * bd);
+          llama_memory_seq_div(mem, 0, ga_i + ib * bd, ga_i + ib * bd + ga_w,
+                               ga_n);
+          llama_memory_seq_add(mem, 0, ga_i + ib * bd + ga_w, n_past + ib * bd,
+                               dd);
 
           n_past -= bd;
 
@@ -844,6 +966,9 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         }
       }
 
+      // ICPP-PATCH: upstream replaced this loop with common_prompt_batch_decode,
+      //             but we need per-batch control to honor the max_tokens budget
+      //             and to track conversation_ss, so we keep our own eval loop.
       for (int i = 0; i < (int)embd.size(); i += params.n_batch) {
         int n_eval = (int)embd.size() - i;
         if (n_eval > params.n_batch) {
@@ -1072,14 +1197,17 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         }
 
         // check for reverse prompt using special tokens
-        llama_token last_token = common_sampler_last(smpl);
-        for (std::vector<llama_token> ids : antiprompt_ids) {
-          if (ids.size() == 1 && last_token == ids[0]) {
-            if (params.interactive) {
-              is_interacting = true;
+        // avoid calling common_sampler_last() if last_output is empty
+        if (!last_output.empty()) {
+          llama_token last_token = common_sampler_last(smpl);
+          for (std::vector<llama_token> ids : antiprompt_ids) {
+            if (ids.size() == 1 && last_token == ids[0]) {
+              if (params.interactive) {
+                is_interacting = true;
+              }
+              is_antiprompt = true;
+              break;
             }
-            is_antiprompt = true;
-            break;
           }
         }
 
@@ -1102,9 +1230,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
             is_antiprompt = true;
           }
 
+#ifndef LLAMA_ICP_NO_CHAT_TEMPLATES
           if (params.enable_chat_template) {
             chat_add_and_format("assistant", assistant_ss.str());
           }
+#endif
           is_interacting = true;
           LOG("\n");
         }
@@ -1168,11 +1298,17 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
             string_process_escapes(buffer);
           }
 
+#ifndef LLAMA_ICP_NO_CHAT_TEMPLATES
           bool format_chat =
               params.conversation_mode && params.enable_chat_template;
           std::string user_inp =
               format_chat ? chat_add_and_format("user", std::move(buffer))
                           : std::move(buffer);
+#else
+          // ICPP-PATCH: chat templates are not compiled into the canister
+          bool format_chat = false;
+          std::string user_inp = std::move(buffer);
+#endif
           // TODO: one inconvenient of current chat template implementation is that we can't distinguish between user input and special tokens (prefix/postfix)
           const auto line_pfx =
               common_tokenize(ctx, params.input_prefix, false, true);
@@ -1271,7 +1407,9 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   reset_static_memory();
   // ICPP-PATCH-END
 
-  llama_backend_free();
+  // ICPP-PATCH: do NOT call llama_backend_free() here. The persisted model
+  //             references quantization tables owned by the backend.
+  //             The backend is freed in icpp_free_model().
 
   ggml_threadpool_free_fn(threadpool);
   ggml_threadpool_free_fn(threadpool_batch);
@@ -1284,17 +1422,29 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
 // Function to be called by the canister to free the model which is persisted in Orthogonal Persisted memory
 void icpp_free_model() {
-  if (g_model && *g_model) {
-    llama_model_free(*g_model);
+  // The static common_init_result owns both the model and the context, so
+  // resetting it frees them together. (Upstream no longer allows releasing the
+  // model out of it, so we must not call llama_model_free ourselves.)
+  g_llama_init.reset();
+
+  g_model_persistent = nullptr;
+  g_ctx_persistent = nullptr;
+
+  if (g_model) {
     *g_model = nullptr;
     g_model = nullptr;
   }
+
+  // The backend was kept alive for as long as the model existed. Free it now,
+  // and allow a subsequent call to main_() to initialize it again.
+  llama_backend_free();
+  g_backend_initialized = false;
 }
 
 void reset_static_memory() {
-  /* Tip: to find what must be reset, use a native debug build and stop here 
+  /* Tip: to find what must be reset, use a native debug build and stop here
             in lldb:
-        
+
         lldb ./build-native/mockic.exe
         (lldb) breakpoint set --name reset_static_memory
         (lldb) run

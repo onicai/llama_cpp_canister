@@ -1,64 +1,164 @@
+# llama_cpp_canister build manifest — llama.cpp b10076 (305ba519)
+#
+# Strategy (upgrade 0003): wasi-shims/ supply no-op <thread>/<mutex>/<future>/
+# <condition_variable>, and -fexceptions + src/wasi-exception-stubs.cpp let
+# upstream sources compile unmodified. This replaces the per-file
+# throw->IC_API::trap and threading-strip patching of upgrades 0001/0002.
+# See README-0003-305ba519.md.
+
 [build-wasm]
 canister = "llama_cpp"
 did_path = "src/llama_cpp.did"
+
 cpp_paths = [
+    # --- llama.cpp core ---
+    # Excluded: llama-quant.cpp -- quantization is not needed for inference, and
+    # it is the one file that genuinely needs threads (std::thread workers +
+    # std::mutex). Nothing in llama.cpp references it, so it drops cleanly.
+    # llama-model-saver.cpp IS required: llama.cpp's llama_model_save_to_file
+    # references it unconditionally. (The wasm build hides this -- LTO
+    # dead-strips it -- so it only fails on build-native.)
     "src/llama_cpp_onicai_fork/src/llama.cpp",
-    "src/llama_cpp_onicai_fork/src/llama-vocab.cpp",
-    "src/llama_cpp_onicai_fork/src/llama-grammar.cpp",
-    "src/llama_cpp_onicai_fork/src/llama-sampling.cpp",
-    "src/llama_cpp_onicai_fork/src/llama-impl.cpp",
-    "src/llama_cpp_onicai_fork/src/llama-context.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-model-saver.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-adapter.cpp",
     "src/llama_cpp_onicai_fork/src/llama-arch.cpp",
-    "src/llama_cpp_onicai_fork/src/llama-kv-cache.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-batch.cpp",
     "src/llama_cpp_onicai_fork/src/llama-chat.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-context.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-cparams.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-grammar.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-graph.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-hparams.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-impl.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-io.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-kv-cache.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-kv-cache-dsa.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-kv-cache-dsv4.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-kv-cache-iswa.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-memory.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-memory-hybrid.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-memory-hybrid-iswa.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-memory-recurrent.cpp",
     "src/llama_cpp_onicai_fork/src/llama-mmap.cpp",
     "src/llama_cpp_onicai_fork/src/llama-model.cpp",
-    "src/llama_cpp_onicai_fork/src/llama-batch.cpp",
-    "src/llama_cpp_onicai_fork/src/llama-adapter.cpp",
     "src/llama_cpp_onicai_fork/src/llama-model-loader.cpp",
-    "src/llama_cpp_onicai_fork/src/llama-hparams.cpp",
-    "src/llama_cpp_onicai_fork/src/unicode-data.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-sampler.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-vocab.cpp",
     "src/llama_cpp_onicai_fork/src/unicode.cpp",
+    "src/llama_cpp_onicai_fork/src/unicode-data.cpp",
+
+    # --- model architectures (b10076 splits each arch into its own TU) ---
+    # Starting generous: omitting an arch fails at MODEL LOAD with an opaque
+    # error, not at link time. Prune only if the WASM globals budget forces it.
+    "src/llama_cpp_onicai_fork/src/models/*.cpp",
+
+    # --- common (minimal set for inference) ---
+    # Excluded for the ICP globals limit (<1000): chat*.cpp, jinja/*,
+    # speculative.cpp, ngram-*.cpp, debug.cpp, llguidance.cpp,
+    # json-schema-to-grammar.cpp (no grammar/JSON-schema surface in our .did),
+    # imatrix-loader.cpp.
+    # NOTE: peg-parser.cpp is REQUIRED, not excluded -- arg.cpp pulls in
+    # preset.h, and preset.cpp's parse_ini_from_file needs common_peg_parser.
+    # The wasm build hides this (LTO dead-strips the path); the native build
+    # does not, so it only fails on build-native.
+    "src/llama_cpp_onicai_fork/common/peg-parser.cpp",
+    # Excluded as unbuildable on WASI: download.cpp + hf-cache.cpp (cpp-httplib),
+    # console.cpp (no TTY). Stubs live in src/wasi-*-stubs.cpp.
     "src/llama_cpp_onicai_fork/common/arg.cpp",
-    "src/llama_cpp_onicai_fork/common/json-schema-to-grammar.cpp",
     "src/llama_cpp_onicai_fork/common/build-info.cpp",
-    "src/llama_cpp_onicai_fork/common/sampling.cpp",
     "src/llama_cpp_onicai_fork/common/common.cpp",
+    # fit.cpp defines common_fit_params + common_memory_breakdown_print, which
+    # common.cpp and sampling.cpp call. It is clean for WASI (no threads,
+    # network, filesystem or getenv), so link it rather than stub it.
+    "src/llama_cpp_onicai_fork/common/fit.cpp",
     "src/llama_cpp_onicai_fork/common/log.cpp",
-    "src/llama_cpp_onicai_fork/ggml/src/ggml-backend.cpp",
-    "src/llama_cpp_onicai_fork/ggml/src/ggml-threading.cpp",
-    "src/llama_cpp_onicai_fork/ggml/src/ggml-backend-reg.cpp",
+    "src/llama_cpp_onicai_fork/common/preset.cpp",
+    "src/llama_cpp_onicai_fork/common/reasoning-budget.cpp",
+    "src/llama_cpp_onicai_fork/common/sampling.cpp",
+    "src/llama_cpp_onicai_fork/common/unicode.cpp",
+
+    # --- ggml C++ ---
+    "src/llama_cpp_onicai_fork/ggml/src/ggml.cpp",
     "src/llama_cpp_onicai_fork/ggml/src/gguf.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-backend.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-backend-reg.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-backend-dl.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-backend-meta.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-opt.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-threading.cpp",
+
+    # --- ggml-cpu C++ (b10076 split ggml-cpu into these TUs) ---
+    # Excluded: hbm.cpp (x86 HBM), amx/, kleidiai/, llamafile/ (arch-specific)
     "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu.cpp",
-    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu-traits.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/ops.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/binary-ops.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/unary-ops.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/vec.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/traits.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/repack.cpp",
+
+    # --- canister wrapper + WASI stubs (glob also picks up src/wasi-*.cpp) ---
     "src/*.cpp",
 ]
+
+# IMPORTANT: wasi-shims MUST come first — it shadows the system <mutex>,
+# <thread>, <future> and <condition_variable> headers.
 cpp_include_dirs = [
+    "wasi-shims",
+    "src/llama_cpp_onicai_fork/vendor",
     "src/llama_cpp_onicai_fork",
     "src/llama_cpp_onicai_fork/include",
     "src/llama_cpp_onicai_fork/src",
     "src/llama_cpp_onicai_fork/ggml/include",
     "src/llama_cpp_onicai_fork/ggml/src",
-    "src/llama_cpp_onicai_fork/common",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu",
+    "src/llama_cpp_onicai_fork/common",
 ]
-# NOTE: Adding compile flag "-msimd128" might be too much. It will compile everything with simd
-#       Alternative is to add it at granular level in the code, like:
-#       // Function with SIMD128 enabled
-#       void __attribute__((target("simd128"))) simd_function() {
-#           // SIMD-specific code here
-#       }
-cpp_compile_flags = ["-DNDEBUG", "-DGGML_USE_CPU"]
-# 8MB stack to prevent "heap out of bounds" (actually stack overflow)
-# -> This is sufficient for the Qwen2.5 model, but you might need to increase it for larger models
-cpp_link_flags = ["-Wl,-z,stack-size=8388608"]
+
+# -fexceptions overrides icpp-pro's default -fno-exceptions (appended later wins).
+# It does NOT give real unwinding: see src/wasi-exception-stubs.cpp — throws trap.
+cpp_compile_flags = [
+    "-DNDEBUG",
+    "-DGGML_USE_CPU",
+    "-DLLAMA_CPP_CANISTER",
+    "-msimd128",
+    "-fexceptions",
+    "-fmerge-all-constants",
+    "-D_WASI_EMULATED_SIGNAL",
+    "-D_WASI_EMULATED_PTHREAD",
+    "-D_WASI_EMULATED_GETPID",
+    "-D_WASI_EMULATED_PROCESS_CLOCKS",
+    "-DGGML_DEFAULT_N_THREADS=1",
+]
+
+# 8MB stack to prevent "heap out of bounds" (actually stack overflow).
+# Sufficient for Qwen2.5; may need raising for larger models or for the deeper
+# call chains introduced by the b10076 ops.cpp/vec.cpp split.
+cpp_link_flags = [
+    # 8MB stack (same as b4531). The 32MB bump tried during the b10076 upgrade
+    # was chasing a phantom install trap that turned out to be a dfx wasm-cache
+    # artifact, not a stack overflow -- see README-0003-305ba519.md. 8MB is
+    # sufficient; raise only if a genuine "heap out of bounds" (stack overflow
+    # in disguise) appears with a larger model. See README Appendix B.
+    "-Wl,-z,stack-size=8388608",
+    "-lwasi-emulated-pthread",
+    "-lwasi-emulated-getpid",
+    "-lwasi-emulated-signal",
+    "-lwasi-emulated-process-clocks",
+    "-fexceptions",
+]
+
 c_paths = [
     "src/llama_cpp_onicai_fork/ggml/src/ggml.c",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-alloc.c",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-quants.c",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu.c",
-    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/ggml-cpu-quants.c",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/quants.c",
+    # THE reason for this upgrade: hand-written WASM SIMD kernels, including
+    # ggml_vec_dot_q8_0_q8_0, which had no __wasm_simd128__ path at b4531.
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/arch/wasm/quants.c",
 ]
+
 c_include_dirs = [
     "src/llama_cpp_onicai_fork",
     "src/llama_cpp_onicai_fork/include",
@@ -67,21 +167,39 @@ c_include_dirs = [
     "src/llama_cpp_onicai_fork/ggml/src",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu",
 ]
-c_compile_flags = ["-DNDEBUG", "-msimd128", "-DGGML_USE_CPU"]
+
+c_compile_flags = [
+    "-DNDEBUG",
+    "-msimd128",
+    "-DGGML_USE_CPU",
+    "-DLLAMA_CPP_CANISTER",
+    "-fmerge-all-constants",
+    "-D_WASI_EMULATED_SIGNAL",
+    "-D_WASI_EMULATED_PTHREAD",
+    "-D_WASI_EMULATED_GETPID",
+    "-D_WASI_EMULATED_PROCESS_CLOCKS",
+]
+
 post_wasm_function = "scripts.optimize_wasm.main"
 
 [build-native]
 cpp_paths = [
     # Use this to build native debug executable for testing canister code
     "native/*.cpp",
-
-    # Use this to build the original console app of llama.cpp, without canister wrapper
-    # "src/llama_cpp_onicai_fork/examples/main/main.cpp",
-    # "src/llama_cpp_onicai_fork/common/console.cpp",
+    # b10076 split the per-architecture CPU kernels out of ggml-cpu-quants.c
+    # into ggml-cpu/arch/<arch>/. The [build-wasm] lists select arch/wasm/,
+    # which compiles to nothing on the host, so the native build needs the
+    # host architecture's files or ggml-cpu.c's type_traits_cpu table has
+    # undefined vec_dot entries (mxfp4, nvfp4, q1_0, tq1_0, tq2_0, ...).
+    # NOTE: this is x86_64-specific. On an arm64 host, switch to arch/arm/.
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/arch/x86/repack.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/arch/x86/cpu-feats.cpp",
 ]
 cpp_include_dirs = []
-cpp_compile_flags = ["-DNDEBUG", "-DGGML_USE_CPU"]
+cpp_compile_flags = ["-DNDEBUG", "-DGGML_USE_CPU", "-DLLAMA_CPP_CANISTER"]
 cpp_link_flags = []
-c_paths = []
+c_paths = [
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/arch/x86/quants.c",
+]
 c_include_dirs = []
-c_compile_flags = ["-DNDEBUG", "-DGGML_USE_CPU"]
+c_compile_flags = ["-DNDEBUG", "-DGGML_USE_CPU", "-DLLAMA_CPP_CANISTER"]
