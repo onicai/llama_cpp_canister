@@ -10,3 +10,9 @@ python-dotenv
 black==24.10.0
 pylint==3.3.4
 mypy==1.13.0
+
+# Dev/debug only: used by scripts/wasm_harness.py to run canister wasm under a
+# faithful ic0 harness and get NAMED trap backtraces the IC does not provide
+# (see README-0003-305ba519.md "Debugging technique"). Also required so pylint/
+# mypy can resolve the harness's `import wasmtime`. NOT a canister runtime dep.
+wasmtime
