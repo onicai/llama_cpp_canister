@@ -55,7 +55,7 @@ all-tests: all-static test-llm-wasm test-llm-native
 build-info-cpp-wasm:
 	@echo "--"
 	@echo "Creating src/llama_cpp_onicai_fork/common/build-info.cpp for build-wasm"
-	sh src/llama_cpp_onicai_fork/scripts/build-info.sh $(ICPP_COMPILER_ROOT)/bin/clang > src/llama_cpp_onicai_fork/common/build-info.cpp
+	sh scripts/build-info-cpp.sh $(ICPP_COMPILER_ROOT)/bin/clang > src/llama_cpp_onicai_fork/common/build-info.cpp
 	@echo "Content of src/llama_cpp_onicai_fork/common/build-info.cpp:"
 	@echo " " 
 	@cat src/llama_cpp_onicai_fork/common/build-info.cpp 
@@ -64,7 +64,7 @@ build-info-cpp-wasm:
 build-info-cpp-native:
 	@echo "--"
 	@echo "Creating src/llama_cpp_onicai_fork/common/build-info.cpp for build-native"
-	sh src/llama_cpp_onicai_fork/scripts/build-info.sh clang > src/llama_cpp_onicai_fork/common/build-info.cpp
+	sh scripts/build-info-cpp.sh clang > src/llama_cpp_onicai_fork/common/build-info.cpp
 	@echo "Content of src/llama_cpp_onicai_fork/common/build-info.cpp:"
 	@echo " " 
 	@cat src/llama_cpp_onicai_fork/common/build-info.cpp

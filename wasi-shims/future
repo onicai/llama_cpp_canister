@@ -1,0 +1,86 @@
+// WASI shim: <future> — single-threaded stub
+//
+// std::async runs the callable eagerly and inline, so llama.cpp's
+// check_tensors validation path still executes — just synchronously.
+//
+// Adapted from instruction-bounded-inference-artifact
+// MIT (c) 2026 Julien Aerni, Simeon Fluck, Dustin Becker
+#pragma once
+
+// Only shim on WASI. On native builds this directory is still on the
+// include path, so fall through to the real system header.
+#ifndef __wasi__
+#include_next <future>
+#else
+
+
+#include <chrono>
+#include <functional>
+#include <stdexcept>
+
+namespace std {
+
+enum class future_status { ready, timeout, deferred };
+
+template <class T>
+class future {
+    T value_;
+    bool has_value_ = false;
+public:
+    future() noexcept = default;
+    future(future&&) noexcept = default;
+    future& operator=(future&&) noexcept = default;
+    future(const future&) = delete;
+
+    bool valid() const noexcept { return has_value_; }
+    T get() { has_value_ = false; return static_cast<T&&>(value_); }
+    void wait() const {}
+
+    template <class Rep, class Period>
+    future_status wait_for(const chrono::duration<Rep, Period>&) const {
+        return future_status::ready;
+    }
+
+    // Internal: used by the async shim below.
+    void _set(T&& v) { value_ = static_cast<T&&>(v); has_value_ = true; }
+};
+
+template <>
+class future<void> {
+    bool has_value_ = false;
+public:
+    future() noexcept = default;
+    future(future&&) noexcept = default;
+    future& operator=(future&&) noexcept = default;
+    future(const future&) = delete;
+
+    bool valid() const noexcept { return has_value_; }
+    void get() { has_value_ = false; }
+    void wait() const {}
+
+    template <class Rep, class Period>
+    future_status wait_for(const chrono::duration<Rep, Period>&) const {
+        return future_status::ready;
+    }
+    void _set() { has_value_ = true; }
+};
+
+enum class launch { async = 1, deferred = 2 };
+
+// Runs synchronously regardless of policy — there is no other thread to
+// defer to, and eager evaluation keeps upstream's error handling intact.
+template <class F, class... Args>
+auto async(launch, F&& f, Args&&... args) -> future<decltype(f(args...))> {
+    future<decltype(f(args...))> fut;
+    fut._set(f(static_cast<Args&&>(args)...));
+    return fut;
+}
+
+template <class F, class... Args>
+auto async(F&& f, Args&&... args) -> future<decltype(f(args...))> {
+    return async(launch::deferred, static_cast<F&&>(f), static_cast<Args&&>(args)...);
+}
+
+} // namespace std
+
+#endif // __wasi__

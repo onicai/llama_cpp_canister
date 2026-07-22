@@ -33,7 +33,7 @@ void remove_log_file() {
 
   // Process the args, which will instantiate the log singleton
   common_params params;
-  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_MAIN,
+  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_COMPLETION,
                            print_usage)) {
     error_msg = "Cannot parse args.";
     send_output_record_result_error_to_wire(
