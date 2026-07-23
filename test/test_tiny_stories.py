@@ -272,6 +272,55 @@ def test__get_chats_ok(network: str) -> None:
         print(f"{current_func_name()}: response: {response}")
     assert 'Ok' in response
 
+
+def test__get_chats_decodes_saved_chat(network: str) -> None:
+    """Regression for issue #24: get_chats was undecodable by clients once a chat
+    existed, because llama_cpp.did declared the field as `timestamp_ns` while the
+    canister sends `timestamp`. Candid field names are hashed, so they never
+    matched and dfx failed with 'Failed to deserialize idl blob'.
+
+    This test saves a chat (chats_resume -> new_chat -> run_update) and then calls
+    get_chats. call_canister_api decodes the response with the deployed .did, so a
+    field-name mismatch makes this fail. It also asserts the field is named
+    `timestamp` (a YYYY-MM-DD_HH-MM-SS string, not nanoseconds), not `timestamp_ns`.
+    """
+    # Turn on chat saving and create one chat with content.
+    call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="chats_resume",
+        canister_argument='()',
+        network=network,
+    )
+    call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="new_chat",
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
+        network=network,
+    )
+    call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="run_update",
+        canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-p"; "Joe loves"; "-n"; "1"} })',
+        network=network,
+    )
+
+    response = call_canister_api(
+        dfx_json_path=DFX_JSON_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_chats",
+        canister_argument='()',
+        network=network,
+    )
+    if PRINT_RESPONSE:
+        print(f"{current_func_name()}: response: {response}")
+    # Must decode (dfx uses the .did) and carry the correctly-named field.
+    assert 'Ok' in response, response
+    assert 'timestamp =' in response, response
+    assert 'timestamp_ns' not in response, response
+
 def test__remove_prompt_cache_1(network: str) -> None:
     response = call_canister_api(
         dfx_json_path=DFX_JSON_PATH,

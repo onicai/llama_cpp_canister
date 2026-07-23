@@ -94,7 +94,7 @@ type GetChatsRecordResult = variant {
 };
 type GetChatsRecord = record {
   chats : vec record {
-    timestamp_ns : text;
+    timestamp : text;
     chat : text
   }
 };
