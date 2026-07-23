@@ -156,28 +156,45 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   dfx ledger fabricate-cycles --canister llama_cpp --t 20
   ```
 
+- Raise the canister's wasm memory limit (needed for larger models)
+
+  The default reference model, Qwen3-0.6B, runs close to the wasm heap ceiling. Set
+  the `wasm_memory_limit` to 3.75 GiB (wasm32 cannot address a full 4 GiB). This must
+  be set with `update-settings` — it cannot be set in `dfx.json`'s
+  `initialization_values` when the canister is created through a cycles wallet:
+
+  ```bash
+  dfx canister update-settings llama_cpp --wasm-memory-limit 4026531840
+
+  # verify
+  dfx canister status llama_cpp | grep "Wasm memory limit"
+  ```
+
 - Upload gguf file
 
-  The canister is now up & running, and ready to be loaded with a gguf file. In
-  this example we use the powerful `qwen2.5-0.5b-instruct-q8_0.gguf` model, but
-  you can use any model availabe in gguf format.
+  The canister is now up & running, and ready to be loaded with a gguf file. Our
+  default reference model is **Qwen3-0.6B** (q8_0) — a state-of-the-art small LLM
+  that we run in **non-thinking** mode for clean, multi-turn on-chain inference
+  (see the chat steps below). You can use any model available in gguf format.
 
-  - Download the model from huggingface: https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF
+  _(For the previous default, Qwen2.5-0.5B, see [README-qwen2.5.md](README-qwen2.5.md).)_
 
-    Store it in: `models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf`
+  - Download the model from huggingface: https://huggingface.co/Qwen/Qwen3-0.6B-GGUF
+
+    Store it in: `models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf`
 
     ```bash
-    mkdir -p models/Qwen/Qwen2.5-0.5B-Instruct-GGUF
+    mkdir -p models/Qwen/Qwen3-0.6B-GGUF
     wget -c \
-      -O models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf \
-      https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf
+      -O models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf \
+      https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf
     ```
 
     After download, verify the sha256 hash:
 
     ```bash
-    $ sha256sum models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf
-    ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e
+    $ sha256sum models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf
+    9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031
     ```
 
   - Upload the gguf file to the canister:
@@ -188,8 +205,8 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
       --canister llama_cpp \
       --canister-filename models/model.gguf \
       --filetype gguf \
-      --hf-sha256 "ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e" \
-      models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf
+      --hf-sha256 "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031" \
+      models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf
     ```
 
     NOTEs:
@@ -197,7 +214,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     - In C++, files are stored in stable memory of the canister. They will survive a code upgrade.
     - The --hf-sha256 argument is optional but highly recommended:
       - The upload process will check if the file on disk has the same sha256 as the one you downloaded from HuggingFace.
-      - The --hf-sha256 for our sample model can be found at https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/blob/main/qwen2.5-0.5b-instruct-q8_0.gguf
+      - The --hf-sha256 for our sample model can be found at https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/blob/main/Qwen3-0.6B-Q8_0.gguf
 
   - Check the filesize & sha256 of the uploaded gguf file in the canister
 
@@ -206,13 +223,13 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
       filename = "models/model.gguf"
     })'
 
-    # Which returns the following for the Qwen2.5-0.5B-Instruct-GGUF model
+    # Which returns the following for the Qwen3-0.6B-GGUF model
     (
       variant {
         Ok = record {
           filename = "models/model.gguf";
-          filesize = 675_710_816 : nat64;
-          filesha256 = "ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e";
+          filesize = 639_446_688 : nat64;
+          filesha256 = "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031";
         }
       },
     )
@@ -221,7 +238,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 - Optional: You can now run a pytest based QA, using the icpp-pro smoketesting framework:
 
   ```bash
-  pytest -vv test/test_qwen2.py
+  pytest -vv --network local test/test_qwen3.py
   ```
 
 - Load the gguf file into Orthogonal Persisted (OP) working memory
@@ -231,9 +248,19 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     args = vec {
       "--model"; "models/model.gguf";
       "--cache-type-k"; "q8_0";
+      "--cache-type-v"; "q8_0";
+      "--ctx-size"; "1024";
     }
   })'
   ```
+
+  **Why these args for Qwen3-0.6B?** Qwen3-0.6B has a much larger KV cache than
+  Qwen2.5-0.5B (8 KV heads / 28 layers vs 2 / 24). At its default ~40K context the
+  KV cache does not fit in the wasm heap, so we cap the context (`--ctx-size 1024`,
+  ample for the ~600-token chat use case) and quantize **both** the K and V caches
+  (`q8_0`). This also assumes you raised the `wasm_memory_limit` to 3.75 GiB (see the
+  `update-settings` step above). You can watch usage with the `get_memory_status`
+  query (see below).
 
 - Set the max_tokens for this model, to avoid it hits the IC's instruction limit
 
@@ -242,11 +269,14 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   ```bash
   dfx canister call llama_cpp set_max_tokens '(record {
     max_tokens_query = 1 : nat64;
-    max_tokens_update = 25 : nat64
+    max_tokens_update = 20 : nat64
   })'
 
   dfx canister call llama_cpp get_max_tokens
   ```
+
+  For Qwen3-0.6B the first-call ceiling is ~25–29 tokens; we use **20** to leave
+  headroom as the context grows across a multi-turn conversation.
 
 - Chat with the LLM
 
@@ -261,6 +291,13 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     Details how to use the Qwen models with llama.cpp:
     https://qwen.readthedocs.io/en/latest/run_locally/llama.cpp.html
 
+    **Running Qwen3 in non-thinking mode.** Qwen3 is a hybrid *thinking* model.
+    To disable thinking (no `<think>` tokens, lower cost) we end the assistant turn
+    with an empty `<think>\n\n</think>\n\n` block — this is exactly what the official
+    chat template emits for `enable_thinking=false`. All prompts below use that form.
+    (Thinking mode _is_ possible but not recommended on this 0.6B under the canister's
+    memory limits: it rambles, often does not terminate, and costs ~10x more tokens.)
+
     Start a new chat
 
     ```bash
@@ -268,6 +305,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
       args = vec {
         "--prompt-cache"; "prompt.cache";
         "--cache-type-k"; "q8_0";
+        "--cache-type-v"; "q8_0";
       }
     })'
     ```
@@ -277,19 +315,21 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     Ingest the prompt:
 
     Repeat this call until `prompt_remaining` in the response is empty.
-    This ingest the prompt into the prompt-cache, using multiple update calls:
+    This ingests the prompt into the prompt-cache, using multiple update calls:
     (-) Keep sending the full prompt
     (-) Use `"-n"; "1"`, so it does not generate new tokens
+    (-) The assistant turn ends with the empty `<think>\n\n</think>\n\n` block, so
+        Qwen3 runs in non-thinking mode
 
     ```bash
     dfx canister call llama_cpp run_update '(record {
       args = vec {
         "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
-        "--cache-type-k"; "q8_0";
+        "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
         "--repeat-penalty"; "1.1";
         "--temp"; "0.6";
         "-sp";
-        "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n";
+        "-p"; "<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
         "-n"; "1"
       }
     })'
@@ -308,7 +348,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     dfx canister call llama_cpp run_update '(record {
       args = vec {
         "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
-        "--cache-type-k"; "q8_0";
+        "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
         "--repeat-penalty"; "1.1";
         "--temp"; "0.6";
         "-sp";
@@ -320,16 +360,15 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
     ***
 
-    Once `generated_eog` in the response is `true`, the LLM is done generating
-
-    This is the response after several update calls and it has reached eog:
+    Once `generated_eog` in the response is `true`, the LLM is done generating.
+    The generated `output` contains **no `<think>` tokens** — a clean, direct answer:
 
     ```bash
     (
       variant {
         Ok = record {
-          output = " level of complexity than the original text.<|im_end|>";
-          conversation = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\nLLMs are large language models, or generative models, that can generate text based on a given input. These models are trained on a large corpus of text and are able to generate text that is similar to the input. They can be used for a wide range of applications, such as language translation, question answering, and text generation for various tasks. LLMs are often referred to as \"artificial general intelligence\" because they can generate text that is not only similar to the input but also has a higher level of complexity than the original text.<|im_end|>";
+          output = " from answering questions to generating creative content.<|im_end|>";
+          conversation = "<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\nA Large Language Model (LLM) is a type of artificial intelligence model that can understand and generate human-like text. These models are trained on vast amounts of text data and are capable of understanding and responding to natural language in a variety of ways, from answering questions to generating creative content.<|im_end|>";
           error = "";
           status_code = 200 : nat16;
           prompt_remaining = "";
@@ -337,6 +376,34 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
         }
       },
     )
+    ```
+
+    ***
+
+    **Multi-turn conversation.** Qwen3 handles back-and-forth conversations well. To
+    continue a chat, send the **full accumulated conversation** as the prompt each
+    turn — the prompt-cache reuses the shared prefix, so only the new turn is
+    processed. Here, turn 2 asks the model to recall facts stated in turn 1
+    (`new_chat` first, then ingest with `-n 1` until `prompt_remaining` is empty,
+    then generate with an empty `-p` until `generated_eog=true`):
+
+    ```bash
+    dfx canister call llama_cpp run_update '(record {
+      args = vec {
+        "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
+        "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
+        "--temp"; "0.6"; "-sp";
+        "-p"; "<|im_start|>user\nMy name is Sam and I have 3 cats named Milo, Coco, and Ziggy.<|im_end|>\n<|im_start|>assistant\nNice to meet you, Sam! You have three cats: Milo, Coco, and Ziggy.<|im_end|>\n<|im_start|>user\nHow many cats do I have, what are their names, and what is my name?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
+        "-n"; "1"
+      }
+    })'
+    ```
+
+    The assistant correctly recalls turn 1:
+
+    ```
+    You have 3 cats: Milo, Coco, and Ziggy.
+    Your name is Sam.
     ```
 
     ***
@@ -352,20 +419,20 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     ```
 
     Note: The sequence of update calls to the canister is required because the Internet Computer has a limitation
-    on the number of instructions it allows per call. For this model, ~25 tokens can be generated per update call (measured on the b10076 build; the hard ceiling is 28 before a call traps).
+    on the number of instructions it allows per call. For Qwen3-0.6B, ~20 tokens are generated per update call (first-call ceiling ~25-29 before a call traps).
 
     This sequence of update calls is equivalent to using the [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
     repo directly and running the `llama-cli` locally, with the command:
 
     ```bash
     <path-to>/llama-cli \
-      -m /models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf \
+      -m /models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf \
       --prompt-cache prompt.cache --prompt-cache-all \
-      --cache-type-k q8_0 \
+      --cache-type-k q8_0 --cache-type-v q8_0 --ctx-size 1024 \
       --repeat-penalty 1.1 \
       --temp 0.6 \
       -sp \
-      -p "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n" \
+      -p "<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n" \
       -n 512
     ```
 
@@ -433,17 +500,19 @@ dfx canister call llama_cpp remove_log_file '(record {
 
 You can run a smoketest on the deployed LLM:
 
-- Deploy Qwen2.5 model as described above
+- Deploy the Qwen3-0.6B model as described above
 
-- Run the smoketests for the Qwen2.5 LLM deployed to your local IC network:
+- Run the smoketests for the Qwen3-0.6B LLM deployed to your local IC network:
 
   ```
   # First test the canister functions, like 'health'
-  pytest -vv test/test_canister_functions.py
+  pytest -vv --network local test/test_canister_functions.py
 
-  # Then run the inference tests
-  pytest -vv test/test_qwen2.py
+  # Then run the inference tests (multi-turn, non-thinking)
+  pytest -vv --network local test/test_qwen3.py
   ```
+
+  _(The previous default, Qwen2.5-0.5B, is still covered by `test/test_qwen2.py`.)_
 
 # Prompt Caching
 
@@ -750,6 +819,34 @@ dfx canister call llama_cpp cycle_balance_stop_timer '()'
 # -> (variant { Ok = record { status_code = 200 : nat16 } })
 ```
 
+# Memory Status
+
+Larger models (e.g. Qwen3-0.6B) run close to the canister's wasm memory limit.
+The `get_memory_status` query lets you watch usage — the `wasm_heap_bytes` value is
+the number that climbs toward the `wasm_memory_limit` and, when it reaches it,
+causes `heap out of bounds` (IC0502) traps during `load_model` / generation.
+
+Access: **non-anonymous** callers only (anonymous callers get an access-denied error).
+
+```bash
+dfx canister call llama_cpp get_memory_status
+# ->
+(
+  variant {
+    Ok = record {
+      wasm_heap_bytes = 2_365_587_456 : nat64;   # wasm linear-memory high-water-mark
+      stable_bytes = 671_088_640 : nat64;        # model file + virtual filesystem
+    }
+  },
+)
+```
+
+The `wasm_memory_limit` itself is set with `dfx canister update-settings llama_cpp
+--wasm-memory-limit 4026531840` (see the setup steps) — it cannot go in `dfx.json`'s
+`initialization_values` when the canister is created through a cycles wallet. Check it
+with `dfx canister status llama_cpp`. If `wasm_heap_bytes` approaches the limit, reduce
+`--ctx-size` and/or quantize the KV cache (`--cache-type-k`/`-v q8_0`) when loading.
+
 # Wasm Verification (pre onicai SNS)
 
 > **NOTE:** This workflow was created for the **pre onicai SNS verification
@@ -802,6 +899,7 @@ We tested several LLM models available on HuggingFace:
 
 | Model                                                                                                                    | # weights | file size | quantization   | --cache-type-k | max*tokens<br> *(ingestion)\_ | max*tokens<br> *(generation)\_ |
 | ------------------------------------------------------------------------------------------------------------------------ | --------- | --------- | -------------- | -------------- | ----------------------------- | ------------------------------ |
+| [Qwen3-0.6B-Q8_0.gguf](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF) (default)                                            | 600 M     | 0.64 GB   | q8_0           | q8_0           | -                             | 25                             |
 | [SmolLM2-135M-Instruct-Q8_0.gguf](https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF)                         | 135 M     | 0.15 GB   | q8_0           | f16            | -                             | ~~40~~                         |
 | [qwen2.5-0.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                              | 630 M     | 0.49 GB   | q4_k_m         | f16            | -                             | ~~14~~                         |
 | [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                                | 630 M     | 0.68 GB   | q8_0           | q8_0           | -                             | 25                             |
@@ -814,7 +912,8 @@ We tested several LLM models available on HuggingFace:
 
 NOTEs:
 
-- **The ~~struck-through~~ values are from the previous (pre-b10076) build and must be re-determined for b10076.** Only the `qwen2.5-0.5b-instruct-q8_0` row has been re-measured: 25 tokens/call sustained to EOG, 28 first-call ceiling — up ~2.8x from ~10 on the previous build, thanks to the hand-written WASM SIMD q8_0 kernel.
+- **`Qwen3-0.6B-Q8_0` is the current default** (top row): ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --ctx-size 1024` and a `wasm_memory_limit` of 3.75 GiB (its KV cache is ~4x Qwen2.5's); see the main README.
+- **The ~~struck-through~~ values are from the pre-b10076 build and must be re-determined.** Of the older rows, only `qwen2.5-0.5b-instruct-q8_0` was re-measured on b10076: 25 tokens/call sustained, 28 first-call ceiling — up ~2.8x from ~10, thanks to the hand-written WASM SIMD q8_0 kernel.
 - During prompt ingestion phase, the max_tokens before hitting the instruction limit is higher as during the generation phase.
 - We use `"--temp"; "0.6"; "--repeat-penalty"; "1.1";`, as recommended on several model cards
 - For each model, we selected a `--cache-type-k` that gives the highest max_tokens while still providing good results.

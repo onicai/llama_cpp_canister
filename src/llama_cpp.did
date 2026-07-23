@@ -301,6 +301,17 @@ type CycleBalanceRecordResult = variant {
 };
 
 // -----------------------------------------------------
+// Memory-status report (non-anonymous callers)
+type MemoryStatusRecord = record {
+  wasm_heap_bytes : nat64;   // wasm linear-memory high-water-mark (approaches wasm_memory_limit)
+  stable_bytes : nat64       // stable memory: uploaded model file + virtual filesystem
+};
+type MemoryStatusRecordResult = variant {
+  Err : ApiError;            // includes access-denied for anonymous callers
+  Ok : MemoryStatusRecord
+};
+
+// -----------------------------------------------------
 // The endpoint services of our canister
 service : {
   // canister
@@ -347,6 +358,9 @@ service : {
   cycle_balance_start_timer : () -> (StatusCodeRecordResult);
   cycle_balance_stop_timer : () -> (StatusCodeRecordResult);
   get_cycle_balance : () -> (CycleBalanceRecordResult) query;
+
+  // Memory-status report (non-anonymous callers)
+  get_memory_status : () -> (MemoryStatusRecordResult) query;
 
   // Logging endpoints
   remove_log_file : (InputRecord) -> (OutputRecordResult);

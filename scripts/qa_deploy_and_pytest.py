@@ -26,7 +26,14 @@ def main() -> int:
                 "canister_filename": "models/tiny.gguf",
                 "test_path_model": "test/test_tiny_stories.py",
             },
-            # This times out in Github action. Can only be run locally.
+            # The Qwen models time out in the Github action; run them locally by
+            # uncommenting. Qwen3-0.6B is the current default reference model; its
+            # multi-turn / non-thinking behaviour is exercised by test_qwen3.py.
+            # {
+            #     "filename": "models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf",
+            #     "canister_filename": "models/model.gguf",
+            #     "test_path_model": "test/test_qwen3.py",
+            # },
             # {
             #     "filename": "models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf",  # pylint: disable=line-too-long
             #     "canister_filename": "models/model.gguf",
