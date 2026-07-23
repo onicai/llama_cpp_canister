@@ -6,6 +6,11 @@
 > for regression, and remains an excellent, lightweight single-turn model. Follow
 > the main README for `# Set up` (dfx, Python env, build & deploy), then use the
 > model-specific steps below instead of the Qwen3 ones.
+>
+> This model is served by the **`llama_cpp_qwen25`** canister (defined alongside the
+> default `llama_cpp` / Qwen3 canister in `dfx.json`). On the IC mainnet it is
+> `6uwoh-vaaaa-aaaag-amema-cai`. The `dfx` commands below therefore target
+> `llama_cpp_qwen25`; deploy just that canister with `dfx deploy llama_cpp_qwen25`.
 
 ## Upload the gguf file
 
@@ -30,7 +35,7 @@ Upload it to the canister as `models/model.gguf`:
 ```bash
 python -m scripts.upload \
   --network local \
-  --canister llama_cpp \
+  --canister llama_cpp_qwen25 \
   --canister-filename models/model.gguf \
   --filetype gguf \
   --hf-sha256 "ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e" \
@@ -40,7 +45,7 @@ python -m scripts.upload \
 Check filesize & sha256 in the canister:
 
 ```bash
-dfx canister call llama_cpp uploaded_file_details '(record { filename = "models/model.gguf" })'
+dfx canister call llama_cpp_qwen25 uploaded_file_details '(record { filename = "models/model.gguf" })'
 # ->
 (
   variant {
@@ -60,7 +65,7 @@ Optional pytest QA: `pytest -vv --network local test/test_qwen2.py`
 Qwen2.5-0.5B fits with the default context and only needs the K cache quantized:
 
 ```bash
-dfx canister call llama_cpp load_model '(record {
+dfx canister call llama_cpp_qwen25 load_model '(record {
   args = vec {
     "--model"; "models/model.gguf";
     "--cache-type-k"; "q8_0";
@@ -71,7 +76,7 @@ dfx canister call llama_cpp load_model '(record {
 ## Set max_tokens
 
 ```bash
-dfx canister call llama_cpp set_max_tokens '(record {
+dfx canister call llama_cpp_qwen25 set_max_tokens '(record {
   max_tokens_query = 1 : nat64;
   max_tokens_update = 25 : nat64
 })'
@@ -88,7 +93,7 @@ Qwen2.5 is not a thinking model, so the assistant turn ends right after
 Start a new chat:
 
 ```bash
-dfx canister call llama_cpp new_chat '(record {
+dfx canister call llama_cpp_qwen25 new_chat '(record {
   args = vec { "--prompt-cache"; "prompt.cache"; "--cache-type-k"; "q8_0"; }
 })'
 ```
@@ -97,7 +102,7 @@ Ingest the prompt — repeat until `prompt_remaining` is empty (`-n 1`, keep sen
 the full prompt):
 
 ```bash
-dfx canister call llama_cpp run_update '(record {
+dfx canister call llama_cpp_qwen25 run_update '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
     "--cache-type-k"; "q8_0";
@@ -113,7 +118,7 @@ dfx canister call llama_cpp run_update '(record {
 Generate new tokens — repeat with an empty prompt until `generated_eog=true`:
 
 ```bash
-dfx canister call llama_cpp run_update '(record {
+dfx canister call llama_cpp_qwen25 run_update '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
     "--cache-type-k"; "q8_0";
@@ -129,7 +134,7 @@ dfx canister call llama_cpp run_update '(record {
 Remove the prompt cache when done:
 
 ```bash
-dfx canister call llama_cpp remove_prompt_cache '(record {
+dfx canister call llama_cpp_qwen25 remove_prompt_cache '(record {
   args = vec { "--prompt-cache"; "prompt.cache" }
 })'
 ```

@@ -134,11 +134,16 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
   - Deploy the wasm to a canister on the local network:
 
+    `dfx.json` defines two canisters that share the same wasm: **`llama_cpp`** (the
+    default, serving **Qwen3-0.6B** — the steps below) and **`llama_cpp_qwen25`** (the
+    previous default, **Qwen2.5-0.5B** — see [README-qwen2.5.md](README-qwen2.5.md)).
+    Deploy just the one you need by naming it:
+
     ```bash
-    dfx deploy
+    dfx deploy llama_cpp
 
     # When upgrading the code in the canister, use:
-    dfx deploy -m upgrade
+    dfx deploy llama_cpp -m upgrade
     ```
 
   - Check the health endpoint of the `llama_cpp` canister:
