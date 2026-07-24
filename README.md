@@ -1,19 +1,17 @@
 [![llama_cpp_canister](https://github.com/onicai/llama_cpp_canister/actions/workflows/cicd-mac.yml/badge.svg)](https://github.com/onicai/llama_cpp_canister/actions/workflows/cicd-mac.yml)
 
-# llama.cpp for the Internet Computer.
+# llama.cpp for the Internet Computer
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
-`llama_cpp_canister` allows you to deploy [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) as a Smart Contract on the Internet Computer,
-and run an LLM on-chain as the brain for your on-chain AI Agents.
+`llama_cpp_canister` lets you deploy [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) as a Smart Contract on the Internet Computer and run an LLM fully on-chain — the verifiable brain for your on-chain AI agents. Our recommended default is **Qwen3-0.6B**, run in non-thinking mode for **multi-turn conversations** with up to a ~12K-word context.
 
-- Run any LLM on-chain via the gguf format 🔥
-- Solves your cybersecurity problem 🔐
-- MIT open source 🧑‍💻
-- Well documented 📝
-- Fully QA'd via CI/CD ✅
-- Easy to build, test & deploy 🚧
-- Smoke testing framework using pytest 🚬
+# Capabilities 🔥
+
+- **Run any LLM on-chain** via the gguf format — we recommend **Qwen3-0.6B** ([Qwen/Qwen3-0.6B-GGUF](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF)).
+- **Multi-turn, verifiable inference** — long back-and-forth conversations, entirely on-chain.
+- MIT open source 🧑‍💻 · Well documented 📝 · Fully QA'd via CI/CD ✅
+- Easy to build, test & deploy 🚧 · Smoke-testing framework using pytest 🚬
 
 # In the wild
 
@@ -21,24 +19,16 @@ llama_cpp_canister is used as the on-chain LLM brain inside the following projec
 
 _(Issue a PR to get your project listed)_
 
-| Project    | Description/Tagline                                                 | GitHub                                                 | X                                                 | Token                                      | URL                                               |
-| ---------- | ------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------- | ------------------------------------------ | ------------------------------------------------- |
-| funnAI     | Truly Open AI with Bitcoin Tokenomics, plus much more! | -     | [@onicaiHQ](https://x.com/onicaiHQ) | $FUNNAI | [funnai.onicai.com](https://funnai.onicai.com) |
-| IConfucius | Wisdom fueled by Cycles<br>_Fully on chain AI tokenized on Bitcoin_ | [IConfucius](https://github.com/onicai/IConfucius)     | [@IConfucius_odin](https://x.com/IConfucius_odin) | [$ICONFUCIUS](https://odin.fun/token/29m8) | [onicai.com](https://www.onicai.com/#/iconfucius) |
-| ICGPT      | on-chain LLMs<br>_Chat with on-chain LLMs_                          | [icgpt](https://github.com/icppWorld/icgpt)            | [@onicaiHQ](https://x.com/onicaiHQ)               | -                                          | [icgpt.onicai.com](https://icgpt.onicai.com)      |
+| Project    | Description/Tagline                                                                                       | GitHub                                             | X                                                 | Token                                      | URL                                               |
+| ---------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- | ------------------------------------------ | ------------------------------------------------- |
+| funnAI     | Truly Open AI with Bitcoin Tokenomics, plus much more!                                                    | -                                                  | [@onicaiHQ](https://x.com/onicaiHQ)               | $FUNNAI                                    | [funnai.onicai.com](https://funnai.onicai.com)    |
+| ICGPT      | On-chain Prompt Studio<br>_Optimize your prompts against LLMs running inside Internet Computer canisters_ | [icgpt](https://github.com/icppWorld/icgpt)        | [@onicaiHQ](https://x.com/onicaiHQ)               | -                                          | [icgpt.onicai.com](https://icgpt.onicai.com)      |
+| IConfucius | Wisdom fueled by Cycles<br>_Fully on chain AI tokenized on Bitcoin_                                       | [IConfucius](https://github.com/onicai/IConfucius) | [@IConfucius_odin](https://x.com/IConfucius_odin) | [$ICONFUCIUS](https://odin.fun/token/29m8) | [onicai.com](https://www.onicai.com/#/iconfucius) |
 
 # Need help or have feedback? ❤️
 
 - [OpenChat C++ community](https://oc.app/community/cklkv-3aaaa-aaaar-ar7uq-cai/?ref=6e3y2-4yaaa-aaaaf-araya-cai)
 - [Forum: Llama.cpp on the Internet Computer](https://forum.dfinity.org/t/llama-cpp-on-the-internet-computer/33471?u=icpp)
-
-# Capabilities 🔥
-
-- Deploy any LLM available as a gguf file.
-
-  _(The model must be able to produce at least 1 token per update call)_
-
-- Our largest so far is DeepSeek-R1 1.5B (See [X](https://x.com/onicaiHQ/status/1884339580851151089)).
 
 # Using the release
 
@@ -96,7 +86,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
 - Create a Python environment with dependencies installed
 
-  ❗❗❗ Use Python 3.11 _(This is needed for binaryen.py dependency)_ ❗❗❗
+  ❗❗❗ Use Python 3.11 _(the version CI builds and tests against)_ ❗❗❗
 
   ```bash
   # We use MiniConda
@@ -271,7 +261,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   heap — shrinking it to 64 frees ~2 GiB. That leaves the KV cache as the only thing that
   grows with context, which is how we run **`--ctx-size 16384`** (~12K words of
   conversation) at ~1.76 GiB heap, ~2 GiB under the 3.75 GiB `wasm_memory_limit`. See
-  [Context size & memory](#context-size--memory) for the full mechanism, levers, and
+  [Context size & memory](#appendix-b-context-size--memory) for the full mechanism, levers, and
   **risks**. This assumes you raised the `wasm_memory_limit` to 3.75 GiB (see the
   `update-settings` step above); watch live usage with the `get_memory_status` query.
 
@@ -859,9 +849,38 @@ The `wasm_memory_limit` itself is set with `dfx canister update-settings llama_c
 `initialization_values` when the canister is created through a cycles wallet. Check it
 with `dfx canister status llama_cpp`. If `wasm_heap_bytes` approaches the limit, lower
 `--batch-size`/`--ubatch-size` (biggest win), reduce `--ctx-size`, and/or quantize the KV
-cache (`--cache-type-k`/`-v q8_0`) when loading — see [Context size & memory](#context-size--memory).
+cache (`--cache-type-k`/`-v q8_0`) when loading — see [Context size & memory](#appendix-b-context-size--memory).
 
-# Context size & memory
+# Wasm Verification (pre onicai SNS)
+
+Anyone can independently verify that the deployed funnAI LLM canisters run the exact code built from this repo. See [README-wasm-verification.md](README-wasm-verification.md).
+
+# Appendix A: max_tokens
+
+The size and settings for models impact the number of tokens that can be generated
+in 1 update call before hitting the instruction limit of the Internet Computer.
+
+The instruction limit is 40 billion instructions per update call
+
+We tested several LLM models available on HuggingFace:
+
+| Model                                                                                     | # weights | file size | quantization | --cache-type-k | max*tokens<br> *(ingestion)\_ | max*tokens<br> *(generation)\_ |
+| ----------------------------------------------------------------------------------------- | --------- | --------- | ------------ | -------------- | ----------------------------- | ------------------------------ |
+| [Qwen3-0.6B-Q8_0.gguf](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF) (default)             | 600 M     | 0.64 GB   | q8_0         | q8_0           | -                             | 25                             |
+| [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF) | 630 M     | 0.68 GB   | q8_0         | q8_0           | -                             | 25                             |
+
+_(We have benchmarked other models too — SmolLM2, Llama-3.2, DeepSeek-R1 1.5B, and other Qwen2.5 quants — but their pre-b10076 numbers must be re-measured before we list them here.)_
+
+NOTEs:
+
+- **`Qwen3-0.6B-Q8_0` is the current default** (top row): ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --batch-size 64 --ubatch-size 64 --ctx-size 16384` and a `wasm_memory_limit` of 3.75 GiB; the small batch shrinks the compute buffers so a 16K context fits with ~2 GiB headroom — see [Context size & memory](#appendix-b-context-size--memory) for the mechanism, levers, and risks.
+- **`qwen2.5-0.5b-instruct-q8_0` was re-measured on b10076**: 25 tokens/call sustained, 28 first-call ceiling — up ~2.8x from ~10, thanks to the hand-written WASM SIMD q8_0 kernel.
+- During prompt ingestion phase, the max_tokens before hitting the instruction limit is higher as during the generation phase.
+- We use `"--temp"; "0.6"; "--repeat-penalty"; "1.1";`, as recommended on several model cards
+- For each model, we selected a `--cache-type-k` that gives the highest max_tokens while still providing good results.
+- The python notebook [scripts/promt-design.ipynb](./scripts/prompt-design.ipynb) allows you to try out these models w/o using an IC canister, to decide what model will work best for your on-chain AI agent
+
+# Appendix B: Context size & memory
 
 Qwen3-0.6B runs in a **wasm32 linear heap capped by `wasm_memory_limit`** (we set 3.75
 GiB — wasm32 cannot address a full 4 GiB). Weights, KV cache, and compute buffers all live
@@ -870,7 +889,7 @@ mechanism, the levers, and the risks.
 
 ### Where the heap goes
 
-- **Weights (~0.64 GiB)** — the q8_0 model, read into the heap at `load_model`. Fixed.
+- **Weights (~0.64 GiB)** — the q8_0 model, read into the heap at `load_model`.
 - **KV cache (scales with context)** — preallocated for the *entire* `--ctx-size` at
   `load_model`, committed whether or not the conversation ever fills it. With dual-q8_0
   caching this is ~50 KB per context token for Qwen3-0.6B (8 KV heads × 28 layers).
@@ -899,7 +918,7 @@ the **KV cache is the only thing that grows with `--ctx-size`**. Measured with f
 | 32768 | ~24K | ~2.6 GiB | ~1.1 GiB |
 | 40960 (native max) | ~30K | ~3.0 GiB | ~0.7 GiB |
 
-We ship **`--ctx-size 16384` with `--batch-size 64 --ubatch-size 64`**: ~12,000 words of
+Our default is **`--ctx-size 16384` with `--batch-size 64 --ubatch-size 64`**: ~12,000 words of
 conversation (16× the old ctx-1024 default) with a comfortable ~2 GiB safety margin,
 verified end-to-end on mainnet. You can push `--ctx-size` toward the native 40960 (~30K
 words) if you accept a tighter margin.
@@ -908,93 +927,18 @@ words) if you accept a tighter margin.
 
 Memory here is a hard wall, and hitting it is **not** a graceful error. If a `load_model`
 or (more likely) an inference call needs to grow the heap past `wasm_memory_limit`, the
-canister traps with `heap out of bounds` (IC0502). Worse: because the heap is orthogonally
-persisted, that trap can leave the allocator corrupted, after which **every** subsequent
-call — even a previously-fine `load_model` — also traps. An `upgrade` does **not** clear it
-(OP working memory is restored from stable memory on upgrade). Recovery requires a
+canister traps with `heap out of bounds` (IC0502). Recovery requires a
 **`dfx canister install --mode reinstall`** (which wipes the heap *and* the uploaded model),
 then **re-uploading the gguf** and reloading.
 
 Practical guidance:
-- Keep real headroom (the shipped 16384 leaves ~2 GiB) rather than maxing out `--ctx-size`.
+- Keep real headroom (the default 16384 leaves ~2 GiB) rather than maxing out `--ctx-size`.
 - The KV cost is committed at `load_model`, so a load that succeeds with headroom will not
   surprise you mid-conversation. Watch `wasm_heap_bytes` with `get_memory_status`.
 - A pre-decode headroom guard (a clean `Err` instead of a trap) is planned hardening; until
   then, treat the memory limit as a wall to stay well clear of.
 
-# Wasm Verification (pre onicai SNS)
-
-> **NOTE:** This workflow was created for the **pre onicai SNS verification
-> process** ([NNS Proposal 140268](https://dashboard.internetcomputer.org/proposal/140268)).
-> It pins the build environment to icpp-pro 5.3.0 / Rust 1.86.0 to reproduce the
-> exact wasm from the v0.7.3 release that is currently deployed to the funnAI LLM
-> canisters. **Post onicai SNS, the build process and pinned versions must be
-> updated** to match the then-current release and toolchain.
-
-The GitHub Actions workflow [verify-funnAI-LLMs](.github/workflows/verify-funnAI-LLMs.yml) verifies that the `llama_cpp.wasm` built from this repo matches the wasm deployed to the funnAI LLM canisters on the Internet Computer mainnet.
-
-Anyone can independently verify that the on-chain LLM canisters are running the exact code from this open-source repo.
-
-**What it does:**
-
-1. Builds `llama_cpp.wasm` from source (same build steps as the release workflow)
-2. Computes the sha256 hash of the built wasm
-3. Queries the module hash of each deployed funnAI LLM canister on IC mainnet via `dfx canister info`
-4. Compares the hashes and reports pass/fail for each canister
-
-**Canisters verified (30 total):**
-
-| Category                        | Count | Description                                |
-| ------------------------------- | ----- | ------------------------------------------ |
-| funnAI Challenger LLM           | 1     | Generates challenges for the funnAI game   |
-| funnAI Judge LLMs               | 16    | Judge responses in the funnAI game         |
-| funnAI mAIner ShareService LLMs | 13    | Provide LLM inference for mAIner services  |
-
-**How to run:**
-
-Trigger the workflow manually from the Actions tab on GitHub (`workflow_dispatch`).
-
-# Acknowledgments
-
-The b10076 upgrade — recovering ~2.8x generation throughput for Q8_0 models — was motivated and informed by the work of **Julien Aerni** (Meotis Sàrl), **Siméon Fluck** (Kaizen Corp SA), and **Dustin Becker** (ORIGYN Foundation):
-
-- Their [forum analysis](https://forum.dfinity.org/t/on-chain-llm-inference-under-instruction-budgets-measured-live-on-icp-mainnet/74709) diagnosed that the previous build ran the `ggml_vec_dot_q8_0_q8_0` matmul kernel without a hand-written WASM SIMD path — the deficiency this upgrade fixes.
-- We adapted their **WASI shim strategy** (no-op `<thread>`/`<mutex>`/`<future>`/`<condition_variable>` plus exception/dl stubs) for building recent llama.cpp on ICP, replacing the earlier per-file patching approach.
-
-Their preprint: _On-Chain LLM Inference Under Instruction Budgets: An Instruction-Budget Cost Model, Ternary Floor Evidence, and Session Costs_ (2026), DOI [10.5281/zenodo.20607598](https://doi.org/10.5281/zenodo.20607598). The companion artifact is MIT-licensed.
-
-# Appendix A: max_tokens
-
-The size and settings for models impact the number of tokens that can be generated
-in 1 update call before hitting the instruction limit of the Internet Computer.
-
-The instruction limit is 40 billion instructions per update call
-
-We tested several LLM models available on HuggingFace:
-
-| Model                                                                                                                    | # weights | file size | quantization   | --cache-type-k | max*tokens<br> *(ingestion)\_ | max*tokens<br> *(generation)\_ |
-| ------------------------------------------------------------------------------------------------------------------------ | --------- | --------- | -------------- | -------------- | ----------------------------- | ------------------------------ |
-| [Qwen3-0.6B-Q8_0.gguf](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF) (default)                                            | 600 M     | 0.64 GB   | q8_0           | q8_0           | -                             | 25                             |
-| [SmolLM2-135M-Instruct-Q8_0.gguf](https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF)                         | 135 M     | 0.15 GB   | q8_0           | f16            | -                             | ~~40~~                         |
-| [qwen2.5-0.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                              | 630 M     | 0.49 GB   | q4_k_m         | f16            | -                             | ~~14~~                         |
-| [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)                                | 630 M     | 0.68 GB   | q8_0           | q8_0           | -                             | 25                             |
-| [Llama-3.2-1B-Instruct-Q4_K_M.gguf](https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF)                           | 1.24 B    | 0.81 GB   | q4_k_m         | q5_0           | ~~5~~                         | ~~4~~                          |
-| [qwen2.5-1.5b-instruct-q4_k_m.gguf](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF)                              | 1.78 B    | 1.10 GB   | q4_k_m         | q8_0           | -                             | ~~3~~                          |
-| [DeepSeek-R1-Distill-Qwen-1.5B-NexaQuant.gguf](https://huggingface.co/NexaAIDev/DeepSeek-R1-Distill-Qwen-1.5B-NexaQuant) | 1.78 B    | 1.34 GB   | NexaQuant-4Bit | f16            | ~~4~~                         | ~~3~~                          |
-| [DeepSeek-R1-Distill-Qwen-1.5B-Q6_K.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)             | 1.78 B    | 1.46 GB   | q6_k           | q8_0           | ~~4~~                         | ~~3~~                          |
-| [DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)           | 1.78 B    | 1.12 GB   | q4_k_m         | q8_0           | ~~4~~                         | ~~3~~                          |
-| [DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf](https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)             | 1.78 B    | 0.75 GB   | q2_k           | q8_0           | ~~2~~                         | ~~2~~                          |
-
-NOTEs:
-
-- **`Qwen3-0.6B-Q8_0` is the current default** (top row): ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --batch-size 64 --ubatch-size 64 --ctx-size 16384` and a `wasm_memory_limit` of 3.75 GiB; the small batch shrinks the compute buffers so a 16K context fits with ~2 GiB headroom — see [Context size & memory](#context-size--memory) for the mechanism, levers, and risks.
-- **The ~~struck-through~~ values are from the pre-b10076 build and must be re-determined.** Of the older rows, only `qwen2.5-0.5b-instruct-q8_0` was re-measured on b10076: 25 tokens/call sustained, 28 first-call ceiling — up ~2.8x from ~10, thanks to the hand-written WASM SIMD q8_0 kernel.
-- During prompt ingestion phase, the max_tokens before hitting the instruction limit is higher as during the generation phase.
-- We use `"--temp"; "0.6"; "--repeat-penalty"; "1.1";`, as recommended on several model cards
-- For each model, we selected a `--cache-type-k` that gives the highest max_tokens while still providing good results.
-- The python notebook [scripts/promt-design.ipynb](./scripts/prompt-design.ipynb) allows you to try out these models w/o using an IC canister, to decide what model will work best for your on-chain AI agent
-
-# Appendix B: heap-out-of-bounds
+# Appendix C: heap-out-of-bounds
 
 If you encounter a `heap out of bounds` error during `load_model`, this is likely a stack overflow in disguise. The WebAssembly runtime cannot distinguish between stack and heap memory violations.
 
@@ -1011,3 +955,12 @@ For larger models, increase further (e.g., 16MB: `16777216`, 32MB: `33554432`).
 Then rebuild with `icpp build-wasm`.
 
 **Reference:** [DFINITY Forum discussion](https://forum.dfinity.org/t/heap-out-of-bounds-error-code-some-ic0502-on-c-code-run/25289)
+
+# Acknowledgments
+
+The b10076 upgrade — recovering ~2.8x generation throughput for Q8_0 models — was motivated and informed by the work of **Julien Aerni** (Meotis Sàrl), **Siméon Fluck** (Kaizen Corp SA), and **Dustin Becker** (ORIGYN Foundation):
+
+- Their [forum analysis](https://forum.dfinity.org/t/on-chain-llm-inference-under-instruction-budgets-measured-live-on-icp-mainnet/74709) diagnosed that the previous build ran the `ggml_vec_dot_q8_0_q8_0` matmul kernel without a hand-written WASM SIMD path — the deficiency this upgrade fixes.
+- We adapted their **WASI shim strategy** (no-op `<thread>`/`<mutex>`/`<future>`/`<condition_variable>` plus exception/dl stubs) for building recent llama.cpp on ICP, replacing the earlier per-file patching approach.
+
+Their preprint: _On-Chain LLM Inference Under Instruction Budgets: An Instruction-Budget Cost Model, Ternary Floor Evidence, and Session Costs_ (2026), DOI [10.5281/zenodo.20607598](https://doi.org/10.5281/zenodo.20607598). The companion artifact is MIT-licensed.

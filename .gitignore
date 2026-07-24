@@ -156,3 +156,6 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Local working notes (not published)
+README-max-tokens-todo.md
