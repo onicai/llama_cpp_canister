@@ -1,5 +1,8 @@
 {
   "llama_cpp": {
+    "ic": "6uo7o-dyaaa-aaaag-ay5ha-cai"
+  },
+  "llama_cpp_qwen25": {
     "ic": "6uwoh-vaaaa-aaaag-amema-cai"
   }
 }

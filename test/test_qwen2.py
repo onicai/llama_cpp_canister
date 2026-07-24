@@ -28,7 +28,7 @@ from icpp.smoketest import call_canister_api, dict_to_candid_text
 DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
 
 # Canister in the dfx.json file we want to test
-CANISTER_NAME = "llama_cpp"
+CANISTER_NAME = "llama_cpp_qwen25"
 
 def test__load_model(network: str) -> None:
     response = call_canister_api(

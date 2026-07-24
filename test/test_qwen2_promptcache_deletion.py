@@ -32,7 +32,7 @@ from typing import Dict, Optional
 from icpp.smoketest import call_canister_api
 
 DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
-CANISTER_NAME = "llama_cpp"
+CANISTER_NAME = "llama_cpp_qwen25"
 
 # Defaults baked into src/cache_cleanup.cpp — used to restore state between
 # tests so the next pytest run starts from a known config.

@@ -5,6 +5,11 @@
       "type": "custom",
       "candid": "build/llama_cpp.did",
       "wasm": "build/llama_cpp.wasm"
+    },
+    "llama_cpp_qwen25": {
+      "type": "custom",
+      "candid": "build/llama_cpp.did",
+      "wasm": "build/llama_cpp.wasm"
     }
   },
   "defaults": {
