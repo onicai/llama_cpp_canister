@@ -174,6 +174,9 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
   _(For the previous default, Qwen2.5-0.5B, see [README-qwen2.5.md](README-qwen2.5.md).)_
 
+  _(For a larger, stronger model — noticeably better at instruction-following,
+  negation, and secret-keeping — see [README-qwen3-1.7B.md](README-qwen3-1.7B.md).)_
+
   - Download the model from huggingface: https://huggingface.co/Qwen/Qwen3-0.6B-GGUF
 
     Store it in: `models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf`
