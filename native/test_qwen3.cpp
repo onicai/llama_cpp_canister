@@ -39,13 +39,15 @@ void test_qwen3(MockIC &mockIC) {
   // load_model with the tuned Qwen3 config (memory-marginal in wasm; on native
   // there is no wasm memory limit so it loads regardless):
   // '(record { args = vec {"--model"; "models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf";
-  //   "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0"; "--ctx-size"; "1024"} })'
+  //   "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0"; "--batch-size"; "64";
+  //   "--ubatch-size"; "64"; "--ctx-size"; "16384"} })'
   test_name = std::string(__func__) + ": " + "load_model - " + model;
   candid_in =
-      "4449444c026c01dd9ad28304016d71010008072d2d6d6f64656c306d6f64656c732f5177656e2f"
-      "5177656e332d302e36422d474755462f5177656e332d302e36422d51385f302e676775660e2d2d"
-      "63616368652d747970652d6b0471385f300e2d2d63616368652d747970652d760471385f300a2d"
-      "2d6374782d73697a650431303234";
+      "4449444c026c01dd9ad28304016d7101000c072d2d6d6f64656c306d6f64656c732f5177656e"
+      "2f5177656e332d302e36422d474755462f5177656e332d302e36422d51385f302e676775660e"
+      "2d2d63616368652d747970652d6b0471385f300e2d2d63616368652d747970652d760471385f"
+      "300c2d2d62617463682d73697a650236340d2d2d7562617463682d73697a650236340a2d2d63"
+      "74782d73697a65053136333834";
   // Load-success OutputRecord is model-independent:
   // '(variant { Ok = record { status_code = 200; input=""; prompt_remaining="";
   //   output="Model succesfully loaded into memory."; error=""; generated_eog=false } })'

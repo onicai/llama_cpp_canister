@@ -254,18 +254,26 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
       "--model"; "models/model.gguf";
       "--cache-type-k"; "q8_0";
       "--cache-type-v"; "q8_0";
-      "--ctx-size"; "1024";
+      "--batch-size"; "64";
+      "--ubatch-size"; "64";
+      "--ctx-size"; "16384";
     }
   })'
   ```
 
-  **Why these args for Qwen3-0.6B?** Qwen3-0.6B has a much larger KV cache than
-  Qwen2.5-0.5B (8 KV heads / 28 layers vs 2 / 24). At its default ~40K context the
-  KV cache does not fit in the wasm heap, so we cap the context (`--ctx-size 1024`,
-  ample for the ~600-token chat use case) and quantize **both** the K and V caches
-  (`q8_0`). This also assumes you raised the `wasm_memory_limit` to 3.75 GiB (see the
-  `update-settings` step above). You can watch usage with the `get_memory_status`
-  query (see below).
+  **Why these args for Qwen3-0.6B?** Two levers keep a large context inside the wasm
+  heap. First, we quantize **both** the K and V caches (`q8_0`), which halves the KV
+  cache. Second — the key one — we set a small **`--batch-size 64 --ubatch-size 64`**.
+  llama.cpp's compute buffers scale with batch size (the output/logits buffer is
+  `batch × vocab` ≈ **1.2 GiB** at the default batch of 2048 for Qwen3's ~152K vocab; the
+  attention buffer is `ubatch × ctx`). A canister serves one request at a time and is
+  instruction-limited on the IC, so a large batch buys nothing here but costs GiBs of
+  heap — shrinking it to 64 frees ~2 GiB. That leaves the KV cache as the only thing that
+  grows with context, which is how we run **`--ctx-size 16384`** (~12K words of
+  conversation) at ~1.76 GiB heap, ~2 GiB under the 3.75 GiB `wasm_memory_limit`. See
+  [Context size & memory](#context-size--memory) for the full mechanism, levers, and
+  **risks**. This assumes you raised the `wasm_memory_limit` to 3.75 GiB (see the
+  `update-settings` step above); watch live usage with the `get_memory_status` query.
 
 - Set the max_tokens for this model, to avoid it hits the IC's instruction limit
 
@@ -433,7 +441,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     <path-to>/llama-cli \
       -m /models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf \
       --prompt-cache prompt.cache --prompt-cache-all \
-      --cache-type-k q8_0 --cache-type-v q8_0 --ctx-size 1024 \
+      --cache-type-k q8_0 --cache-type-v q8_0 --batch-size 64 --ubatch-size 64 --ctx-size 16384 \
       --repeat-penalty 1.1 \
       --temp 0.6 \
       -sp \
@@ -839,8 +847,8 @@ dfx canister call llama_cpp get_memory_status
 (
   variant {
     Ok = record {
-      wasm_heap_bytes = 2_365_587_456 : nat64;   # wasm linear-memory high-water-mark
-      stable_bytes = 671_088_640 : nat64;        # model file + virtual filesystem
+      wasm_heap_bytes = 1_758_068_736 : nat64;   # linear-memory high-water-mark (~1.76 GiB at ctx 16384)
+      stable_bytes = 1_132_527_616 : nat64;      # model file + virtual filesystem
     }
   },
 )
@@ -849,8 +857,70 @@ dfx canister call llama_cpp get_memory_status
 The `wasm_memory_limit` itself is set with `dfx canister update-settings llama_cpp
 --wasm-memory-limit 4026531840` (see the setup steps) — it cannot go in `dfx.json`'s
 `initialization_values` when the canister is created through a cycles wallet. Check it
-with `dfx canister status llama_cpp`. If `wasm_heap_bytes` approaches the limit, reduce
-`--ctx-size` and/or quantize the KV cache (`--cache-type-k`/`-v q8_0`) when loading.
+with `dfx canister status llama_cpp`. If `wasm_heap_bytes` approaches the limit, lower
+`--batch-size`/`--ubatch-size` (biggest win), reduce `--ctx-size`, and/or quantize the KV
+cache (`--cache-type-k`/`-v q8_0`) when loading — see [Context size & memory](#context-size--memory).
+
+# Context size & memory
+
+Qwen3-0.6B runs in a **wasm32 linear heap capped by `wasm_memory_limit`** (we set 3.75
+GiB — wasm32 cannot address a full 4 GiB). Weights, KV cache, and compute buffers all live
+in that heap, so context length is ultimately a memory-budget question. Here is the
+mechanism, the levers, and the risks.
+
+### Where the heap goes
+
+- **Weights (~0.64 GiB)** — the q8_0 model, read into the heap at `load_model`. Fixed.
+- **KV cache (scales with context)** — preallocated for the *entire* `--ctx-size` at
+  `load_model`, committed whether or not the conversation ever fills it. With dual-q8_0
+  caching this is ~50 KB per context token for Qwen3-0.6B (8 KV heads × 28 layers).
+- **Compute buffers (scale with batch)** — allocated for the forward pass. Two matter:
+  the **output/logits buffer ≈ `batch × vocab`** (at the default `--batch-size 2048` and
+  Qwen3's ~152K vocab that alone is **~1.2 GiB**) and the **attention buffer ≈
+  `ubatch × ctx`**. With a small batch these become negligible and stop dominating.
+
+### The levers
+
+| Lever | Effect | Cost on the IC |
+| --- | --- | --- |
+| `--batch-size` / `--ubatch-size` | Shrinks the compute buffers. 2048/512 → **64/64** frees ~2 GiB. | ≈none — a canister serves one request at a time and prefill is already instruction-limited, so large batches buy nothing here. |
+| `--cache-type-k` / `--cache-type-v` `q8_0` | Halves the KV cache vs f16. | Negligible quality impact. |
+| `--ctx-size` | Sets conversation length **and** the preallocated KV cache. | Longer context = more KV heap. |
+| `wasm_memory_limit` | The ceiling itself (≤ 3.75 GiB on wasm32). | Set via `update-settings`. |
+
+With `--batch-size 64 --ubatch-size 64` the compute buffers stop scaling with context, so
+the **KV cache is the only thing that grows with `--ctx-size`**. Measured with full prefill
++ multi-turn generation (16384 on mainnet; larger sizes from the local batch-64 sweep):
+
+| `--ctx-size` | ≈ words | wasm heap (peak) | headroom to 3.75 GiB |
+| ------------ | ------- | ---------------- | -------------------- |
+| 1024 (old default) | ~750 | ~1.0 GiB | ~2.7 GiB |
+| **16384** *(default)* | **~12K** | **1.76 GiB** | **~2.0 GiB** |
+| 32768 | ~24K | ~2.6 GiB | ~1.1 GiB |
+| 40960 (native max) | ~30K | ~3.0 GiB | ~0.7 GiB |
+
+We ship **`--ctx-size 16384` with `--batch-size 64 --ubatch-size 64`**: ~12,000 words of
+conversation (16× the old ctx-1024 default) with a comfortable ~2 GiB safety margin,
+verified end-to-end on mainnet. You can push `--ctx-size` toward the native 40960 (~30K
+words) if you accept a tighter margin.
+
+### ⚠️ The risk — a memory trap bricks the canister
+
+Memory here is a hard wall, and hitting it is **not** a graceful error. If a `load_model`
+or (more likely) an inference call needs to grow the heap past `wasm_memory_limit`, the
+canister traps with `heap out of bounds` (IC0502). Worse: because the heap is orthogonally
+persisted, that trap can leave the allocator corrupted, after which **every** subsequent
+call — even a previously-fine `load_model` — also traps. An `upgrade` does **not** clear it
+(OP working memory is restored from stable memory on upgrade). Recovery requires a
+**`dfx canister install --mode reinstall`** (which wipes the heap *and* the uploaded model),
+then **re-uploading the gguf** and reloading.
+
+Practical guidance:
+- Keep real headroom (the shipped 16384 leaves ~2 GiB) rather than maxing out `--ctx-size`.
+- The KV cost is committed at `load_model`, so a load that succeeds with headroom will not
+  surprise you mid-conversation. Watch `wasm_heap_bytes` with `get_memory_status`.
+- A pre-decode headroom guard (a clean `Err` instead of a trap) is planned hardening; until
+  then, treat the memory limit as a wall to stay well clear of.
 
 # Wasm Verification (pre onicai SNS)
 
@@ -917,7 +987,7 @@ We tested several LLM models available on HuggingFace:
 
 NOTEs:
 
-- **`Qwen3-0.6B-Q8_0` is the current default** (top row): ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --ctx-size 1024` and a `wasm_memory_limit` of 3.75 GiB (its KV cache is ~4x Qwen2.5's); see the main README.
+- **`Qwen3-0.6B-Q8_0` is the current default** (top row): ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --batch-size 64 --ubatch-size 64 --ctx-size 16384` and a `wasm_memory_limit` of 3.75 GiB; the small batch shrinks the compute buffers so a 16K context fits with ~2 GiB headroom — see [Context size & memory](#context-size--memory) for the mechanism, levers, and risks.
 - **The ~~struck-through~~ values are from the pre-b10076 build and must be re-determined.** Of the older rows, only `qwen2.5-0.5b-instruct-q8_0` was re-measured on b10076: 25 tokens/call sustained, 28 first-call ceiling — up ~2.8x from ~10, thanks to the hand-written WASM SIMD q8_0 kernel.
 - During prompt ingestion phase, the max_tokens before hitting the instruction limit is higher as during the generation phase.
 - We use `"--temp"; "0.6"; "--repeat-penalty"; "1.1";`, as recommended on several model cards

@@ -11,9 +11,11 @@ Deploy + upload the model as `models/model.gguf`, then:
 $ pytest -vv --network local test/test_qwen3.py
 
 Notes:
-- Requires the tuned config: dfx.json sets wasm_memory_limit (3.75 GiB); load_model
-  uses --ctx-size 1024 --cache-type-k q8_0 --cache-type-v q8_0 (Qwen3's KV cache is
-  ~4x Qwen2.5's, so it needs a capped context + dual-quantized cache to fit).
+- Requires the tuned config: the canister's wasm_memory_limit is raised to 3.75 GiB
+  (via `dfx canister update-settings`), and load_model uses --ctx-size 16384
+  --batch-size 64 --ubatch-size 64 --cache-type-k q8_0 --cache-type-v q8_0. The small
+  batch shrinks the compute buffers so the KV cache is the only thing scaling with
+  context; ctx 16384 sits at ~1.76 GiB heap (~2 GiB headroom under the 3.75 GiB limit).
 """
 
 # pylint: disable=missing-function-docstring, line-too-long
@@ -107,7 +109,8 @@ def test__load_model(network: str) -> None:
         network,
         "load_model",
         '(record { args = vec {"--model"; "models/model.gguf"; '
-        f'{_CACHE}; "--ctx-size"; "1024"}} }})',
+        f'{_CACHE}; "--batch-size"; "64"; "--ubatch-size"; "64"; '
+        '"--ctx-size"; "16384"} })',
     )
     assert "(variant { Ok" in response
 
