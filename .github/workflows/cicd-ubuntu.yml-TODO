@@ -52,7 +52,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install build-essential
           make summary
-          make install-dfx
+          make install-icp
           make install-python
           make install-clang-ubuntu
           make install-jp-ubuntu
@@ -68,7 +68,7 @@ jobs:
           echo "python version  : $(python --version)"
           echo "jp version      : $(jp --version)"
           #echo "rustc version   : $(rustc --version)"
-          echo "dfx version    : $(dfx --version)"
+          echo "icp version    : $(icp --version)"
           echo "Ensure conda works properly"
           conda info
           which pip
