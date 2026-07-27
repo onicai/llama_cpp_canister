@@ -33,22 +33,23 @@ unzip /tmp/llama_cpp_release_test/llama_cpp_canister_<TAG>.zip -d /tmp/llama_cpp
 
 All subsequent commands run from `/tmp/llama_cpp_release_test/<TAG>/`.
 
-Sanity-check the zip: `build/llama_cpp.wasm` + `build/llama_cpp.did` present, `dfx.json`
+Sanity-check the zip: `build/llama_cpp.wasm` + `build/llama_cpp.did` present, `icp.yaml`
 has **two** canisters (`llama_cpp` + `llama_cpp_qwen25`), and `test/test_qwen3.py` exists.
 
-## 2. Start from a CLEAN local replica
+## 2. Start from a CLEAN local network
 
-IMPORTANT (learned the hard way): a stale / long-running shared replica makes
-`dfx start --clean` hang and the deploy time out with no error. Force a clean slate first:
+icp-cli runs one local network **per project** and has no `--clean` flag. The
+clean-slate equivalent is to stop the network and remove the disposable cache. NEVER
+remove `.icp/data` — it holds committed mainnet id mappings; only `.icp/cache` is
+disposable:
 
 ```bash
-dfx stop 2>/dev/null || true
+icp network stop 2>/dev/null || true   # exits non-zero when none is running — that's fine
 pkill -f pocket-ic 2>/dev/null || true
-pkill -f 'dfinity/versions/.*/dfx' 2>/dev/null || true
-dfx ping 2>&1 | grep -q healthy && echo "STILL UP — investigate" || echo "replica down (good)"
+rm -rf .icp/cache
 ```
 
-Verify dfx version >= 0.31.0 (`dfx --version`); warn the user if lower.
+Verify the icp-cli version (`icp --version`); this flow was validated on 1.2.0.
 
 ## 3. Create conda environment + install deps
 
@@ -65,27 +66,24 @@ pip install -r requirements.txt
 
 ## 4. Deploy + configure the Qwen3 canister
 
-`dfx.json` defines two canisters — deploy **`llama_cpp`** (the Qwen3 default), not a bare
-`dfx deploy`.
+`icp.yaml` defines two canisters — deploy **`llama_cpp`** (the Qwen3 default), not both.
+`icp network start -d` picks a random ephemeral port; never hardcode `localhost:8000`.
 
 ```bash
 cd /tmp/llama_cpp_release_test/<TAG>
-dfx start --clean --background
-# NOTE: `dfx start --background` sometimes does not return cleanly even though the replica
-# IS up. If it hangs, verify with `dfx ping` (expect "healthy") and kill the hung starter
-# (`pkill -f "dfx start --clean"`) — the replica keeps running. Then proceed.
-dfx deploy llama_cpp --network local
-dfx canister update-settings llama_cpp --wasm-memory-limit 4026531840   # 3.75 GiB — REQUIRED for Qwen3
-dfx ledger fabricate-cycles --canister llama_cpp --t 20
-dfx canister call llama_cpp health                                       # -> Ok 200
-dfx canister status llama_cpp | grep "Wasm memory limit"                 # -> 4_026_531_840
+icp network start -d
+icp deploy llama_cpp -e local -y
+icp canister settings update llama_cpp --wasm-memory-limit 4026531840 -e local   # 3.75 GiB — REQUIRED for Qwen3
+icp canister top-up llama_cpp --amount 20000000000000 -e local                   # ~20T cycles
+icp canister call llama_cpp health '()' -e local --query                         # -> Ok 200
+icp canister status llama_cpp -e local | grep "Wasm memory limit"                # -> 4_026_531_840
 ```
 
 ## 5. Check the get_memory_status endpoint (new in v0.13.0)
 
 ```bash
-dfx canister call llama_cpp get_memory_status                            # -> Ok { wasm_heap_bytes; stable_bytes }
-dfx canister call llama_cpp get_memory_status --identity anonymous       # -> Err "Access Denied"
+icp canister call llama_cpp get_memory_status '()' -e local --query                      # -> Ok { wasm_heap_bytes; stable_bytes }
+icp canister call llama_cpp get_memory_status '()' -e local --query --identity anonymous  # -> Err "Access Denied"
 ```
 
 ## 6. Get the Qwen3 model
@@ -116,7 +114,7 @@ python -m scripts.upload --network local --canister llama_cpp \
   models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf
 ```
 
-Optionally confirm on-chain: `dfx canister call llama_cpp uploaded_file_details
+Optionally confirm on-chain: `icp canister call llama_cpp -e local uploaded_file_details
 '(record { filename = "models/model.gguf" })'` → filesize `639_446_688`, matching sha256.
 
 ## 8. Run pytest
@@ -141,7 +139,7 @@ deterministic failure of the other tests is a real problem.
 ## 9. (Optional) Qwen2.5 regression
 
 The release also serves the previous default, Qwen2.5-0.5B, via the `llama_cpp_qwen25`
-canister and `test/test_qwen2.py`. To exercise it: `dfx deploy llama_cpp_qwen25`, download
+canister and `test/test_qwen2.py`. To exercise it: `icp deploy llama_cpp_qwen25 -e local -y`, download
 the Qwen2.5 gguf (sha256 `ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e`),
 upload it to `llama_cpp_qwen25`, then `pytest -vv --network local test/test_qwen2.py`.
 
@@ -149,7 +147,7 @@ upload it to `llama_cpp_qwen25`, then `pytest -vv --network local test/test_qwen
 
 ```bash
 cd /tmp/llama_cpp_release_test/<TAG>
-dfx stop
+icp network stop
 ```
 
 Ask the user if they want to remove the test directory and conda environment. If yes:

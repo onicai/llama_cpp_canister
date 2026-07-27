@@ -7,7 +7,7 @@ $ icp deploy -e local -y
 Then run the tests:
 $ pytest -vv --network local test/test_promptcache.py
 
-To run it against a deployment to the IC, just replace `local` with `ic` in the commands above.
+To run it against a deployment to the IC, just replace `local` with `production` in the commands above.
 
 """
 # pylint: disable=missing-function-docstring, unused-import, wildcard-import, unused-wildcard-import, line-too-long
@@ -15,7 +15,7 @@ To run it against a deployment to the IC, just replace `local` with `ic` in the 
 from pathlib import Path
 from typing import Dict
 import pytest
-from icpp.smoketest import call_canister_api, dict_to_candid_text
+from .candid_compat import call_canister_api, dict_to_candid_text, norm
 
 # Path to the icp.yaml file
 ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
@@ -34,7 +34,7 @@ def test__upload_prompt_cache_file(network: str, principal: str) -> None:
         network=network,
     )
     expected_response = f'(variant {{ Ok = record {{ filename = ".canister_cache/{principal}/sessions/prompt.cache"; filesize = 5 : nat64; filesha256 = "fe3b34fd092c3e2c6da3270eb91c4d3e9c2c6f891c21b6ed7358bf5ecca2d207";}} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
     response = call_canister_api(
         icp_yaml_path=ICP_YAML_PATH,
@@ -44,7 +44,7 @@ def test__upload_prompt_cache_file(network: str, principal: str) -> None:
         network=network,
     )
     expected_response = f'(variant {{ Ok = record {{ filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filesize = 5 : nat64; filesha256 = "fd789322b6e4d1a517f1b75768f0f9ebc5747076811ee04e8a5f0731320f4884";}} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 # ------------------------------------------------------------------
 def test__recursive_dir_content_non_existing(network: str, principal: str) -> None:
@@ -56,7 +56,7 @@ def test__recursive_dir_content_non_existing(network: str, principal: str) -> No
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "recursive_dir_content_: Directory does not exist: does_not_exist\\n" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
     response = call_canister_api(
         icp_yaml_path=ICP_YAML_PATH,
@@ -66,7 +66,7 @@ def test__recursive_dir_content_non_existing(network: str, principal: str) -> No
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "recursive_dir_content_: Directory does not exist: does_not_exist\\n" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
     # double check the identity_anonymous fixture worked
@@ -83,7 +83,7 @@ def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], ne
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
     response = call_canister_api(
         icp_yaml_path=ICP_YAML_PATH,
@@ -93,7 +93,7 @@ def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], ne
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 # This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
 #
@@ -130,7 +130,7 @@ def test__recursive_dir_content_controller(network: str, principal: str) -> None
         network=network,
     )
     expected_response = f'(variant {{ Ok = vec {{ record {{ filename = ".canister_cache/{principal}"; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions"; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions/prompt.cache"; filetype = "file";}}; record {{ filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filetype = "file";}};}} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
     response = call_canister_api(
         icp_yaml_path=ICP_YAML_PATH,
@@ -140,7 +140,7 @@ def test__recursive_dir_content_controller(network: str, principal: str) -> None
         network=network,
     )
     expected_response = f'(variant {{ Ok = vec {{ record {{ filename = ".canister_cache/{principal}"; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions"; filetype = "directory";}}; record {{ filename = ".canister_cache/{principal}/sessions/prompt.cache"; filetype = "file";}}; record {{ filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filetype = "file";}};}} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 # ------------------------------------------------------------------
 def test__filesystem_file_size_non_existing(network: str, principal: str) -> None:
@@ -152,7 +152,7 @@ def test__filesystem_file_size_non_existing(network: str, principal: str) -> Non
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "File does not exist: does_not_exist.bin" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__filesystem_file_size_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
     # double check the identity_anonymous fixture worked
@@ -170,7 +170,7 @@ def test__filesystem_file_size_anonymous(identity_anonymous: Dict[str, str], net
         network=network,
     )
     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 # This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
 #
@@ -199,7 +199,7 @@ def test__filesystem_file_size_controller(network: str, principal: str) -> None:
         network=network,
     )
     expected_response = f'(variant {{ Ok = record {{ msg = "File exists: .canister_cache/{principal}/sessions/prompt.cache\\nFile size: 5 bytes\\n"; filename = ".canister_cache/{principal}/sessions/prompt.cache"; filesize = 5 : nat64; exists = true;}} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 # ------------------------------------------------------------------
 def test__get_creation_timestamp_ns_non_existing(network: str, principal: str) -> None:
@@ -211,7 +211,7 @@ def test__get_creation_timestamp_ns_non_existing(network: str, principal: str) -
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "File does not exist: does_not_exist.bin" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__get_creation_timestamp_ns_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
     # double check the identity_anonymous fixture worked
@@ -229,7 +229,7 @@ def test__get_creation_timestamp_ns_anonymous(identity_anonymous: Dict[str, str]
         network=network,
     )
     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 # This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
 #
@@ -270,7 +270,7 @@ def test__filesystem_remove_non_existing(network: str, principal: str) -> None:
         network=network,
     )
     expected_response = f'(variant {{ Ok = record {{ msg = "Path does not exist: does_not_exist.bin\\n"; filename = "does_not_exist.bin"; exists = false; removed = false;}} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__filesystem_remove_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
     # double check the identity_anonymous fixture worked
@@ -288,7 +288,7 @@ def test__filesystem_remove_anonymous(identity_anonymous: Dict[str, str], networ
         network=network,
     )
     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 # This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
 # 
@@ -317,7 +317,7 @@ def test__filesystem_remove_controller(network: str, principal: str) -> None:
         network=network,
     )
     expected_response = f'(variant {{ Ok = record {{ msg = "Path removed successfully: .canister_cache/{principal}/sessions/prompt.cache"; filename = ".canister_cache/{principal}/sessions/prompt.cache"; exists = true; removed = true;}} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 # The other file should still be there after removing the first one
 def test__filesystem_file_size_controller_another_prompt(network: str, principal: str) -> None:
@@ -331,7 +331,7 @@ def test__filesystem_file_size_controller_another_prompt(network: str, principal
         network=network,
     )
     expected_response = f'(variant {{ Ok = record {{ msg = "File exists: .canister_cache/{principal}/sessions/another_prompt.cache\\nFile size: 5 bytes\\n"; filename = ".canister_cache/{principal}/sessions/another_prompt.cache"; filesize = 5 : nat64; exists = true;}} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 # ------------------------------------------------------------------
 # file_download_chunk tests
@@ -348,7 +348,7 @@ def test__file_download_chunk_anonymous(identity_anonymous: Dict[str, str], netw
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 # ------------------------------------------------------------------
@@ -366,7 +366,7 @@ def test__uploaded_file_details_anonymous(identity_anonymous: Dict[str, str], ne
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 # ------------------------------------------------------------------
@@ -385,7 +385,7 @@ def test__file_download_chunk_exceeds_max_chunk_size(network: str, principal: st
         network=network,
     )
     expected_response = f'(variant {{ Err = variant {{ Other = "file_download_chunk_: chunksize {chunksize_3mb} exceeds limit 2097152" }} }})'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 # ------------------------------------------------------------------
@@ -403,7 +403,7 @@ def test__file_upload_chunk_anonymous(identity_anonymous: Dict[str, str], networ
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__file_upload_chunk_controller(network: str, principal: str) -> None:

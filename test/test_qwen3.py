@@ -24,7 +24,7 @@ import inspect
 import re
 from pathlib import Path
 
-from icpp.smoketest import call_canister_api
+from .candid_compat import call_canister_api, norm
 
 ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 CANISTER_NAME = "llama_cpp"
@@ -126,7 +126,7 @@ def test__set_max_tokens(network: str) -> None:
 
 def test__ready(network: str) -> None:
     response = _call(network, "ready", "()")
-    assert response == "(variant { Ok = record { status_code = 200 : nat16;} })"
+    assert response == norm("(variant { Ok = record { status_code = 200 : nat16;} })")
 
 
 def test__generate_no_think(network: str) -> None:

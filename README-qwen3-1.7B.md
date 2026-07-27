@@ -8,7 +8,7 @@
 >
 > It runs on the **same `llama_cpp` canister** as the default — you just upload a
 > different gguf and load it with the settings below. Follow the main
-> [README.md](README.md) for `# Set up` (dfx, Python env, build, deploy, cycles, and
+> [README.md](README.md) for `# Set up` (icp, Python env, build, deploy, cycles, and
 > the 3.75 GiB `wasm_memory_limit`), then use the model-specific steps here.
 
 ## Two hard Internet-Computer limits you must respect
@@ -50,7 +50,7 @@ Upload it to the canister as `models/model.gguf`:
 
 ```bash
 python -m scripts.upload \
-  --network local \
+  -e local \
   --canister llama_cpp \
   --canister-filename models/model.gguf \
   --filetype gguf \
@@ -61,7 +61,7 @@ python -m scripts.upload \
 Check filesize & sha256 in the canister:
 
 ```bash
-dfx canister call llama_cpp uploaded_file_details '(record { filename = "models/model.gguf" })'
+icp canister call llama_cpp -e local uploaded_file_details '(record { filename = "models/model.gguf" })'
 # ->
 (
   variant {
@@ -79,7 +79,7 @@ dfx canister call llama_cpp uploaded_file_details '(record { filename = "models/
 Quantize both K and V caches and keep the micro-batch small:
 
 ```bash
-dfx canister call llama_cpp load_model '(record {
+icp canister call llama_cpp -e local load_model '(record {
   args = vec {
     "--model"; "models/model.gguf";
     "-c"; "16384";
@@ -98,7 +98,7 @@ should report ~2.07 GiB used after load.
 ## Set max_tokens
 
 ```bash
-dfx canister call llama_cpp set_max_tokens '(record {
+icp canister call llama_cpp -e local set_max_tokens '(record {
   max_tokens_query = 1 : nat64;
   max_tokens_update = 4 : nat64
 })'
@@ -134,7 +134,7 @@ Provide a hint about {word}. Do not mention {word}.
 Start a new chat:
 
 ```bash
-dfx canister call llama_cpp new_chat '(record {
+icp canister call llama_cpp -e local new_chat '(record {
   args = vec { "--prompt-cache"; "prompt.cache"; "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0"; }
 })'
 ```
@@ -143,7 +143,7 @@ Ingest the prompt — repeat until `prompt_remaining` is empty (keep sending the
 prompt):
 
 ```bash
-dfx canister call llama_cpp run_update '(record {
+icp canister call llama_cpp -e local run_update '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
     "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
@@ -158,7 +158,7 @@ dfx canister call llama_cpp run_update '(record {
 Generate — repeat with an empty prompt until `generated_eog=true`:
 
 ```bash
-dfx canister call llama_cpp run_update '(record {
+icp canister call llama_cpp -e local run_update '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
     "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
@@ -194,7 +194,7 @@ emits ~20–28 tokens per call; the 1.7B, capped at 4, crosses many more boundar
 Remove the prompt cache when done:
 
 ```bash
-dfx canister call llama_cpp remove_prompt_cache '(record {
+icp canister call llama_cpp -e local remove_prompt_cache '(record {
   args = vec { "--prompt-cache"; "prompt.cache" }
 })'
 ```

@@ -56,7 +56,10 @@ def get_agent(network: str = "local") -> Agent:
         print(f"Error: could not get network status for environment '{network}'.")
         print("If this is the local network, start it first:  icp network start -d")
         sys.exit(1)
-    network_url = json.loads(status_json)["api_url"]
+    # Strip any trailing slash: icp reports the api_url with one (e.g.
+    # "http://localhost:61795/"), but icp-py-core appends "/api/v3/...", which
+    # would otherwise produce a "//api/v3" double slash that the replica rejects.
+    network_url = json.loads(status_json)["api_url"].rstrip("/")
     print(f"Network URL        = {network_url}")
 
     # Get the name of the active identity (equivalent of `dfx identity whoami`).

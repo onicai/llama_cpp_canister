@@ -7,7 +7,7 @@ $ icp deploy -e local -y
 Then run the tests:
 $ pytest -vv --network local test/test_canister_functions.py
 
-To run it against a deployment to the IC, just replace `local` with `ic` in the commands above.
+To run it against a deployment to the IC, just replace `local` with `production` in the commands above.
 
 """
 # pylint: disable=missing-function-docstring, unused-import, wildcard-import, unused-wildcard-import, line-too-long
@@ -15,7 +15,7 @@ To run it against a deployment to the IC, just replace `local` with `ic` in the 
 from pathlib import Path
 from typing import Dict
 import pytest
-from icpp.smoketest import call_canister_api, dict_to_candid_text
+from .candid_compat import call_canister_api, dict_to_candid_text, norm
 
 # Path to the icp.yaml file
 ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
@@ -33,7 +33,7 @@ def test__health(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__set_access_err(identity_anonymous: Dict[str, str], network: str) -> None:
     # double check the identity_anonymous fixture worked
@@ -48,7 +48,7 @@ def test__set_access_err(identity_anonymous: Dict[str, str], network: str) -> No
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__get_access_err(identity_anonymous: Dict[str, str], network: str) -> None:
     # double check the identity_anonymous fixture worked
@@ -63,7 +63,7 @@ def test__get_access_err(identity_anonymous: Dict[str, str], network: str) -> No
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__set_access_1(network: str) -> None:
     response = call_canister_api(
@@ -74,7 +74,7 @@ def test__set_access_1(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { explanation = "All except anonymous"; level = 1 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__get_access_1(network: str) -> None:
     response = call_canister_api(
@@ -85,7 +85,7 @@ def test__get_access_1(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { explanation = "All except anonymous"; level = 1 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__set_access_0(network: str) -> None:
     response = call_canister_api(
@@ -96,7 +96,7 @@ def test__set_access_0(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { explanation = "Only controllers"; level = 0 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__get_access_0(network: str) -> None:
     response = call_canister_api(
@@ -107,7 +107,7 @@ def test__get_access_0(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { explanation = "Only controllers"; level = 0 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 # ------------------------------------------------------------------
@@ -125,7 +125,7 @@ def test__check_access_anonymous(identity_anonymous: Dict[str, str], network: st
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__check_access_controller(network: str) -> None:
@@ -138,7 +138,7 @@ def test__check_access_controller(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 # ------------------------------------------------------------------
@@ -153,7 +153,7 @@ def test__whoami(network: str, principal: str) -> None:
         network=network,
     )
     expected_response = f'("{principal}")'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__whoami_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -169,7 +169,7 @@ def test__whoami_anonymous(identity_anonymous: Dict[str, str], network: str) -> 
         network=network,
     )
     expected_response = '("2vxsx-fae")'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 # =============================================================================
@@ -188,7 +188,7 @@ def test__set_max_tokens_anonymous(identity_anonymous: Dict[str, str], network: 
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__load_model_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -219,7 +219,7 @@ def test__log_pause_anonymous(identity_anonymous: Dict[str, str], network: str) 
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__log_resume_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -234,7 +234,7 @@ def test__log_resume_anonymous(identity_anonymous: Dict[str, str], network: str)
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__remove_log_file_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -329,7 +329,7 @@ def test__copy_prompt_cache_anonymous(identity_anonymous: Dict[str, str], networ
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__get_chats_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -344,7 +344,7 @@ def test__get_chats_anonymous(identity_anonymous: Dict[str, str], network: str) 
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__chats_resume_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -359,7 +359,7 @@ def test__chats_resume_anonymous(identity_anonymous: Dict[str, str], network: st
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__chats_pause_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -374,4 +374,4 @@ def test__chats_pause_anonymous(identity_anonymous: Dict[str, str], network: str
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)

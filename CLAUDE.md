@@ -35,11 +35,11 @@ icpp build-native
 icpp build-wasm
 
 # Deploy to local network
-dfx start --background
-dfx deploy --network local
+icp network start -d
+icp deploy -e local -y
 
 # Deploy to IC mainnet
-dfx deploy --network ic
+icp deploy -e production -y
 ```
 
 ## Testing
@@ -97,12 +97,12 @@ Location: `test/test_*.py`
 from pathlib import Path
 from icpp.smoketest import call_canister_api
 
-DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
+ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 CANISTER_NAME = "llama_cpp"
 
 def test__your_test_name(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="your_canister_method",
         canister_argument='(record { field = "value" })',
@@ -115,8 +115,8 @@ def test__your_test_name(network: str, principal: str) -> None:
 **Running smoke tests:**
 ```bash
 # Deploy first
-dfx start --clean --background
-dfx deploy --network local
+icp network start -d
+icp deploy -e local -y
 
 # Run specific test
 pytest -vv --network local test/test_files.py::test__your_test_name
@@ -126,7 +126,7 @@ pytest -vv --network local test/test_files.py
 ```
 
 **Available fixtures (from conftest.py):**
-- `network` - "local" or "ic"
+- `network` - "local" or "production"
 - `principal` - Current identity's principal
 - `identity_anonymous` - Dict with anonymous identity info
 
@@ -192,7 +192,7 @@ llama_cpp_canister/
 │   └── test_*.py          # Smoke test files
 ├── build-native/           # Native build output
 ├── build/                  # WASM build output
-└── dfx.json               # DFX configuration
+└── icp.yaml               # icp-cli configuration
 ```
 
 ## Workflow for Adding Security Fixes
@@ -202,7 +202,7 @@ llama_cpp_canister/
 3. **Add unit test** to appropriate `native/test_*.cpp`
 4. **Build and run unit tests**: `icpp build-native && ./build-native/mockic.exe`
 5. **Add smoke test** to appropriate `test/test_*.py`
-6. **Deploy and run smoke tests**: `dfx deploy --network local && pytest -vv --network local test/test_*.py`
+6. **Deploy and run smoke tests**: `icp deploy -e local -y && pytest -vv --network local test/test_*.py`
 
 ## Tips
 

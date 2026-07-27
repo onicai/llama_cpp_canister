@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 from typing import Dict, Optional
 
-from icpp.smoketest import call_canister_api
+from .candid_compat import call_canister_api, norm
 
 ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 CANISTER_NAME = "llama_cpp"
@@ -151,7 +151,7 @@ def test__cache_cleanup_admin_endpoints_require_auth(
         ),
     ]:
         response = _call(method, arg, network)
-        assert response == expected, f"{method}: got {response!r}"
+        assert response == norm(expected), f"{method}: got {response!r}"
 
 
 # ---------- start/stop lifecycle -------------------------------------------

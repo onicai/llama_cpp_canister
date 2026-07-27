@@ -75,16 +75,17 @@ git checkout -b feature/<name>   # off main
   cycle balance of 3'000'000'000'000 and lets you pin time with
   `ic0mock_set_time_override`.
 - **pytest smoke**: `test/test_<feature>.py`; add it to the `test_paths` list in
-  `scripts/qa_deploy_and_pytest.py` so it runs in the full QA scenario. Match
-  the exact response format the framework returns — e.g. a status record prints
-  as `{ status_code = 200 : nat16;}` (trailing `;}`, no space).
+  `scripts/qa_deploy_and_pytest.py` so it runs in the full QA scenario. Compare
+  responses with the `norm()` helper from `test/candid_compat.py` (the tests
+  route `call_canister_api` through it): icp-cli wraps records over indented lines
+  and omits dfx's trailing `;` before `}`, so assert `response == norm(expected)`.
 - Clean `.canister_cache` between repeated native runs — leftover files make
   filesystem-touching tests (e.g. cache_cleanup) non-deterministic.
 
 ## 6. Document
 
 Add a README section explaining what the feature does, its operator-driven
-lifecycle, the required admin roles, and copy-pasteable `dfx canister call`
+lifecycle, the required admin roles, and copy-pasteable `icp canister call`
 examples (including any "off"/error responses).
 
 ## 7. Verify — targeted
@@ -100,11 +101,11 @@ icpp build-native && ./build-native/mockic.exe
 
 # WASM build + local deploy (regenerates declarations):
 icpp build-wasm
-dfx start --clean --background
-dfx deploy --network local
+icp network start -d
+icp deploy -e local -y
 
 # Exercise the new endpoints:
-dfx canister --network local call llama_cpp <new_endpoint> '()'
+icp canister call llama_cpp <new_endpoint> '()' -e local
 
 # New smoke tests:
 pytest -vv --network local test/test_<feature>.py
@@ -123,15 +124,15 @@ make all-tests
 
 Note: `make test-llm-wasm` (and the qwen2 walkthrough below) require
 `python -m scripts.upload` to load a model. If that step fails with
-`404 .../api/v3/.../query` (an icp_core agent vs dfx replica mismatch), the
+`404 .../api/v3/.../query` (an icp_core agent vs replica mismatch), the
 upload tooling is broken in your environment — the model-dependent suites can't
-run until it's fixed. The native, static, and dfx-based smoke suites
-(`call_canister_api` shells out to dfx, so they still work) remain valid.
+run until it's fixed. The native, static, and icp-based smoke suites
+(`call_canister_api` shells out to icp, so they still work) remain valid.
 
 ## 9. Verify — full README walkthrough
 
 Deploy the qwen2 model following the exact README "Getting Started" steps
-(download → deploy → fabricate-cycles → upload+verify sha256 → load_model →
+(download → deploy → top-up cycles → upload+verify sha256 → load_model →
 set_max_tokens → new_chat → run_update until `generated_eog = true`), then
 exercise the new feature on the live, model-loaded canister. Confirms no
 regression in the inference path. Also run:

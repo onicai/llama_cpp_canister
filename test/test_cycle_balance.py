@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 from typing import Dict
 
-from icpp.smoketest import call_canister_api
+from .candid_compat import call_canister_api, norm
 
 ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 CANISTER_NAME = "llama_cpp"
@@ -75,7 +75,7 @@ def test__cycle_balance_endpoints_require_auth(
         ("get_cycle_balance", "()"),
     ]:
         response = _call(method, arg, network)
-        assert response == expected, f"{method}: got {response!r}"
+        assert response == norm(expected), f"{method}: got {response!r}"
 
 
 # ---------- tracking-off error (timer not armed) ---------------------------
@@ -95,7 +95,7 @@ def test__get_cycle_balance_off_returns_clear_error(network: str) -> None:
 
 def test__cycle_balance_start_timer(network: str) -> None:
     response = _start(network)
-    assert response == "(variant { Ok = record { status_code = 200 : nat16;} })", response
+    assert response == norm("(variant { Ok = record { status_code = 200 : nat16;} })"), response
 
 
 # ---------- get returns a fresh, non-zero balance --------------------------
@@ -119,7 +119,7 @@ def test__get_cycle_balance_ok_after_start(network: str) -> None:
 
 def test__cycle_balance_stop_timer(network: str) -> None:
     response = _stop(network)
-    assert response == "(variant { Ok = record { status_code = 200 : nat16;} })", response
+    assert response == norm("(variant { Ok = record { status_code = 200 : nat16;} })"), response
 
     # After stop, the query again reports tracking is off.
     off = _call("get_cycle_balance", "()", network)

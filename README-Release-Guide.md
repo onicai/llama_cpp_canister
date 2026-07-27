@@ -28,7 +28,7 @@ Commit and push to `main`.
 | --------------------------- | ----------------------------------------------------------------------------- |
 | **check-cicd-mac-status**   | Verifies the latest `cicd-mac.yml` run succeeded                              |
 | **install & build**         | Sets up miniconda, installs toolchains, builds the Wasm canister              |
-| **zip release files**       | Packages `build/`, `scripts/`, `test/`, `dfx.json`, `version.txt`, etc.       |
+| **zip release files**       | Packages `build/`, `scripts/`, `test/`, `icp.yaml`, `version.txt`, etc.       |
 | **create GitHub release**   | Creates a GitHub release with tag and attaches `llama_cpp_canister_<tag>.zip` |
 
 ### 4. Post-release verification
@@ -40,10 +40,10 @@ After the workflow completes:
    - `build/llama_cpp.wasm` and `build/llama_cpp.did`
    - `scripts/` with upload/download tooling
    - `test/` with smoke tests
-   - `dfx.json`, `version.txt`, `requirements.txt`
+   - `icp.yaml`, `version.txt`, `requirements.txt`
 3. Optionally deploy and run smoke tests:
    ```bash
-   dfx start --clean --background
-   dfx deploy --network local
+   icp network start -d
+   icp deploy -e local -y
    pytest -vv --network local test/
    ```

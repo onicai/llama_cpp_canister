@@ -16,7 +16,7 @@ $ pytest -vv --network local test/test_admin_rbac.py::test__getAdminRoles_anonym
 from pathlib import Path
 from typing import Dict
 import pytest
-from icpp.smoketest import call_canister_api, dict_to_candid_text
+from .candid_compat import call_canister_api, dict_to_candid_text, norm
 
 # Path to the icp.yaml file
 ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
@@ -41,7 +41,7 @@ def test__getAdminRoles_anonymous(identity_anonymous: Dict[str, str], network: s
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__assignAdminRole_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -56,7 +56,7 @@ def test__assignAdminRole_anonymous(identity_anonymous: Dict[str, str], network:
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__revokeAdminRole_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -71,7 +71,7 @@ def test__revokeAdminRole_anonymous(identity_anonymous: Dict[str, str], network:
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 # =============================================================================
@@ -104,7 +104,7 @@ def test__getAdminRoles_empty(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = vec {} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__assignAdminRole_AdminQuery(network: str) -> None:
@@ -219,7 +219,7 @@ def test__revokeAdminRole_second_principal(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = "Admin role revoked for rrkah-fqaaa-aaaaa-aaaaq-cai" })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__revokeAdminRole(network: str) -> None:
@@ -232,7 +232,7 @@ def test__revokeAdminRole(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = "Admin role revoked for aaaaa-aa" })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__revokeAdminRole_not_found(network: str) -> None:
@@ -245,7 +245,7 @@ def test__revokeAdminRole_not_found(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Principal not found" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__getAdminRoles_after_revoke(network: str) -> None:
@@ -258,4 +258,4 @@ def test__getAdminRoles_after_revoke(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = vec {} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
