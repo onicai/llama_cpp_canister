@@ -12,7 +12,7 @@ $ pytest -vv --network local test/test_qwen3.py
 
 Notes:
 - Requires the tuned config: the canister's wasm_memory_limit is raised to 3.75 GiB
-  (via `dfx canister update-settings`), and load_model uses --ctx-size 16384
+  (via `icp canister settings update`), and load_model uses --ctx-size 16384
   --batch-size 64 --ubatch-size 64 --cache-type-k q8_0 --cache-type-v q8_0. The small
   batch shrinks the compute buffers so the KV cache is the only thing scaling with
   context; ctx 16384 sits at ~1.76 GiB heap (~2 GiB headroom under the 3.75 GiB limit).
@@ -26,7 +26,7 @@ from pathlib import Path
 
 from icpp.smoketest import call_canister_api
 
-DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
+ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 CANISTER_NAME = "llama_cpp"
 
 PRINT_RESPONSE = True
@@ -56,7 +56,7 @@ PROMPT_MULTITURN = (
 
 def _call(network: str, method: str, arg: str) -> str:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method=method,
         canister_argument=arg,

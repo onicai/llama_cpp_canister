@@ -1,7 +1,7 @@
 """End-to-end test: prompt-cache cleanup against real Qwen2.5 prompt-cache files.
 
 Prerequisites:
-- Canister deployed and ready (`dfx deploy --network local`).
+- Canister deployed and ready (`icp deploy -e local -y`).
 - Qwen2.5 gguf uploaded as `models/model.gguf` (`scripts.upload`).
 - `pytest -vv test/test_qwen2.py` was run first so the model is loaded into
   the canister's working memory and `set_max_tokens` was called.
@@ -31,7 +31,7 @@ from typing import Dict, Optional
 
 from icpp.smoketest import call_canister_api
 
-DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
+ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 CANISTER_NAME = "llama_cpp_qwen25"
 
 # Defaults baked into src/cache_cleanup.cpp — used to restore state between
@@ -62,7 +62,7 @@ QWEN_PROMPT_ARGS = (
 
 def _call(method: str, argument: str, network: str) -> str:
     return call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method=method,
         canister_argument=argument,

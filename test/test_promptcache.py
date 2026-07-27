@@ -2,7 +2,7 @@
 
 First deploy the canister:
 $ icpp build-wasm
-$ dfx deploy --network local
+$ icp deploy -e local -y
 
 Then run the tests:
 $ pytest -vv --network local test/test_promptcache.py
@@ -17,10 +17,10 @@ from typing import Dict
 import pytest
 from icpp.smoketest import call_canister_api, dict_to_candid_text
 
-# Path to the dfx.json file
-DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
+# Path to the icp.yaml file
+ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 
-# Canister in the dfx.json file we want to test
+# Canister in the icp.yaml file we want to test
 CANISTER_NAME = "llama_cpp"
 
 
@@ -34,7 +34,7 @@ def test__upload_prompt_cache_chunk_anonymous(identity_anonymous: Dict[str, str]
     assert identity_anonymous["principal"] == "2vxsx-fae"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="upload_prompt_cache_chunk",
         canister_argument='(record { promptcache = "test.cache"; chunk = blob "\\01\\02\\03"; chunksize = 3 : nat64; offset = 0 : nat64 })',
@@ -50,7 +50,7 @@ def test__download_prompt_cache_chunk_anonymous(identity_anonymous: Dict[str, st
     assert identity_anonymous["principal"] == "2vxsx-fae"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="download_prompt_cache_chunk",
         canister_argument='(record { promptcache = "test.cache"; chunksize = 1024 : nat64; offset = 0 : nat64 })',
@@ -66,7 +66,7 @@ def test__uploaded_prompt_cache_details_anonymous(identity_anonymous: Dict[str, 
     assert identity_anonymous["principal"] == "2vxsx-fae"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="uploaded_prompt_cache_details",
         canister_argument='(record { promptcache = "test.cache" })',
@@ -82,7 +82,7 @@ def test__uploaded_prompt_cache_details_anonymous(identity_anonymous: Dict[str, 
 
 def test__upload_prompt_cache_chunk_0(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="upload_prompt_cache_chunk",
         canister_argument='(record { promptcache = "prompt.cache"; chunk = blob "\\47\\47\\55\\46\\03"; chunksize = 5 : nat64; offset = 0 : nat64; })',
@@ -93,7 +93,7 @@ def test__upload_prompt_cache_chunk_0(network: str, principal: str) -> None:
 
 def test__upload_prompt_cache_chunk_1(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="upload_prompt_cache_chunk",
         canister_argument='(record { promptcache = "prompt.cache"; chunk = blob "\\08\\33\\41\\43\\04"; chunksize = 5 : nat64; offset = 5 : nat64; })',
@@ -105,7 +105,7 @@ def test__upload_prompt_cache_chunk_1(network: str, principal: str) -> None:
 # Start another upload to test concurrent uploads
 def test__upload_prompt_cache_chunk_another_0(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="upload_prompt_cache_chunk",
         canister_argument='(record { promptcache = "another_prompt.cache"; chunk = blob "\\03\\46\\55\\47\\47"; chunksize = 5 : nat64; offset = 0 : nat64; })',
@@ -116,7 +116,7 @@ def test__upload_prompt_cache_chunk_another_0(network: str, principal: str) -> N
 
 def test__upload_prompt_cache_chunk_2(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="upload_prompt_cache_chunk",
         canister_argument='(record { promptcache = "prompt.cache"; chunk = blob "\\03\\46\\55\\47\\47"; chunksize = 5 : nat64; offset = 10 : nat64; })',
@@ -128,7 +128,7 @@ def test__upload_prompt_cache_chunk_2(network: str, principal: str) -> None:
 # Continue the other upload to test concurrent uploads
 def test__upload_prompt_cache_chunk_another_1(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="upload_prompt_cache_chunk",
         canister_argument='(record { promptcache = "another_prompt.cache"; chunk = blob "\\04\\33\\41\\43\\08"; chunksize = 5 : nat64; offset = 5 : nat64; })',
@@ -139,7 +139,7 @@ def test__upload_prompt_cache_chunk_another_1(network: str, principal: str) -> N
 
 def test__uploaded_prompt_cache_details(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="uploaded_prompt_cache_details",
         canister_argument='(record { promptcache = "prompt.cache"; })',
@@ -150,7 +150,7 @@ def test__uploaded_prompt_cache_details(network: str, principal: str) -> None:
 
 def test__download_prompt_cache_chunk_0(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="download_prompt_cache_chunk",
         canister_argument='(record { promptcache = "prompt.cache"; chunksize = 5 : nat64; offset = 0 : nat64;})',
@@ -161,7 +161,7 @@ def test__download_prompt_cache_chunk_0(network: str, principal: str) -> None:
 
 def test__download_prompt_cache_chunk_1(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="download_prompt_cache_chunk",
         canister_argument='(record { promptcache = "prompt.cache"; chunksize = 5 : nat64; offset = 5 : nat64;})',
@@ -172,7 +172,7 @@ def test__download_prompt_cache_chunk_1(network: str, principal: str) -> None:
 
 def test__download_prompt_cache_chunk_2(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="download_prompt_cache_chunk",
         canister_argument='(record { promptcache = "prompt.cache"; chunksize = 5 : nat64; offset = 10 : nat64;})',
@@ -183,7 +183,7 @@ def test__download_prompt_cache_chunk_2(network: str, principal: str) -> None:
 
 def test__download_prompt_cache_chunk_another_full(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="download_prompt_cache_chunk",
         canister_argument='(record { promptcache = "another_prompt.cache"; chunksize = 1000 : nat64; offset = 0 : nat64;})',

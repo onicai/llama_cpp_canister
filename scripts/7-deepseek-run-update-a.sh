@@ -2,7 +2,7 @@
 
 #######################################################################
 # run from parent folder as:
-# scripts/test.sh --network [local|ic]
+# scripts/test.sh --network [local|production]
 #######################################################################
 
 # Default network type is local
@@ -13,17 +13,17 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --network)
             shift
-            if [ "$1" = "local" ] || [ "$1" = "ic" ]; then
+            if [ "$1" = "local" ] || [ "$1" = "production" ]; then
                 NETWORK_TYPE=$1
             else
-                echo "Invalid network type: $1. Use 'local' or 'ic'."
+                echo "Invalid network type: $1. Use 'local' or 'production'."
                 exit 1
             fi
             shift
             ;;
         *)
             echo "Unknown argument: $1"
-            echo "Usage: $0 --network [local|ic]"
+            echo "Usage: $0 --network [local|production]"
             exit 1
             ;;
     esac
@@ -35,4 +35,4 @@ echo " "
 echo "--------------------------------------------------"
 echo "Calling run_update for llama_cpp"
 # See model card at : https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF
-dfx canister call llama_cpp run_update '(record { args = vec {"--cache-type-k"; "q8_0"; "--no-warmup"; "--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<｜User｜>What is 1+1?<｜Assistant｜>";} })'
+icp canister call llama_cpp run_update '(record { args = vec {"--cache-type-k"; "q8_0"; "--no-warmup"; "--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-p"; "<｜User｜>What is 1+1?<｜Assistant｜>";} })' -e "$NETWORK_TYPE"

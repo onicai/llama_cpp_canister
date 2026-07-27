@@ -30,19 +30,19 @@ def parse_args() -> argparse.Namespace:
         "--network",
         type=str,
         default="local",
-        help="Network: ic or local",
+        help="Environment name in icp.yaml: production or local",
     )
     parser.add_argument(
         "--canister",
         type=str,
         default="llama_cpp",
-        help="canister name in dfx.json",
+        help="canister name in icp.yaml",
     )
     parser.add_argument(
         "--canister-id",
         type=str,
         default="",
-        help="canister-id from canister_ids.json; Overrules --canister",
+        help="canister-id from .icp/data/mappings/<env>.ids.json; Overrules --canister",
     )
     parser.add_argument(
         "--candid",

@@ -2,7 +2,7 @@
 
 #######################################################################
 # run from parent folder as:
-# scripts/load-model.sh --network [local|ic]
+# scripts/load-model.sh --network [local|production]
 #######################################################################
 
 # Default network type is local
@@ -13,17 +13,17 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --network)
             shift
-            if [ "$1" = "local" ] || [ "$1" = "ic" ]; then
+            if [ "$1" = "local" ] || [ "$1" = "production" ]; then
                 NETWORK_TYPE=$1
             else
-                echo "Invalid network type: $1. Use 'local' or 'ic'."
+                echo "Invalid network type: $1. Use 'local' or 'production'."
                 exit 1
             fi
             shift
             ;;
         *)
             echo "Unknown argument: $1"
-            echo "Usage: $0 --network [local|ic]"
+            echo "Usage: $0 --network [local|production]"
             exit 1
             ;;
     esac
@@ -38,7 +38,7 @@ echo "Loading model"
 echo " "
 echo "--------------------------------------------------"
 echo "Checking health endpoint for llama_cpp"
-output=$(dfx canister call llama_cpp health --network $NETWORK_TYPE )
+output=$(icp canister call llama_cpp health -e $NETWORK_TYPE --query )
 
 if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
     echo "llama_cpp health check failed."
@@ -51,7 +51,7 @@ fi
 echo " "
 echo "--------------------------------------------------"
 echo "Calling load_model for llama_cpp"
-output=$(dfx canister call llama_cpp load_model \
+output=$(icp canister call llama_cpp load_model \
         '(record { args = vec {"--model"; "models/model.gguf"; "--no-warmup";} })' \
         --network "$NETWORK_TYPE")
 

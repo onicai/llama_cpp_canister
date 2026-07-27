@@ -5,10 +5,18 @@ from pathlib import Path
 import subprocess
 import typer
 from icpp.run_shell_cmd import run_shell_cmd
-from icpp.run_dfx_cmd import run_dfx_cmd
 
 # SCRIPTS_PATH = Path(__file__).parent
 ROOT_PATH = Path(__file__).parent.parent
+
+
+def icp_network_stop() -> None:
+    """Stop the local network, tolerating a non-zero exit when none is running.
+
+    `icp network stop` returns non-zero when there is no running network, which
+    is not a failure for our purposes (dfx's `stop` was lenient about this).
+    """
+    subprocess.run(["icp", "network", "stop"], cwd=ROOT_PATH, check=False)
 
 
 def main() -> int:
@@ -59,13 +67,18 @@ def main() -> int:
             ]
 
             typer.echo("--\nStop the local network")
-            run_dfx_cmd("stop")
+            icp_network_stop()
 
             typer.echo("--\nStart a clean local network")
-            run_dfx_cmd("start --clean --background")
+            # icp-cli has no `--clean` flag. The clean-start equivalent is to
+            # remove the disposable cache (replica state + the managed network's
+            # id mappings) and start fresh. NEVER remove .icp/data — it holds the
+            # committed mainnet id mappings.
+            run_shell_cmd("rm -rf .icp/cache", cwd=ROOT_PATH)
+            run_shell_cmd("icp network start -d", cwd=ROOT_PATH)
 
             typer.echo(f"--\nDeploy {ROOT_PATH.name}")
-            run_dfx_cmd("deploy", cwd=ROOT_PATH)
+            run_shell_cmd("icp deploy -e local -y", cwd=ROOT_PATH)
 
             typer.echo(f"--\nUpload {filename}")
             run_shell_cmd(
@@ -79,11 +92,11 @@ def main() -> int:
                 run_shell_cmd(f"pytest -vv --network=local {test_path}", cwd=ROOT_PATH)
 
             typer.echo("--\nStop the local network")
-            run_dfx_cmd("stop")
+            icp_network_stop()
 
     except subprocess.CalledProcessError as e:
         typer.echo("--\nSomething did not pass")
-        run_dfx_cmd("stop")
+        icp_network_stop()
         return e.returncode
 
     typer.echo("--\nCongratulations, everything passed!")

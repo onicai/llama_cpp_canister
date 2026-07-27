@@ -2,7 +2,7 @@
 
 First deploy the canister:
 $ icpp build-wasm
-$ dfx deploy --network local
+$ icp deploy -e local -y
 
 Then run the tests:
 $ pytest -vv --network local test/test_cache_cleanup.py
@@ -31,7 +31,7 @@ from typing import Dict, Optional
 
 from icpp.smoketest import call_canister_api
 
-DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
+ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 CANISTER_NAME = "llama_cpp"
 
 # Default cleanup config baked into cache_cleanup.cpp:
@@ -50,7 +50,7 @@ MAX_FILES_CEILING = 10_000
 
 def _call(method: str, argument: str, network: str) -> str:
     return call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method=method,
         canister_argument=argument,

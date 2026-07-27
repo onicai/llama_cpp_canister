@@ -2,7 +2,7 @@
 
 First deploy the canister:
 $ icpp build-wasm
-$ dfx deploy --network local
+$ icp deploy -e local -y
 
 Then get the model from Hugging Face:
 $ mkdir -p models/Qwen/Qwen2.5-0.5B-Instruct-GGUF
@@ -24,15 +24,15 @@ from typing import Dict
 import pytest
 from icpp.smoketest import call_canister_api, dict_to_candid_text
 
-# Path to the dfx.json file
-DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
+# Path to the icp.yaml file
+ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 
-# Canister in the dfx.json file we want to test
+# Canister in the icp.yaml file we want to test
 CANISTER_NAME = "llama_cpp_qwen25"
 
 def test__load_model(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="load_model",
         canister_argument='(record { args = vec {"--model"; "models/model.gguf";} })',
@@ -42,7 +42,7 @@ def test__load_model(network: str) -> None:
 
 def test__set_max_tokens(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="set_max_tokens",
         canister_argument='(record { max_tokens_query = 1 : nat64; max_tokens_update = 13 : nat64 })',
@@ -52,7 +52,7 @@ def test__set_max_tokens(network: str) -> None:
 
 def test__get_max_tokens(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_max_tokens",
         canister_argument='()',
@@ -63,7 +63,7 @@ def test__get_max_tokens(network: str) -> None:
 
 def test__ready(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="ready",
         canister_argument="()",
@@ -74,7 +74,7 @@ def test__ready(network: str) -> None:
 
 def test__remove_prompt_cache_1(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="remove_prompt_cache",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
@@ -84,7 +84,7 @@ def test__remove_prompt_cache_1(network: str) -> None:
 
 def test__new_chat_1(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="new_chat",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
@@ -94,7 +94,7 @@ def test__new_chat_1(network: str) -> None:
 
 def test__run_update_1(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="run_update",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
@@ -105,7 +105,7 @@ def test__run_update_1(network: str) -> None:
 
 def test__copy_prompt_cache_save(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="copy_prompt_cache",
         canister_argument='(record { from = "prompt.cache"; to = "prompt-save.cache"} )',
@@ -115,7 +115,7 @@ def test__copy_prompt_cache_save(network: str) -> None:
 
 def test__run_update_2(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="run_update",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
@@ -126,7 +126,7 @@ def test__run_update_2(network: str) -> None:
 
 def test__run_update_3(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="run_update",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
@@ -137,7 +137,7 @@ def test__run_update_3(network: str) -> None:
 
 def test__run_update_4(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="run_update",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; ""} })',
@@ -148,7 +148,7 @@ def test__run_update_4(network: str) -> None:
 
 def test__remove_prompt_cache_2(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="remove_prompt_cache",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
@@ -158,7 +158,7 @@ def test__remove_prompt_cache_2(network: str) -> None:
 
 def test__copy_prompt_cache_restore(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="copy_prompt_cache",
         canister_argument='(record { from = "prompt-save.cache"; to = "prompt.cache"} )',
@@ -168,7 +168,7 @@ def test__copy_prompt_cache_restore(network: str) -> None:
 
 def test__new_chat_2(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="new_chat",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
@@ -178,7 +178,7 @@ def test__new_chat_2(network: str) -> None:
 
 def test__run_update_2_2(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="run_update",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
@@ -189,7 +189,7 @@ def test__run_update_2_2(network: str) -> None:
 
 def test__chats_resume(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="chats_resume",
         canister_argument='()',
@@ -200,7 +200,7 @@ def test__chats_resume(network: str) -> None:
 
 def test__log_pause(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="log_pause",
         canister_argument='()',
@@ -211,7 +211,7 @@ def test__log_pause(network: str) -> None:
 
 def test__new_chat_3(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="new_chat",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
@@ -221,7 +221,7 @@ def test__new_chat_3(network: str) -> None:
 
 def test__get_chats_1(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_chats",
         canister_argument='()',
@@ -231,7 +231,7 @@ def test__get_chats_1(network: str) -> None:
 
 def test__chats_pause(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="chats_pause",
         canister_argument='()',
@@ -242,7 +242,7 @@ def test__chats_pause(network: str) -> None:
 
 def test__get_chats_2(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_chats",
         canister_argument='()',
@@ -252,7 +252,7 @@ def test__get_chats_2(network: str) -> None:
 
 def test__new_chat_4(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="new_chat",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
@@ -262,7 +262,7 @@ def test__new_chat_4(network: str) -> None:
 
 def test__get_chats_3(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_chats",
         canister_argument='()',
@@ -272,7 +272,7 @@ def test__get_chats_3(network: str) -> None:
 
 def test__remove_prompt_cache_cleanup(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="remove_prompt_cache",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
@@ -281,7 +281,7 @@ def test__remove_prompt_cache_cleanup(network: str) -> None:
     assert "(variant { Ok" in response
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="remove_prompt_cache",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt-save.cache"} })',
@@ -291,7 +291,7 @@ def test__remove_prompt_cache_cleanup(network: str) -> None:
 
 def test__remove_log_file(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="remove_log_file",
         canister_argument='(record { args = vec {"--log-file"; "main.log"} })',
@@ -301,7 +301,7 @@ def test__remove_log_file(network: str) -> None:
 
 def test__new_chat_for_query_test(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="new_chat",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"} })',
@@ -311,7 +311,7 @@ def test__new_chat_for_query_test(network: str) -> None:
 
 def test__run_query_1(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="run_query",
         canister_argument='(record { args = vec {"--prompt-cache"; "prompt.cache"; "--prompt-cache-all"; "-sp"; "-n"; "512"; "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain Large Language Models.<|im_end|>\n<|im_start|>assistant\n"} })',
@@ -322,7 +322,7 @@ def test__run_query_1(network: str) -> None:
 
 def test__log_pause(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="log_pause",
         canister_argument='()',
@@ -333,7 +333,7 @@ def test__log_pause(network: str) -> None:
 
 def test__log_resume(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="log_resume",
         canister_argument='()',

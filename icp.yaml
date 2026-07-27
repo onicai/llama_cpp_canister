@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://github.com/dfinity/icp-cli/raw/refs/tags/v1.2.0/docs/schemas/icp-yaml-schema.json
+#
+# icp-cli project configuration. This replaces the legacy `dfx.json`, because dfx
+# is deprecated.
+#
+# Both canisters share the same wasm and Candid interface, exactly as the old
+# `dfx.json` did. The wasm is produced by this repo's own build (see the Makefile
+# and `icpp build-wasm`); icp only picks it up via a `pre-built` step. The Candid
+# interface travels inside the wasm, in the `icp:public candid:service` custom
+# section, so no separate `.did` reference is needed here.
+
+canisters:
+  - name: llama_cpp
+    build:
+      steps:
+        - type: pre-built
+          path: build/llama_cpp.wasm
+  - name: llama_cpp_qwen25
+    build:
+      steps:
+        - type: pre-built
+          path: build/llama_cpp.wasm
+
+networks:
+  # A project-local replica, started with `icp network start`. icp-cli runs one
+  # local network per project (keyed by project root), so this does not collide
+  # with the replicas of other projects - or of other worktrees of this repo.
+  #
+  # `port: 0` lets the OS assign a free ephemeral port, so parallel projects
+  # cannot fight over the default 8000 either. The port therefore changes on
+  # every start: never hardcode it, read it back from `icp network status`
+  # (which is what icpp.smoketest does for you).
+  - name: local
+    mode: managed
+    gateway:
+      port: 0
+
+environments:
+  # The names of these environments are the values passed to pytest as
+  # `--network=[local/production]`.
+  - name: local
+    network: local
+  - name: production
+    network: ic

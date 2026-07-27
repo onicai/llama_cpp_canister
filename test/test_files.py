@@ -2,7 +2,7 @@
 
 First deploy the canister:
 $ icpp build-wasm
-$ dfx deploy --network local
+$ icp deploy -e local -y
 
 Then run the tests:
 $ pytest -vv --network local test/test_promptcache.py
@@ -17,17 +17,17 @@ from typing import Dict
 import pytest
 from icpp.smoketest import call_canister_api, dict_to_candid_text
 
-# Path to the dfx.json file
-DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
+# Path to the icp.yaml file
+ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 
-# Canister in the dfx.json file we want to test
+# Canister in the icp.yaml file we want to test
 CANISTER_NAME = "llama_cpp"
 
 
 def test__upload_prompt_cache_file(network: str, principal: str) -> None:
     # Upload two dummy prompt cache files to the canister - The other tests rely on these files being present
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="upload_prompt_cache_chunk",
         canister_argument='(record { promptcache = "prompt.cache"; chunk = blob "\\47\\47\\55\\46\\03"; chunksize = 5 : nat64; offset = 0 : nat64; })',
@@ -37,7 +37,7 @@ def test__upload_prompt_cache_file(network: str, principal: str) -> None:
     assert response == expected_response
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="upload_prompt_cache_chunk",
         canister_argument='(record { promptcache = "another_prompt.cache"; chunk = blob "\\03\\46\\55\\47\\47"; chunksize = 5 : nat64; offset = 0 : nat64; })',
@@ -49,7 +49,7 @@ def test__upload_prompt_cache_file(network: str, principal: str) -> None:
 # ------------------------------------------------------------------
 def test__recursive_dir_content_non_existing(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="recursive_dir_content_query",
         canister_argument='(record {dir = "does_not_exist"; max_entries = 0 : nat64})',
@@ -59,7 +59,7 @@ def test__recursive_dir_content_non_existing(network: str, principal: str) -> No
     assert response == expected_response
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="recursive_dir_content_update",
         canister_argument='(record {dir = "does_not_exist"; max_entries = 0 : nat64})',
@@ -76,7 +76,7 @@ def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], ne
     principal = identity_anonymous["principal"]
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="recursive_dir_content_query",
         canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
@@ -86,7 +86,7 @@ def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], ne
     assert response == expected_response
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="recursive_dir_content_update",
         canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
@@ -101,7 +101,7 @@ def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], ne
 #     principal = identity_default["principal"]
 
 #     response = call_canister_api(
-#         dfx_json_path=DFX_JSON_PATH,
+#         icp_yaml_path=ICP_YAML_PATH,
 #         canister_name=CANISTER_NAME,
 #         canister_method="recursive_dir_content_query",
 #         canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
@@ -111,7 +111,7 @@ def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], ne
 #     assert response == expected_response
 
 #     response = call_canister_api(
-#         dfx_json_path=DFX_JSON_PATH,
+#         icp_yaml_path=ICP_YAML_PATH,
 #         canister_name=CANISTER_NAME,
 #         canister_method="recursive_dir_content_update",
 #         canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
@@ -123,7 +123,7 @@ def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], ne
 def test__recursive_dir_content_controller(network: str, principal: str) -> None:
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="recursive_dir_content_query",
         canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
@@ -133,7 +133,7 @@ def test__recursive_dir_content_controller(network: str, principal: str) -> None
     assert response == expected_response
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="recursive_dir_content_update",
         canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
@@ -145,7 +145,7 @@ def test__recursive_dir_content_controller(network: str, principal: str) -> None
 # ------------------------------------------------------------------
 def test__filesystem_file_size_non_existing(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="filesystem_file_size",
         canister_argument='(record {filename = "does_not_exist.bin"})',
@@ -163,7 +163,7 @@ def test__filesystem_file_size_anonymous(identity_anonymous: Dict[str, str], net
     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="filesystem_file_size",
         canister_argument=f'(record {{filename = "{filename}"}})',
@@ -179,7 +179,7 @@ def test__filesystem_file_size_anonymous(identity_anonymous: Dict[str, str], net
 #     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
 #     response = call_canister_api(
-#         dfx_json_path=DFX_JSON_PATH,
+#         icp_yaml_path=ICP_YAML_PATH,
 #         canister_name=CANISTER_NAME,
 #         canister_method="filesystem_file_size",
 #         canister_argument=f'(record {{filename = "{filename}"}})',
@@ -192,7 +192,7 @@ def test__filesystem_file_size_controller(network: str, principal: str) -> None:
     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="filesystem_file_size",
         canister_argument=f'(record {{filename = "{filename}"}})',
@@ -204,7 +204,7 @@ def test__filesystem_file_size_controller(network: str, principal: str) -> None:
 # ------------------------------------------------------------------
 def test__get_creation_timestamp_ns_non_existing(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_creation_timestamp_ns",
         canister_argument='(record {filename = "does_not_exist.bin"})',
@@ -222,7 +222,7 @@ def test__get_creation_timestamp_ns_anonymous(identity_anonymous: Dict[str, str]
     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_creation_timestamp_ns",
         canister_argument=f'(record {{filename = "{filename}"}})',
@@ -238,7 +238,7 @@ def test__get_creation_timestamp_ns_anonymous(identity_anonymous: Dict[str, str]
 #     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
 #     response = call_canister_api(
-#         dfx_json_path=DFX_JSON_PATH,
+#         icp_yaml_path=ICP_YAML_PATH,
 #         canister_name=CANISTER_NAME,
 #         canister_method="get_creation_timestamp_ns",
 #         canister_argument=f'(record {{filename = "{filename}"}})',
@@ -251,7 +251,7 @@ def test__get_creation_timestamp_ns_controller(network: str, principal: str) -> 
     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_creation_timestamp_ns",
         canister_argument=f'(record {{filename = "{filename}"}})',
@@ -263,7 +263,7 @@ def test__get_creation_timestamp_ns_controller(network: str, principal: str) -> 
 # ------------------------------------------------------------------
 def test__filesystem_remove_non_existing(network: str, principal: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="filesystem_remove",
         canister_argument='(record {filename = "does_not_exist.bin"})',
@@ -281,7 +281,7 @@ def test__filesystem_remove_anonymous(identity_anonymous: Dict[str, str], networ
     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="filesystem_remove",
         canister_argument=f'(record {{filename = "{filename}"}})',
@@ -297,7 +297,7 @@ def test__filesystem_remove_anonymous(identity_anonymous: Dict[str, str], networ
 #     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
 #     response = call_canister_api(
-#         dfx_json_path=DFX_JSON_PATH,
+#         icp_yaml_path=ICP_YAML_PATH,
 #         canister_name=CANISTER_NAME,
 #         canister_method="filesystem_remove",
 #         canister_argument=f'(record {{filename = "{filename}"}})',
@@ -310,7 +310,7 @@ def test__filesystem_remove_controller(network: str, principal: str) -> None:
     filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="filesystem_remove",
         canister_argument=f'(record {{filename = "{filename}"}})',
@@ -324,7 +324,7 @@ def test__filesystem_file_size_controller_another_prompt(network: str, principal
     filename = f".canister_cache/{principal}/sessions/another_prompt.cache"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="filesystem_file_size",
         canister_argument=f'(record {{filename = "{filename}"}})',
@@ -341,7 +341,7 @@ def test__file_download_chunk_anonymous(identity_anonymous: Dict[str, str], netw
     assert identity_anonymous["principal"] == "2vxsx-fae"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="file_download_chunk",
         canister_argument='(record { filename = "test.bin"; chunksize = 1024 : nat64; offset = 0 : nat64 })',
@@ -359,7 +359,7 @@ def test__uploaded_file_details_anonymous(identity_anonymous: Dict[str, str], ne
     assert identity_anonymous["principal"] == "2vxsx-fae"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="uploaded_file_details",
         canister_argument='(record { filename = "test.bin" })',
@@ -378,7 +378,7 @@ def test__file_download_chunk_exceeds_max_chunk_size(network: str, principal: st
     chunksize_3mb = 3 * 1024 * 1024
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="file_download_chunk",
         canister_argument=f'(record {{filename = "{filename}"; chunksize = {chunksize_3mb} : nat64; offset = 0 : nat64}})',
@@ -396,7 +396,7 @@ def test__file_upload_chunk_anonymous(identity_anonymous: Dict[str, str], networ
     assert identity_anonymous["principal"] == "2vxsx-fae"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="file_upload_chunk",
         canister_argument='(record { filename = "test.bin"; chunk = blob "\\01\\02\\03"; chunksize = 3 : nat64; offset = 0 : nat64 })',
@@ -409,7 +409,7 @@ def test__file_upload_chunk_anonymous(identity_anonymous: Dict[str, str], networ
 def test__file_upload_chunk_controller(network: str, principal: str) -> None:
     """Test that file_upload_chunk succeeds for controller"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="file_upload_chunk",
         canister_argument='(record { filename = "models/test_upload.bin"; chunk = blob "\\01\\02\\03\\04\\05"; chunksize = 5 : nat64; offset = 0 : nat64 })',
@@ -423,7 +423,7 @@ def test__file_upload_chunk_controller(network: str, principal: str) -> None:
 def test__file_upload_chunk_cleanup(network: str, principal: str) -> None:
     """Cleanup: remove the test file created by file_upload_chunk test"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="filesystem_remove",
         canister_argument='(record { filename = "models/test_upload.bin" })',

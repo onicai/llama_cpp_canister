@@ -35,8 +35,8 @@ endif
 VERSION_DIDC := $(shell curl --silent "https://api.github.com/repos/dfinity/candid/releases/latest" | grep -e '"tag_name"' | cut -c 16-25)
 # version to install for clang
 VERSION_CLANG := $(shell cat version_clang.txt)
-# version to install for dfx
-VERSION_DFX := 0.31.0
+# version to install for icp-cli
+VERSION_ICP := 1.2.0
 
 ###########################################################################
 # Use some clang tools that come with wasi-sdk
@@ -82,13 +82,13 @@ summary:
 
 .PHONY: test-llm-native
 test-llm-native:
-	dfx identity use default
+	icp identity default default
 	icpp build-native
 	./build-native/mockic.exe
 
 .PHONY: test-llm-wasm
 test-llm-wasm:
-	dfx identity use default
+	icp identity default default
 	python -m scripts.qa_deploy_and_pytest
 	
 .PHONY: all-static
@@ -151,11 +151,10 @@ install-clang-ubuntu:
 	sudo ln --force -s /usr/bin/clang-$(VERSION_CLANG) /usr/bin/clang
 	sudo ln --force -s /usr/bin/clang++-$(VERSION_CLANG) /usr/bin/clang++
 
-# This installs ~/bin/dfx
-# Make sure to source ~/.profile afterwards -> it adds ~/bin to the path if it exists
-.PHONY: install-dfx
-install-dfx:
-	DFX_VERSION=$(VERSION_DFX) DFXVM_INIT_YES=true sh -ci "$$(curl -fsSL https://sdk.dfinity.org/install.sh)"
+# This installs the icp-cli (and ic-wasm) globally via npm. Requires Node.js >= 22.
+.PHONY: install-icp
+install-icp:
+	npm install -g @icp-sdk/icp-cli@$(VERSION_ICP) @icp-sdk/ic-wasm
 
 .PHONY: install-didc
 install-didc:

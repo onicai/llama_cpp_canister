@@ -1,8 +1,8 @@
 """Test Admin RBAC endpoints
 
 First deploy the canister:
-$ dfx start --clean --background
-$ dfx deploy --network local
+$ icp network start -d
+$ icp deploy -e local -y
 
 Then run the tests:
 $ pytest -vv --network local test/test_admin_rbac.py
@@ -18,10 +18,10 @@ from typing import Dict
 import pytest
 from icpp.smoketest import call_canister_api, dict_to_candid_text
 
-# Path to the dfx.json file
-DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
+# Path to the icp.yaml file
+ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 
-# Canister in the dfx.json file we want to test
+# Canister in the icp.yaml file we want to test
 CANISTER_NAME = "llama_cpp"
 
 
@@ -34,7 +34,7 @@ def test__getAdminRoles_anonymous(identity_anonymous: Dict[str, str], network: s
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="getAdminRoles",
         canister_argument="()",
@@ -49,7 +49,7 @@ def test__assignAdminRole_anonymous(identity_anonymous: Dict[str, str], network:
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="assignAdminRole",
         canister_argument='(record { "principal" = "aaaaa-aa"; role = variant { AdminQuery }; note = "test" })',
@@ -64,7 +64,7 @@ def test__revokeAdminRole_anonymous(identity_anonymous: Dict[str, str], network:
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="revokeAdminRole",
         canister_argument='("aaaaa-aa")',
@@ -81,7 +81,7 @@ def test__revokeAdminRole_anonymous(identity_anonymous: Dict[str, str], network:
 def test__setup_cleanup_admin_roles(network: str) -> None:
     """Setup: Clean up any existing admin roles from previous test runs"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="revokeAdminRole",
         canister_argument='("aaaaa-aa")',
@@ -97,7 +97,7 @@ def test__setup_cleanup_admin_roles(network: str) -> None:
 def test__getAdminRoles_empty(network: str) -> None:
     """Test getAdminRoles returns empty list initially"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="getAdminRoles",
         canister_argument="()",
@@ -110,7 +110,7 @@ def test__getAdminRoles_empty(network: str) -> None:
 def test__assignAdminRole_AdminQuery(network: str) -> None:
     """Test assignAdminRole assigns AdminQuery role"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="assignAdminRole",
         canister_argument='(record { "principal" = "aaaaa-aa"; role = variant { AdminQuery }; note = "Test admin query role" })',
@@ -125,7 +125,7 @@ def test__assignAdminRole_AdminQuery(network: str) -> None:
 def test__getAdminRoles_after_assign(network: str) -> None:
     """Test getAdminRoles returns assigned roles with proper variant format"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="getAdminRoles",
         canister_argument="()",
@@ -144,7 +144,7 @@ def test__getAdminRoles_after_assign(network: str) -> None:
 def test__assignAdminRole_AdminUpdate(network: str) -> None:
     """Test assignAdminRole assigns AdminUpdate role (upsert overwrites AdminQuery)"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="assignAdminRole",
         canister_argument='(record { "principal" = "aaaaa-aa"; role = variant { AdminUpdate }; note = "Upgraded to admin update" })',
@@ -158,7 +158,7 @@ def test__assignAdminRole_AdminUpdate(network: str) -> None:
 def test__getAdminRoles_after_update(network: str) -> None:
     """Test getAdminRoles returns AdminUpdate role with proper variant format"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="getAdminRoles",
         canister_argument="()",
@@ -178,7 +178,7 @@ def test__getAdminRoles_after_update(network: str) -> None:
 def test__assignAdminRole_second_principal(network: str) -> None:
     """Test assigning AdminQuery role to a second principal"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="assignAdminRole",
         canister_argument='(record { "principal" = "rrkah-fqaaa-aaaaa-aaaaq-cai"; role = variant { AdminQuery }; note = "Second admin" })',
@@ -191,7 +191,7 @@ def test__assignAdminRole_second_principal(network: str) -> None:
 def test__getAdminRoles_multiple_principals(network: str) -> None:
     """Test getAdminRoles returns multiple principals with different roles"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="getAdminRoles",
         canister_argument="()",
@@ -212,7 +212,7 @@ def test__getAdminRoles_multiple_principals(network: str) -> None:
 def test__revokeAdminRole_second_principal(network: str) -> None:
     """Clean up: revoke second principal's role"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="revokeAdminRole",
         canister_argument='("rrkah-fqaaa-aaaaa-aaaaq-cai")',
@@ -225,7 +225,7 @@ def test__revokeAdminRole_second_principal(network: str) -> None:
 def test__revokeAdminRole(network: str) -> None:
     """Test revokeAdminRole removes role"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="revokeAdminRole",
         canister_argument='("aaaaa-aa")',
@@ -238,7 +238,7 @@ def test__revokeAdminRole(network: str) -> None:
 def test__revokeAdminRole_not_found(network: str) -> None:
     """Test revokeAdminRole returns error for non-existent principal"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="revokeAdminRole",
         canister_argument='("non-existent-principal")',
@@ -251,7 +251,7 @@ def test__revokeAdminRole_not_found(network: str) -> None:
 def test__getAdminRoles_after_revoke(network: str) -> None:
     """Test getAdminRoles returns empty after revoke"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="getAdminRoles",
         canister_argument="()",

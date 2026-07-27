@@ -8,7 +8,7 @@
 # file separately.
 
 -r scripts/requirements.txt
-icpp-pro>=5.4.2
+icpp-pro>=5.6.0
 icp-py-core==2.3.1
 # cbor2 is intentionally unpinned: icp-py-core 2.3.1 adds cbor2 6.x compatibility,
 # resolving the frozendict/isinstance(response, dict) breakage that previously
