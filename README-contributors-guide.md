@@ -80,14 +80,14 @@ See the files: README-<upgrade #>-<llama.cpp sha>.md
 
 Established during the b10076 upgrade (see `README-0003-305ba519.md`). Native tests pass
 almost everything the real canister will reject, so escalate through four gates in order —
-do NOT skip to a dfx deploy:
+do NOT skip to an icp deploy:
 
 1. **Native** (`make all-tests` / MockIC) — fastest loop; catches API/merge/link errors and
    verifies exact-token output. But native has real mmap, threads, exceptions, stack and
    getenv, so a green native suite proves almost nothing about canister *runtime* behavior.
    (In b10076, native was 111/111 while five wasm-only bugs were still live.)
 
-2. **Faithful wasmtime harness** (`scripts/wasm_harness.py`) — BEFORE touching dfx. The IC
+2. **Faithful wasmtime harness** (`scripts/wasm_harness.py`) — BEFORE deploying. The IC
    gives no wasm backtrace for a trap; this does.
    - Run the **pre-optimize** wasm `build/llama_cpp_before_opt.wasm` so backtraces show
      function NAMES (binaryen's `optimize()` strips the name section from the deployed wasm).
@@ -97,15 +97,14 @@ do NOT skip to a dfx deploy:
      behavior.
 
 3. **Local IC replica** — confirmation, not primary debugging.
-   - ALWAYS `dfx deploy` or `dfx canister install --wasm build/llama_cpp.wasm`; the `.dfx`
-     cache can serve a stale binary. Verify the module hash changed after install.
+   - ALWAYS `icp deploy` or `icp canister install --wasm build/llama_cpp.wasm`; the `.icp/cache`      cache can serve a stale binary. Verify the module hash changed after install.
    - Run the full pipeline: upload → `load_model` → `new_chat` → `run_update`.
 
 4. **Mainnet** — throughput / behavior under the real 40B instruction cap.
 
 **Interpretation rule that saves the most time:** if `scripts/wasm_harness.py` says the binary
-is clean but the IC traps, suspect the DEPLOY PIPELINE (stale `.dfx` cache, wrong `--wasm`),
-not the binary. In b10076, a multi-hour "install trap" chase was ultimately dfx installing a
+is clean but the IC traps, suspect the DEPLOY PIPELINE (stale `.icp/cache` cache, wrong `--wasm`),
+not the binary. In b10076, a multi-hour "install trap" chase was ultimately the deploy pipeline installing a
 stale cached wasm.
 
 ## Branch management

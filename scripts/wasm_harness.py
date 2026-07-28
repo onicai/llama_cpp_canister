@@ -20,8 +20,9 @@ Key ideas (see README-0003-305ba519.md "Debugging technique"):
     to 1.
 
 INTERPRETATION RULE: if this harness says the binary is clean but the IC traps,
-suspect the DEPLOY PIPELINE (e.g. a stale dfx `.dfx/` cached wasm), not the
-binary. Always `dfx canister install --wasm <path>` and check the module hash.
+suspect the DEPLOY PIPELINE (e.g. a stale icp `.icp/cache/` cached wasm), not the
+binary. Always redeploy with `icp deploy --mode reinstall` and check the module
+hash (`icp canister status <name>`).
 
 Requirements:  pip install wasmtime
 Encode a candid arg with:  didc encode '(record { ... })'   (hex output)

@@ -15,7 +15,7 @@ Anyone can independently verify that the on-chain LLM canisters are running the 
 
 1. Builds `llama_cpp.wasm` from source (same build steps as the release workflow)
 2. Computes the sha256 hash of the built wasm
-3. Queries the module hash of each deployed funnAI LLM canister on IC mainnet via `dfx canister info`
+3. Queries the module hash of each deployed funnAI LLM canister on IC mainnet via `icp canister status`
 4. Compares the hashes and reports pass/fail for each canister
 
 **Canisters verified (30 total):**

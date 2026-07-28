@@ -2,12 +2,12 @@
 
 First deploy the canister:
 $ icpp build-wasm
-$ dfx deploy --network local
+$ icp deploy -e local -y
 
 Then run the tests:
 $ pytest -vv --network local test/test_canister_functions.py
 
-To run it against a deployment to the IC, just replace `local` with `ic` in the commands above.
+To run it against a deployment to the IC, just replace `local` with `production` in the commands above.
 
 """
 # pylint: disable=missing-function-docstring, unused-import, wildcard-import, unused-wildcard-import, line-too-long
@@ -15,25 +15,25 @@ To run it against a deployment to the IC, just replace `local` with `ic` in the 
 from pathlib import Path
 from typing import Dict
 import pytest
-from icpp.smoketest import call_canister_api, dict_to_candid_text
+from .candid_compat import call_canister_api, dict_to_candid_text, norm
 
-# Path to the dfx.json file
-DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
+# Path to the icp.yaml file
+ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 
-# Canister in the dfx.json file we want to test
+# Canister in the icp.yaml file we want to test
 CANISTER_NAME = "llama_cpp"
 
 
 def test__health(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="health",
         canister_argument="()",
         network=network,
     )
     expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__set_access_err(identity_anonymous: Dict[str, str], network: str) -> None:
     # double check the identity_anonymous fixture worked
@@ -41,14 +41,14 @@ def test__set_access_err(identity_anonymous: Dict[str, str], network: str) -> No
     assert identity_anonymous["principal"] == "2vxsx-fae"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="set_access",
         canister_argument='(record { level = 0 : nat16 })',
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__get_access_err(identity_anonymous: Dict[str, str], network: str) -> None:
     # double check the identity_anonymous fixture worked
@@ -56,58 +56,58 @@ def test__get_access_err(identity_anonymous: Dict[str, str], network: str) -> No
     assert identity_anonymous["principal"] == "2vxsx-fae"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_access",
         canister_argument='(record { level = 0 : nat16 })',
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__set_access_1(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="set_access",
         canister_argument='(record { level = 1 : nat16 })',
         network=network,
     )
     expected_response = '(variant { Ok = record { explanation = "All except anonymous"; level = 1 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__get_access_1(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_access",
         canister_argument='(record { level = 1 : nat16 })',
         network=network,
     )
     expected_response = '(variant { Ok = record { explanation = "All except anonymous"; level = 1 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__set_access_0(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="set_access",
         canister_argument='(record { level = 0 : nat16 })',
         network=network,
     )
     expected_response = '(variant { Ok = record { explanation = "Only controllers"; level = 0 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 def test__get_access_0(network: str) -> None:
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_access",
         canister_argument='(record { level = 0 : nat16 })',
         network=network,
     )
     expected_response = '(variant { Ok = record { explanation = "Only controllers"; level = 0 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 # ------------------------------------------------------------------
@@ -118,27 +118,27 @@ def test__check_access_anonymous(identity_anonymous: Dict[str, str], network: st
     assert identity_anonymous["principal"] == "2vxsx-fae"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="check_access",
         canister_argument="()",
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__check_access_controller(network: str) -> None:
     """Test check_access succeeds for controller"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="check_access",
         canister_argument="()",
         network=network,
     )
     expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 # ------------------------------------------------------------------
@@ -146,14 +146,14 @@ def test__check_access_controller(network: str) -> None:
 def test__whoami(network: str, principal: str) -> None:
     """Test whoami returns caller's principal"""
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="whoami",
         canister_argument="()",
         network=network,
     )
     expected_response = f'("{principal}")'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__whoami_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -162,14 +162,14 @@ def test__whoami_anonymous(identity_anonymous: Dict[str, str], network: str) -> 
     assert identity_anonymous["principal"] == "2vxsx-fae"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="whoami",
         canister_argument="()",
         network=network,
     )
     expected_response = '("2vxsx-fae")'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 # =============================================================================
@@ -181,14 +181,14 @@ def test__set_max_tokens_anonymous(identity_anonymous: Dict[str, str], network: 
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="set_max_tokens",
         canister_argument='(record { max_tokens_update = 100 : nat64; max_tokens_query = 100 : nat64 })',
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__load_model_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -196,7 +196,7 @@ def test__load_model_anonymous(identity_anonymous: Dict[str, str], network: str)
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="load_model",
         canister_argument='(record { args = vec { "--help" } })',
@@ -212,14 +212,14 @@ def test__log_pause_anonymous(identity_anonymous: Dict[str, str], network: str) 
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="log_pause",
         canister_argument="()",
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__log_resume_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -227,14 +227,14 @@ def test__log_resume_anonymous(identity_anonymous: Dict[str, str], network: str)
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="log_resume",
         canister_argument="()",
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__remove_log_file_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -242,7 +242,7 @@ def test__remove_log_file_anonymous(identity_anonymous: Dict[str, str], network:
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="remove_log_file",
         canister_argument='(record { args = vec {} })',
@@ -258,7 +258,7 @@ def test__new_chat_anonymous(identity_anonymous: Dict[str, str], network: str) -
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="new_chat",
         canister_argument='(record { args = vec { "--help" } })',
@@ -274,7 +274,7 @@ def test__run_query_anonymous(identity_anonymous: Dict[str, str], network: str) 
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="run_query",
         canister_argument='(record { args = vec { "--help" } })',
@@ -290,7 +290,7 @@ def test__run_update_anonymous(identity_anonymous: Dict[str, str], network: str)
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="run_update",
         canister_argument='(record { args = vec { "--help" } })',
@@ -306,7 +306,7 @@ def test__remove_prompt_cache_anonymous(identity_anonymous: Dict[str, str], netw
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="remove_prompt_cache",
         canister_argument='(record { args = vec { "test.cache" } })',
@@ -322,14 +322,14 @@ def test__copy_prompt_cache_anonymous(identity_anonymous: Dict[str, str], networ
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="copy_prompt_cache",
         canister_argument='(record { from = "source.cache"; to = "dest.cache" })',
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__get_chats_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -337,14 +337,14 @@ def test__get_chats_anonymous(identity_anonymous: Dict[str, str], network: str) 
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="get_chats",
         canister_argument="()",
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__chats_resume_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -352,14 +352,14 @@ def test__chats_resume_anonymous(identity_anonymous: Dict[str, str], network: st
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="chats_resume",
         canister_argument="()",
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)
 
 
 def test__chats_pause_anonymous(identity_anonymous: Dict[str, str], network: str) -> None:
@@ -367,11 +367,11 @@ def test__chats_pause_anonymous(identity_anonymous: Dict[str, str], network: str
     assert identity_anonymous["identity"] == "anonymous"
 
     response = call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="chats_pause",
         canister_argument="()",
         network=network,
     )
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-    assert response == expected_response
+    assert response == norm(expected_response)

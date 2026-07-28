@@ -2,7 +2,7 @@
 
 First deploy the canister:
 $ icpp build-wasm
-$ dfx deploy --network local
+$ icp deploy -e local -y
 
 Then run the tests:
 $ pytest -vv --network local test/test_cycle_balance.py
@@ -19,9 +19,9 @@ import re
 from pathlib import Path
 from typing import Dict
 
-from icpp.smoketest import call_canister_api
+from .candid_compat import call_canister_api, norm
 
-DFX_JSON_PATH = Path(__file__).parent / "../dfx.json"
+ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 CANISTER_NAME = "llama_cpp"
 
 TRACKING_OFF_MESSAGE = (
@@ -34,7 +34,7 @@ TRACKING_OFF_MESSAGE = (
 
 def _call(method: str, argument: str, network: str) -> str:
     return call_canister_api(
-        dfx_json_path=DFX_JSON_PATH,
+        icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method=method,
         canister_argument=argument,
@@ -75,7 +75,7 @@ def test__cycle_balance_endpoints_require_auth(
         ("get_cycle_balance", "()"),
     ]:
         response = _call(method, arg, network)
-        assert response == expected, f"{method}: got {response!r}"
+        assert response == norm(expected), f"{method}: got {response!r}"
 
 
 # ---------- tracking-off error (timer not armed) ---------------------------
@@ -95,7 +95,7 @@ def test__get_cycle_balance_off_returns_clear_error(network: str) -> None:
 
 def test__cycle_balance_start_timer(network: str) -> None:
     response = _start(network)
-    assert response == "(variant { Ok = record { status_code = 200 : nat16;} })", response
+    assert response == norm("(variant { Ok = record { status_code = 200 : nat16;} })"), response
 
 
 # ---------- get returns a fresh, non-zero balance --------------------------
@@ -119,7 +119,7 @@ def test__get_cycle_balance_ok_after_start(network: str) -> None:
 
 def test__cycle_balance_stop_timer(network: str) -> None:
     response = _stop(network)
-    assert response == "(variant { Ok = record { status_code = 200 : nat16;} })", response
+    assert response == norm("(variant { Ok = record { status_code = 200 : nat16;} })"), response
 
     # After stop, the query again reports tracking is off.
     off = _call("get_cycle_balance", "()", network)

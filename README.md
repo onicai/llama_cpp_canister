@@ -39,20 +39,17 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
 # Set up
 
-- Install dfx (version 0.31.0 or later is required):
+- Install icp-cli (and ic-wasm). Requires [Node.js](https://nodejs.org/) >= 22:
 
   ```bash
-  sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
+  npm install -g @icp-sdk/icp-cli @icp-sdk/ic-wasm
 
-  # Configure your shell
-  source "$HOME/.local/share/dfx/env"
-
-  # Verify the version (must be >= 0.31.0)
-  dfx --version
+  # Verify it is installed
+  icp --version
   ```
 
-  > **Note:** dfx 0.31+ is required because `icp-py-core` uses the `/api/v3/`
-  > endpoint, which is not supported by older dfx versions.
+  > **Note:** icp-cli replaces the deprecated `dfx`. This project was built and
+  > tested against **icp-cli 1.2.0**.
 
 - Clone the repo and it's children:
 
@@ -119,26 +116,32 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   - Start the local network:
 
     ```bash
-    dfx start --clean
+    icp network start -d
     ```
+
+    > **Note:** icp-cli runs one local network **per project** and (with
+    > `gateway.port: 0` in `icp.yaml`) assigns a **random ephemeral port** on every
+    > start, so parallel projects never collide. Never hardcode `localhost:8000`;
+    > read the port back with `icp network status -e local --json`.
 
   - Deploy the wasm to a canister on the local network:
 
-    `dfx.json` defines two canisters that share the same wasm: **`llama_cpp`** (the
+    `icp.yaml` defines two canisters that share the same wasm: **`llama_cpp`** (the
     default, serving **Qwen3-0.6B** — the steps below) and **`llama_cpp_qwen25`** (the
     previous default, **Qwen2.5-0.5B** — see [README-qwen2.5.md](README-qwen2.5.md)).
     Deploy just the one you need by naming it:
 
     ```bash
-    dfx deploy llama_cpp
+    icp deploy llama_cpp -e local -y
 
     # When upgrading the code in the canister, use:
-    dfx deploy llama_cpp -m upgrade
+    icp deploy llama_cpp -m upgrade -e local -y
     ```
 
-  - Check the health endpoint of the `llama_cpp` canister:
+  - Check the health endpoint of the `llama_cpp` canister (calling a canister by
+    name requires naming its environment with `-e`):
     ```bash
-    $ dfx canister call llama_cpp health
+    $ icp canister call llama_cpp health '()' -e local --query
     (variant { Ok = record { status_code = 200 : nat16 } })
     ```
 
@@ -147,22 +150,21 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   The LLM upload and inference calls consume cycles. You can add with:
 
   ```bash
-  # Add 20 trillion cycles
-  dfx ledger fabricate-cycles --canister llama_cpp --t 20
+  # Add 20 trillion cycles (drawn from your local identity's seeded balance)
+  icp canister top-up llama_cpp --amount 20000000000000 -e local
   ```
 
 - Raise the canister's wasm memory limit (needed for larger models)
 
   The default reference model, Qwen3-0.6B, runs close to the wasm heap ceiling. Set
-  the `wasm_memory_limit` to 3.75 GiB (wasm32 cannot address a full 4 GiB). This must
-  be set with `update-settings` — it cannot be set in `dfx.json`'s
-  `initialization_values` when the canister is created through a cycles wallet:
+  the `wasm_memory_limit` to 3.75 GiB (wasm32 cannot address a full 4 GiB) with
+  `icp canister settings update`:
 
   ```bash
-  dfx canister update-settings llama_cpp --wasm-memory-limit 4026531840
+  icp canister settings update llama_cpp --wasm-memory-limit 4026531840 -e local
 
   # verify
-  dfx canister status llama_cpp | grep "Wasm memory limit"
+  icp canister status llama_cpp -e local | grep "Wasm memory limit"
   ```
 
 - Upload gguf file
@@ -199,7 +201,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
     ```bash
     python -m scripts.upload \
-      --network local \
+      -e local \
       --canister llama_cpp \
       --canister-filename models/model.gguf \
       --filetype gguf \
@@ -217,7 +219,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   - Check the filesize & sha256 of the uploaded gguf file in the canister
 
     ```bash
-    dfx canister call llama_cpp uploaded_file_details '(record {
+    icp canister call llama_cpp -e local uploaded_file_details '(record {
       filename = "models/model.gguf"
     })'
 
@@ -242,7 +244,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 - Load the gguf file into Orthogonal Persisted (OP) working memory
 
   ```bash
-  dfx canister call llama_cpp load_model '(record {
+  icp canister call llama_cpp -e local load_model '(record {
     args = vec {
       "--model"; "models/model.gguf";
       "--cache-type-k"; "q8_0";
@@ -273,12 +275,12 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   _(See Appendix A for values of others models.)_
 
   ```bash
-  dfx canister call llama_cpp set_max_tokens '(record {
+  icp canister call llama_cpp -e local set_max_tokens '(record {
     max_tokens_query = 1 : nat64;
     max_tokens_update = 20 : nat64
   })'
 
-  dfx canister call llama_cpp get_max_tokens
+  icp canister call llama_cpp -e local get_max_tokens
   ```
 
   For Qwen3-0.6B the first-call ceiling is ~25–29 tokens; we use **20** to leave
@@ -289,7 +291,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   - Ensure the canister is ready for Inference, with the model loaded
 
     ```bash
-    dfx canister call llama_cpp ready
+    icp canister call llama_cpp -e local ready
     ```
 
   - Chat with the LLM:
@@ -307,7 +309,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     Start a new chat
 
     ```bash
-    dfx canister call llama_cpp new_chat '(record {
+    icp canister call llama_cpp -e local new_chat '(record {
       args = vec {
         "--prompt-cache"; "prompt.cache";
         "--cache-type-k"; "q8_0";
@@ -328,7 +330,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
         Qwen3 runs in non-thinking mode
 
     ```bash
-    dfx canister call llama_cpp run_update '(record {
+    icp canister call llama_cpp -e local run_update '(record {
       args = vec {
         "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
         "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
@@ -351,7 +353,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     (-) Use `"-n"; "512"`, so it will now generate new tokens
 
     ```bash
-    dfx canister call llama_cpp run_update '(record {
+    icp canister call llama_cpp -e local run_update '(record {
       args = vec {
         "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
         "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
@@ -394,7 +396,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     then generate with an empty `-p` until `generated_eog=true`):
 
     ```bash
-    dfx canister call llama_cpp run_update '(record {
+    icp canister call llama_cpp -e local run_update '(record {
       args = vec {
         "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
         "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
@@ -417,7 +419,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     Remove the prompt cache when done - this keeps stable memory usage at a minimum
 
     ```bash
-    dfx canister call llama_cpp remove_prompt_cache '(record {
+    icp canister call llama_cpp -e local remove_prompt_cache '(record {
       args = vec {
         "--prompt-cache"; "prompt.cache"
       }
@@ -447,15 +449,15 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     This functionality is off by default. You can turn it on/off with:
 
     ```bash
-    dfx canister call llama_cpp chats_resume
-    dfx canister call llama_cpp chats_pause
+    icp canister call llama_cpp -e local chats_resume
+    icp canister call llama_cpp -e local chats_pause
     ```
 
     When on, up to 3 chats per principal are saved.
     The `get_chats` method retrieves them for the principal of the caller.
 
     ```
-    dfx canister call llama_cpp get_chats
+    icp canister call llama_cpp -e local get_chats
     ```
 
 # log_pause & log_resume
@@ -465,10 +467,10 @@ turn the logging off and back on with these commands:
 
 ```bash
 # turn off logging
-dfx canister call llama_cpp log_pause
+icp canister call llama_cpp -e local log_pause
 
 # turn on logging
-dfx canister call llama_cpp log_resume
+icp canister call llama_cpp -e local log_resume
 ```
 
 # Logging to a file
@@ -481,7 +483,7 @@ Afterwards, you can download the `main.log` file from the canister with:
 
 ```bash
 python -m scripts.download \
-  --network local \
+  -e local \
   --canister llama_cpp \
   --local-filename main.log main.log
 ```
@@ -489,13 +491,13 @@ python -m scripts.download \
 You can cleanup by deleting both the log & prompt.cache files in the canister:
 
 ```bash
-dfx canister call llama_cpp remove_prompt_cache '(record {
+icp canister call llama_cpp -e local remove_prompt_cache '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"
     }
 })'
 
-dfx canister call llama_cpp remove_log_file '(record {
+icp canister call llama_cpp -e local remove_log_file '(record {
   args = vec {
     "--log-file"; "main.log"
   }
@@ -530,14 +532,14 @@ Each caller of the llama_cpp_canister has it's own cache folder, and has the fol
 
 ```bash
 # Remove a prompt cache file from the caller's cache folder
-dfx canister call llama_cpp remove_prompt_cache '(record {
+icp canister call llama_cpp -e local remove_prompt_cache '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"
   }
 })'
 
 # Copy a prompt cache file within the caller's cache folder
-dfx canister call llama_cpp copy_prompt_cache '(record {
+icp canister call llama_cpp -e local copy_prompt_cache '(record {
   from = "prompt.cache";
   to = "prompt-save.cache"
 })'
@@ -547,7 +549,7 @@ dfx canister call llama_cpp copy_prompt_cache '(record {
 # Note: chunksize of 5 bytes is for demo only.
 #       -> use 200_000 or higher (2_000_000 max) in actual download
 #       -> experiment what chunksize results in fastest download
-dfx canister call llama_cpp download_prompt_cache_chunk '(record {
+icp canister call llama_cpp -e local download_prompt_cache_chunk '(record {
   promptcache = "prompt.cache";
   chunksize = 5 : nat64;
   offset = 0 : nat64;
@@ -567,7 +569,7 @@ dfx canister call llama_cpp download_prompt_cache_chunk '(record {
 
 # --
 # Then call it again to download the next chunk of bytes
-dfx canister call llama_cpp download_prompt_cache_chunk '(record {
+icp canister call llama_cpp -e local download_prompt_cache_chunk '(record {
   promptcache = "prompt.cache";
   chunksize = 5 : nat64;
   offset = 5 : nat64;
@@ -592,7 +594,7 @@ dfx canister call llama_cpp download_prompt_cache_chunk '(record {
 # Using a small chunksize goes faster !
 #
 python -m scripts.download \
-    --network local \
+    -e local \
     --canister llama_cpp \
     --filetype promptcache \
     --chunksize 2000000 \
@@ -603,7 +605,7 @@ python -m scripts.download \
 # Note: chunksize of 5 bytes is for demo only.
 #       -> use 200_000 or higher (2_000_000 max) in actual download
 #       -> experiment what chunksize results in fastest download
-dfx canister call llama_cpp upload_prompt_cache_chunk '(record {
+icp canister call llama_cpp -e local upload_prompt_cache_chunk '(record {
   promptcache = "prompt.cache";
   chunk = blob "\47\47\55\46\03";
   chunksize = 5 : nat64;
@@ -622,7 +624,7 @@ dfx canister call llama_cpp upload_prompt_cache_chunk '(record {
 
 # --
 # Then call it again to upload the next chunk of bytes
-dfx canister call llama_cpp upload_prompt_cache_chunk '(record {
+icp canister call llama_cpp -e local upload_prompt_cache_chunk '(record {
   promptcache = "prompt.cache";
   chunk = blob "\08\33\41\43\04";
   chunksize = 5 : nat64;
@@ -641,7 +643,7 @@ dfx canister call llama_cpp upload_prompt_cache_chunk '(record {
 
 # --
 # You can check the filesize & sha256 of the uploaded prompt cache file in the canister
-dfx canister call llama_cpp uploaded_prompt_cache_details '(record {
+icp canister call llama_cpp -e local uploaded_prompt_cache_details '(record {
   promptcache = "prompt.cache";
 })'
 # -> this will return
@@ -658,7 +660,7 @@ dfx canister call llama_cpp uploaded_prompt_cache_details '(record {
 # --
 # You can wrap the upload call in a loop, as in scripts/upload.py
 python -m scripts.upload \
-    --network local \
+    -e local \
     --canister llama_cpp \
     --canister-filename prompt.cache \
     --filetype promptcache \
@@ -680,15 +682,15 @@ You can open up the inference endpoints using the following command:
 #
 # 0 = only controllers
 # 1 = all except anonymous
-dfx canister call llama_cpp set_access '(record {
+icp canister call llama_cpp -e local set_access '(record {
   level = 1 : nat16
 })'
 
 # Verify it worked
-dfx canister call llama_cpp get_access
+icp canister call llama_cpp -e local get_access
 
 # A caller can check it's access rights with
-dfx canister call llama_cpp check_access
+icp canister call llama_cpp -e local check_access
 ```
 
 # File Management
@@ -701,20 +703,20 @@ For example, you can explore what is stored in the `.canister_cache` folder:
 
 ```bash
 # Query call to list all files & directories in a folder
-dfx canister call llama_cpp recursive_dir_content_query '(record {dir = ".canister_cache"; max_entries = 0 : nat64})' --output json
+icp canister call llama_cpp -e local recursive_dir_content_query '(record {dir = ".canister_cache"; max_entries = 0 : nat64})' --output json
 # Update call in case you hit the instruction limit
-dfx canister call llama_cpp recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 0 : nat64})' --output json
+icp canister call llama_cpp -e local recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 0 : nat64})' --output json
 # Update call to get eg. the first 5000 entries, in case you still hit the instruction limit
-dfx canister call llama_cpp recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 5000 : nat64})' --output json
+icp canister call llama_cpp -e local recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 5000 : nat64})' --output json
 
 # Get the size of a file in bytes
-dfx canister call llama_cpp filesystem_file_size '(record {filename = "<filename>"})' --output json
+icp canister call llama_cpp -e local filesystem_file_size '(record {filename = "<filename>"})' --output json
 
 # Get the creation timestamp of a file in nanoseconds (also returns age of file in seconds)
-dfx canister call llama_cpp get_creation_timestamp_ns '(record {filename = "<filename>"})' --output json
+icp canister call llama_cpp -e local get_creation_timestamp_ns '(record {filename = "<filename>"})' --output json
 
 # remove a file or empty directory
-dfx canister call llama_cpp filesystem_remove '(record {filename = "<filename>"})'
+icp canister call llama_cpp -e local filesystem_remove '(record {filename = "<filename>"})'
 ```
 
 # Prompt-Cache Cleanup Timer
@@ -744,15 +746,15 @@ All endpoints below require **admin role**:
 ```bash
 # ------------------------------------------------------------------
 # Arm the recurring timer (REQUIRED after every install / upgrade)
-dfx canister call llama_cpp cache_cleanup_start_timer '()'
+icp canister call llama_cpp -e local cache_cleanup_start_timer '()'
 # -> (variant { Ok = record { ok = true; is_running = true } })
 
 # Stop the recurring timer
-dfx canister call llama_cpp cache_cleanup_stop_timer '()'
+icp canister call llama_cpp -e local cache_cleanup_stop_timer '()'
 # -> (variant { Ok = record { ok = true; is_running = false } })
 
 # Trigger one cleanup pass immediately (independent of the timer state)
-dfx canister call llama_cpp cache_cleanup_now '()'
+icp canister call llama_cpp -e local cache_cleanup_now '()'
 # -> (variant { Ok = record { runs = ...; files_examined = ...;
 #                             files_deleted = ...; files_failed = ...;
 #                             last_run_ns = ...; period_seconds = 600;
@@ -763,21 +765,21 @@ dfx canister call llama_cpp cache_cleanup_now '()'
 # Inspect stats (query, fast). `runs` and `last_run_ns` are lifetime
 # counters; `files_examined`, `files_deleted`, `files_failed` reflect the
 # MOST RECENT cleanup run only.
-dfx canister call llama_cpp get_cache_cleanup_stats '()'
+icp canister call llama_cpp -e local get_cache_cleanup_stats '()'
 
 # Adjust config (each field is `opt nat64`; null = no change).
 #   - period_seconds: must be > 0; opt 0 is silently rejected.
 #   - ttl_seconds   : 0 is valid ("delete every file under sessions/").
 #   - max_files_per_run: clamped to [1, 10000].
 # If the timer is already running, the new period is applied transparently.
-dfx canister call llama_cpp set_cache_cleanup_config '(record {
+icp canister call llama_cpp -e local set_cache_cleanup_config '(record {
   period_seconds    = opt (300 : nat64);
   ttl_seconds       = opt (3600 : nat64);
   max_files_per_run = opt (128 : nat64)
 })'
 
 # Same call to update only the TTL, leaving period and cap unchanged
-dfx canister call llama_cpp set_cache_cleanup_config '(record {
+icp canister call llama_cpp -e local set_cache_cleanup_config '(record {
   period_seconds    = null;
   ttl_seconds       = opt (3600 : nat64);
   max_files_per_run = null
@@ -809,19 +811,19 @@ All endpoints below require **admin role**:
 # ------------------------------------------------------------------
 # Turn ON cycle-balance tracking (REQUIRED after every install / upgrade).
 # Refreshes the balance once immediately, then re-reads it hourly.
-dfx canister call llama_cpp cycle_balance_start_timer '()'
+icp canister call llama_cpp -e local cycle_balance_start_timer '()'
 # -> (variant { Ok = record { status_code = 200 : nat16 } })
 
 # Read the cached balance (admin query, fast). updated_at_ns is the
 # IC_API::time() at which the snapshot was taken.
-dfx canister call llama_cpp get_cycle_balance '()'
+icp canister call llama_cpp -e local get_cycle_balance '()'
 # -> (variant { Ok = record { cycle_balance = ... : nat; updated_at_ns = ... : nat64 } })
 
 # If tracking is OFF, the query returns a clear error instead of a stale value:
 # -> (variant { Err = variant { Other = "cycle balance tracking is off — an admin must call cycle_balance_start_timer" } })
 
 # Turn OFF cycle-balance tracking
-dfx canister call llama_cpp cycle_balance_stop_timer '()'
+icp canister call llama_cpp -e local cycle_balance_stop_timer '()'
 # -> (variant { Ok = record { status_code = 200 : nat16 } })
 ```
 
@@ -835,7 +837,7 @@ causes `heap out of bounds` (IC0502) traps during `load_model` / generation.
 Access: **non-anonymous** callers only (anonymous callers get an access-denied error).
 
 ```bash
-dfx canister call llama_cpp get_memory_status
+icp canister call llama_cpp -e local get_memory_status
 # ->
 (
   variant {
@@ -847,10 +849,10 @@ dfx canister call llama_cpp get_memory_status
 )
 ```
 
-The `wasm_memory_limit` itself is set with `dfx canister update-settings llama_cpp
---wasm-memory-limit 4026531840` (see the setup steps) — it cannot go in `dfx.json`'s
+The `wasm_memory_limit` itself is set with `icp canister settings update llama_cpp
+--wasm-memory-limit 4026531840` (see the setup steps) — it cannot go in `icp.yaml`'s
 `initialization_values` when the canister is created through a cycles wallet. Check it
-with `dfx canister status llama_cpp`. If `wasm_heap_bytes` approaches the limit, lower
+with `icp canister status llama_cpp`. If `wasm_heap_bytes` approaches the limit, lower
 `--batch-size`/`--ubatch-size` (biggest win), reduce `--ctx-size`, and/or quantize the KV
 cache (`--cache-type-k`/`-v q8_0`) when loading — see [Context size & memory](#appendix-b-context-size--memory).
 
@@ -931,7 +933,7 @@ words) if you accept a tighter margin.
 Memory here is a hard wall, and hitting it is **not** a graceful error. If a `load_model`
 or (more likely) an inference call needs to grow the heap past `wasm_memory_limit`, the
 canister traps with `heap out of bounds` (IC0502). Recovery requires a
-**`dfx canister install --mode reinstall`** (which wipes the heap *and* the uploaded model),
+**`icp canister install --mode reinstall`** (which wipes the heap *and* the uploaded model),
 then **re-uploading the gguf** and reloading.
 
 Practical guidance:

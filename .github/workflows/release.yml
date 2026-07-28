@@ -75,7 +75,7 @@ jobs:
           echo "Installing tool chains & dependencies"
           pwd
           make summary
-          make install-dfx
+          make install-icp
           make install-python
           make install-homebrew-mac
           make install-jp-mac
@@ -91,7 +91,7 @@ jobs:
           echo "python version  : $(python --version)"
           echo "jp version      : $(jp --version)"
           #echo "rustc version   : $(rustc --version)"
-          echo "dfx version    : $(dfx --version)"
+          echo "icp version    : $(icp --version)"
           echo "Ensure conda works properly"
           conda info
           which pip
@@ -131,7 +131,7 @@ jobs:
           cp version.txt release/
           cp requirements.txt release/
           cp README.md release/
-          cp dfx.json release/
+          cp icp.yaml release/
           cp LICENSE release/
           cp __init__.py release/
           mkdir -p release/build

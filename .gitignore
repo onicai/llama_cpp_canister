@@ -22,8 +22,12 @@ main*.log
 .vs
 CppProperties.json
 
-# Internet Computer
-.dfx
+# Internet Computer (icp-cli)
+# ONLY the cache is disposable. `.icp/data/` holds the mainnet canister id
+# mappings (the replacement for canister_ids.json) and MUST be committed, so it is
+# deliberately NOT ignored. Use `**/.icp/cache/` (a slash-containing pattern is
+# anchored to this file's dir; a bare `.icp/cache/` would miss nested project dirs).
+**/.icp/cache/
 
 # Javascript bindings
 declarations
@@ -159,3 +163,7 @@ venv.bak/
 
 # Local working notes (not published)
 README-max-tokens-todo.md
+
+# Scratch / task-todo notes for AI agents & humans. Deliberately local-only:
+# they capture in-flight plans and findings, not repo state.
+TMP-*

@@ -23,10 +23,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: install dfx
+      - name: install icp
         run: |
-          DFXVM_INIT_YES=true sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
-          echo "$HOME/.local/share/dfx/bin" >> "$GITHUB_PATH"
+          npm install -g @icp-sdk/icp-cli @icp-sdk/ic-wasm
 
       - name: download release wasm
         run: |
@@ -47,8 +46,8 @@ jobs:
           echo "  ${RELEASE_HASH}"
           echo "=============================================="
 
-      - name: create default identity
-        run: dfx identity get-principal > /dev/null 2>&1
+      - name: verify icp identity works
+        run: icp identity principal > /dev/null 2>&1
 
       - name: verify onicai SNS LLM canisters
         run: |
@@ -71,13 +70,14 @@ jobs:
             echo "Verifying: ${LABEL}"
             echo "Canister : ${CANISTER_ID}"
 
-            # Get the deployed module hash
-            INFO_OUTPUT=$(dfx canister info "${CANISTER_ID}" --network ic 2>&1) || true
+            # Get the deployed module hash (icp canister status uses a public
+            # read-state call, so it works without being a controller).
+            INFO_OUTPUT=$(icp canister status "${CANISTER_ID}" -n ic 2>&1) || true
             DEPLOYED_HASH=$(echo "${INFO_OUTPUT}" | grep "Module hash" | awk '{print $3}' | sed 's/^0x//')
 
             if [ -z "${DEPLOYED_HASH}" ]; then
               echo "  ERROR: Could not retrieve module hash"
-              echo "  dfx output: ${INFO_OUTPUT}"
+              echo "  icp output: ${INFO_OUTPUT}"
               FAIL=$((FAIL + 1))
               ERRORS="${ERRORS}\n  FAIL: ${LABEL} (${CANISTER_ID}) - could not retrieve module hash"
               return

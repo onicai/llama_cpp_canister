@@ -54,7 +54,7 @@ jobs:
           echo "Installing tool chains & dependencies"
           pwd
           make summary
-          make install-dfx
+          make install-icp
           make install-python
           make install-homebrew-mac
           make install-jp-mac
@@ -70,7 +70,7 @@ jobs:
           echo "python version  : $(python --version)"
           echo "jp version      : $(jp --version)"
           #echo "rustc version   : $(rustc --version)"
-          echo "dfx version    : $(dfx --version)"
+          echo "icp version    : $(icp --version)"
           echo "Ensure conda works properly"
           conda info
           which pip
@@ -117,5 +117,10 @@ jobs:
 
       - name: test-llm-wasm
         shell: bash -l {0}
+        # `icp network start` downloads the network-launcher via the GitHub API.
+        # Unauthenticated that is 60 req/hour shared across all GitHub-hosted
+        # runners, so authenticate with the job's token to avoid 403 rate limits.
+        env:
+          ICP_CLI_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           make test-llm-wasm

@@ -5,7 +5,7 @@ export PYTHONPATH="${PYTHONPATH}:$(realpath $LLAMA_CPP_CANISTER_PATH)"
 
 #######################################################################
 # run from parent folder as:
-# scripts/upload-model.sh --network [local|ic]
+# scripts/upload-model.sh --network [local|production]
 #######################################################################
 
 # Default network type is local
@@ -24,17 +24,17 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --network)
             shift
-            if [ "$1" = "local" ] || [ "$1" = "ic" ]; then
+            if [ "$1" = "local" ] || [ "$1" = "production" ]; then
                 NETWORK_TYPE=$1
             else
-                echo "Invalid network type: $1. Use 'local' or 'ic'."
+                echo "Invalid network type: $1. Use 'local' or 'production'."
                 exit 1
             fi
             shift
             ;;
         *)
             echo "Unknown argument: $1"
-            echo "Usage: $0 --network [local|ic]"
+            echo "Usage: $0 --network [local|production]"
             exit 1
             ;;
     esac
@@ -50,7 +50,7 @@ echo "Uploading model to llama_cpp"
 echo " "
 echo "--------------------------------------------------"
 echo "Checking health endpoint for llama_cpp"
-output=$(dfx canister call llama_cpp health --network $NETWORK_TYPE )
+output=$(icp canister call llama_cpp health -e $NETWORK_TYPE --query )
 
 if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
     echo "llama_cpp health check failed."
@@ -63,7 +63,7 @@ fi
 echo " "
 echo "--------------------------------------------------"
 echo "Upload the model ($MODEL) to llama_cpp"
-python -m scripts.upload --network $NETWORK_TYPE --canister llama_cpp --canister-filename models/model.gguf $MODEL
+python -m scripts.upload -e $NETWORK_TYPE --canister llama_cpp --canister-filename models/model.gguf $MODEL
 
 if [ $? -ne 0 ]; then
     echo "scripts.upload for llama_cpp exited with an error."

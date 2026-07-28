@@ -20,10 +20,10 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --network)
             shift
-            if [ "$1" = "local" ] || [ "$1" = "ic" ]; then
+            if [ "$1" = "local" ] || [ "$1" = "production" ]; then
                 NETWORK_TYPE=$1
             else
-                echo "Invalid network type: $1. Use 'local' or 'ic'."
+                echo "Invalid network type: $1. Use 'local' or 'production'."
                 exit 1
             fi
             shift
@@ -40,7 +40,7 @@ while [ $# -gt 0 ]; do
             ;;
         *)
             echo "Unknown argument: $1"
-            echo "Usage: $0 --network [local|ic]"
+            echo "Usage: $0 --network [local|production]"
             exit 1
             ;;
     esac
@@ -51,20 +51,20 @@ echo "Using network type: $NETWORK_TYPE"
 #######################################################################
 echo "--------------------------------------------------"
 echo "Deploying the wasm to llama_cpp"
-if [ "$NETWORK_TYPE" = "ic" ]; then
+if [ "$NETWORK_TYPE" = "production" ]; then
     if [ "$SUBNET" = "none" ]; then
-        yes | dfx deploy llama_cpp -m $DEPLOY_MODE --yes --network $NETWORK_TYPE
+        icp deploy llama_cpp -m $DEPLOY_MODE -y -e $NETWORK_TYPE
     else
-        yes | dfx deploy llama_cpp -m $DEPLOY_MODE --yes --network $NETWORK_TYPE --subnet $SUBNET
+        icp deploy llama_cpp -m $DEPLOY_MODE -y -e $NETWORK_TYPE --subnet $SUBNET
     fi
 else
-    yes | dfx deploy llama_cpp -m $DEPLOY_MODE --yes --network $NETWORK_TYPE
+    icp deploy llama_cpp -m $DEPLOY_MODE -y -e $NETWORK_TYPE
 fi 
 
 echo " "
 echo "--------------------------------------------------"
 echo "Checking health endpoint for llama_cpp"
-output=$(dfx canister call llama_cpp health --network $NETWORK_TYPE )
+output=$(icp canister call llama_cpp health -e $NETWORK_TYPE --query )
 
 if [ "$output" != "(variant { Ok = record { status_code = 200 : nat16 } })" ]; then
     echo "llama_cpp health check failed."
