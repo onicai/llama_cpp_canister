@@ -82,12 +82,15 @@ summary:
 
 .PHONY: test-llm-native
 test-llm-native:
-	icp identity default default
 	icpp build-native
 	./build-native/mockic.exe
 
 .PHONY: test-llm-wasm
 test-llm-wasm:
+	# icp does not auto-create a `default` identity (dfx did). Create a keyed,
+	# plaintext-stored one so the uploader can export its key non-interactively;
+	# tolerate "already exists" on machines that have it.
+	icp identity new default --storage plaintext 2>/dev/null || true
 	icp identity default default
 	python -m scripts.qa_deploy_and_pytest
 	
