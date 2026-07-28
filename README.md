@@ -873,7 +873,7 @@ We tested several LLM models available on HuggingFace:
 | ----------------------------------------------------------------------------------------- | --------- | --------- | ------------ | -------------- | ----------------------------- | ------------------------------ |
 | [Qwen3-0.6B-Q8_0.gguf](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF) (default)             | 600 M     | 0.64 GB   | q8_0         | q8_0           | -                             | 25                             |
 | [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF) | 630 M     | 0.68 GB   | q8_0         | q8_0           | -                             | 25                             |
-| [gemma-3-270m-it-Q8_0.gguf](https://huggingface.co/unsloth/gemma-3-270m-it-GGUF) (tiniest) | 270 M     | 0.29 GB   | q8_0         | f16            | -                             | 40                             |
+| [gemma-3-270m-it-Q8_0.gguf](https://huggingface.co/unsloth/gemma-3-270m-it-GGUF) (tiniest) | 270 M     | 0.29 GB   | q8_0         | q8_0           | -                             | 44                             |
 
 _(We have benchmarked other models too — SmolLM2, Llama-3.2, DeepSeek-R1 1.5B, and other Qwen2.5 quants — but their pre-b10076 numbers must be re-measured before we list them here.)_
 
@@ -881,7 +881,7 @@ NOTEs:
 
 - **`Qwen3-0.6B-Q8_0` is the current default** (top row): ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --batch-size 64 --ubatch-size 64 --ctx-size 16384` and a `wasm_memory_limit` of 3.75 GiB; the small batch shrinks the compute buffers so a 16K context fits with ~2 GiB headroom — see [Context size & memory](#appendix-b-context-size--memory) for the mechanism, levers, and risks.
 - **`qwen2.5-0.5b-instruct-q8_0` was re-measured on b10076**: 25 tokens/call sustained, 28 first-call ceiling — up ~2.8x from ~10, thanks to the hand-written WASM SIMD q8_0 kernel.
-- **`gemma-3-270m-it-Q8_0` is the smallest model we run on-chain** — the b10076 fork loads the `gemma3` architecture. Measured **generation ceiling of 49 tokens/call** (49 OK / 50 traps at short context, on a local replica whose instruction limit is the same 40 B as mainnet), so `max_tokens_update = 40` is a safe value. Use `--temp 0.7` — greedy decoding can end a turn immediately. Its heap peaks at only ~0.9 GiB after load, so the **default `wasm_memory_limit` is enough** (no 3.75 GiB bump). See [README-gemma-3.md](README-gemma-3.md) for the full recipe.
+- **`gemma-3-270m-it-Q8_0` is the smallest model we run on-chain** — the b10076 fork loads the `gemma3` architecture. With a **q8_0 KV cache** the measured **generation ceiling is ~55 tokens/call** (55 OK / 60 traps at short context, on a local replica whose instruction limit is the same 40 B as mainnet; ~50 with the default f16 cache), so `max_tokens_update = 44` is a safe value. Use `--temp 0.7` — greedy decoding can end a turn immediately. Its heap peaks at only ~0.9 GiB after load, so the **default `wasm_memory_limit` is enough** (no 3.75 GiB bump). See [README-gemma-3.md](README-gemma-3.md) for the full recipe.
 - During prompt ingestion phase, the max_tokens before hitting the instruction limit is higher as during the generation phase.
 - We use `"--temp"; "0.6"; "--repeat-penalty"; "1.1";`, as recommended on several model cards
 - For each model, we selected a `--cache-type-k` that gives the highest max_tokens while still providing good results.

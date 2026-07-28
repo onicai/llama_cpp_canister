@@ -4,7 +4,7 @@
 > (270 M parameters, instruction-tuned). Use it when you want the **cheapest, fastest**
 > on-chain LLM and the task is simple: basic chat, short structured answers, or
 > high-throughput generation where a low quality ceiling is acceptable. It generates
-> **~40 tokens per update call** (vs ~25 for the 0.6B), and its heap peaks at only
+> **~44 tokens per update call** (vs ~25 for the 0.6B), and its heap peaks at only
 > ~0.9 GiB, so it needs **no `wasm_memory_limit` bump**.
 >
 > Verified end-to-end on a local `llama_cpp_canister` (v0.14.0 wasm, llama.cpp
@@ -73,14 +73,17 @@ icp canister call llama_cpp uploaded_file_details '(record { filename = "models/
 
 ## Load the model
 
-Gemma-3-270M is tiny, so the default f16 KV cache is fine — no quantized cache
-needed:
+Use a **q8_0 KV cache** — measured against the default f16 cache it gives a slightly
+higher token ceiling (~55 vs ~50) and is marginally faster, because the quantized KV
+halves the prompt-cache state written on every call:
 
 ```bash
 icp canister call llama_cpp load_model '(record {
   args = vec {
     "--model"; "models/model.gguf";
     "-c"; "4096";
+    "--cache-type-k"; "q8_0";
+    "--cache-type-v"; "q8_0";
   }
 })' -e local
 # -> Ok = record { output = "Model succesfully loaded into memory."; ... }
@@ -93,23 +96,24 @@ Heap after load is ~0.9 GiB (`get_memory_status` reports `wasm_heap_bytes ≈
 
 ## Set max_tokens
 
-The measured **generation ceiling is 49 tokens per call** at short context (49 OK,
-50 traps with `IC0522` — the IC's 40 B-instruction-per-message limit). Use **40** for
-a safe margin, and lower it for long conversations (the per-token cost rises as the
-context grows):
+With the q8_0 KV cache above, the measured **generation ceiling is ~55 tokens per
+call** at short context (55 OK, 60 traps with `IC0522` — the IC's
+40 B-instruction-per-message limit). Use **44** for a safe margin, and lower it for
+long conversations (the per-token cost rises as the context grows):
 
 ```bash
 icp canister call llama_cpp set_max_tokens '(record {
   max_tokens_query = 1 : nat64;
-  max_tokens_update = 40 : nat64
+  max_tokens_update = 44 : nat64
 })' -e local
 ```
 
 > How this was measured: a fresh `new_chat` → short prefill → one generation call of
 > N tokens, scanning N until it traps. On the local replica (whose limit is the same
 > `40000000000` instructions as mainnet, so the number carries over) the boundary was
-> **49 OK / 50 TRAP**. This ~40 tok/call is higher than the 0.6B's ~25 — a smaller
-> model buys more tokens per call.
+> **55 OK / 60 TRAP** with the q8_0 KV cache (~50 with the default f16 cache; expect
+> ±5 run-to-run). This ~44 tok/call is well above the 0.6B's ~25 — a smaller model
+> buys more tokens per call.
 
 ## Chat
 
@@ -128,6 +132,7 @@ sending the full prompt):
 icp canister call llama_cpp run_update '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
+    "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
     "--temp"; "0.7";
     "-sp";
     "-p"; "<start_of_turn>user\nWrite a few sentences about why the ocean is important.<end_of_turn>\n<start_of_turn>model\n";
@@ -142,10 +147,11 @@ Generate — repeat with an empty prompt until `generated_eog=true`:
 icp canister call llama_cpp run_update '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
+    "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
     "--temp"; "0.7";
     "-sp";
     "-p"; "";
-    "-n"; "40"
+    "-n"; "44"
   }
 })' -e local
 ```
