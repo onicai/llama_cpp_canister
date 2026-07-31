@@ -13,6 +13,7 @@
 
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <system_error>
 
@@ -165,10 +166,19 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
       prompt_remaining; // part of the prompt not processed due to max_tokens
   bool generated_eog =
       false; // this is set to true if llama.cpp is generating new tokens, and it generated an eog (End Of Generation)
+  // Exact token accounting for this call, filled by main_() and put on the wire
+  // (opt nat64) on the success record below.
+  uint64_t n_prompt_tokens = 0;
+  uint64_t n_prompt_tokens_cached = 0;
+  uint64_t n_prompt_tokens_decoded = 0;
+  uint64_t n_tokens_generated = 0;
+  uint64_t n_prompt_tokens_remaining = 0;
   bool load_model_only = false;
   int result = main_(argc, argv.data(), principal_id, load_model_only,
                      icpp_error_msg, conversation_ss, output_ss, max_tokens,
-                     prompt_remaining, generated_eog);
+                     prompt_remaining, generated_eog, n_prompt_tokens,
+                     n_prompt_tokens_cached, n_prompt_tokens_decoded,
+                     n_tokens_generated, n_prompt_tokens_remaining);
 
   // Exit if there was an error
   if (result != 0) {
@@ -201,6 +211,23 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   r_out.append("error", CandidTypeText{""});
   r_out.append("prompt_remaining", CandidTypeText{prompt_remaining});
   r_out.append("generated_eog", CandidTypeBool{generated_eog});
+  // Exact token accounting for this call (opt nat64). Only this success record
+  // carries them; every other OutputRecordResult builder (errors, new_chat,
+  // load_model, logs, promptcache) omits them, which is a valid candid subtype
+  // so clients decode those as null (no run = no token counts).
+  r_out.append("n_prompt_tokens",
+               CandidTypeOptNat64{std::optional<uint64_t>{n_prompt_tokens}});
+  r_out.append(
+      "n_prompt_tokens_cached",
+      CandidTypeOptNat64{std::optional<uint64_t>{n_prompt_tokens_cached}});
+  r_out.append(
+      "n_prompt_tokens_decoded",
+      CandidTypeOptNat64{std::optional<uint64_t>{n_prompt_tokens_decoded}});
+  r_out.append("n_tokens_generated",
+               CandidTypeOptNat64{std::optional<uint64_t>{n_tokens_generated}});
+  r_out.append(
+      "n_prompt_tokens_remaining",
+      CandidTypeOptNat64{std::optional<uint64_t>{n_prompt_tokens_remaining}});
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
 }
 

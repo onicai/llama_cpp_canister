@@ -63,9 +63,17 @@ void load_model() {
   bool load_model_only = true;
   std::string prompt_remaining;
   bool generated_eog = false;
-  int result = main_(argc, argv.data(), principal_id, load_model_only,
-                     icpp_error_msg, conversation_ss, output_ss,
-                     max_tokens_update, prompt_remaining, generated_eog);
+  // main_() also reports exact token accounting; load_model does not use it.
+  uint64_t n_prompt_tokens = 0;
+  uint64_t n_prompt_tokens_cached = 0;
+  uint64_t n_prompt_tokens_decoded = 0;
+  uint64_t n_tokens_generated = 0;
+  uint64_t n_prompt_tokens_remaining = 0;
+  int result = main_(
+      argc, argv.data(), principal_id, load_model_only, icpp_error_msg,
+      conversation_ss, output_ss, max_tokens_update, prompt_remaining,
+      generated_eog, n_prompt_tokens, n_prompt_tokens_cached,
+      n_prompt_tokens_decoded, n_tokens_generated, n_prompt_tokens_remaining);
 
   // Exit if there was an error
   if (result != 0) {

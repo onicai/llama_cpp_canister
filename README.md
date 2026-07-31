@@ -388,6 +388,27 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
     ***
 
+    **Exact token accounting.** Every `run_update` / `run_query` **success** record
+    also carries five `opt nat64` fields with the exact token counts for that call
+    (they decode to `null` on non-run records such as `new_chat` / `load_model`):
+
+    | Field                       | Meaning                                                    |
+    | --------------------------- | ---------------------------------------------------------- |
+    | `n_prompt_tokens`           | total prompt tokens presented this call                    |
+    | `n_prompt_tokens_cached`    | prompt-cache prefix reused for free (the cache-break offset)|
+    | `n_prompt_tokens_decoded`   | prompt tokens actually decoded this call                   |
+    | `n_tokens_generated`        | tokens generated this call                                 |
+    | `n_prompt_tokens_remaining` | prompt suffix left for the next call                       |
+
+    They always reconcile: `cached + decoded + remaining == n_prompt_tokens`, and
+    `n_tokens_generated` is `0` until the prompt is fully ingested
+    (`n_prompt_tokens_remaining == 0`). This lets a caller measure the exact
+    ingest-vs-generate split and the prompt-cache break offset per call. Being
+    `opt`, they are upgrade-safe: a client built against the older `.did` simply
+    ignores them.
+
+    ***
+
     **Multi-turn conversation.** Qwen3 handles back-and-forth conversations well. To
     continue a chat, send the **full accumulated conversation** as the prompt each
     turn — the prompt-cache reuses the shared prefix, so only the new turn is

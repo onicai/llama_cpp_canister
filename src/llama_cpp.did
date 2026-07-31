@@ -18,7 +18,16 @@ type RunOutputRecord = record {
   conversation : text;
   error : text;
   prompt_remaining : text;
-  generated_eog : bool
+  generated_eog : bool;
+  // Exact token accounting, populated only on a run_update / run_query success
+  // record; `opt` so other OutputRecordResult producers (errors, new_chat,
+  // load_model, ...) may omit them (they decode as null). See the "Exact
+  // token accounting" note in the README run_update section.
+  n_prompt_tokens : opt nat64;
+  n_prompt_tokens_cached : opt nat64;
+  n_prompt_tokens_decoded : opt nat64;
+  n_tokens_generated : opt nat64;
+  n_prompt_tokens_remaining : opt nat64
 };
 type OutputRecordResult = variant {
   Ok : RunOutputRecord;

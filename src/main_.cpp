@@ -132,7 +132,18 @@ static bool file_is_empty(const std::string &path) {
 int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           std::string &icpp_error_msg, std::ostringstream &conversation_ss,
           std::ostringstream &output_ss, const uint64_t &max_tokens,
-          std::string &prompt_remaining, bool &generated_eog) {
+          std::string &prompt_remaining, bool &generated_eog,
+          uint64_t &n_prompt_tokens, uint64_t &n_prompt_tokens_cached,
+          uint64_t &n_prompt_tokens_decoded, uint64_t &n_tokens_generated,
+          uint64_t &n_prompt_tokens_remaining) {
+  // Exact token accounting (put on the wire by run.cpp). Initialize to 0 so the
+  // early return-sites below (embedding tool, load_model_only) report 0; the real
+  // values are assigned just before the success `return 0;` at the end.
+  n_prompt_tokens = 0;
+  n_prompt_tokens_cached = 0;
+  n_prompt_tokens_decoded = 0;
+  n_tokens_generated = 0;
+  n_prompt_tokens_remaining = 0;
   LOG_INF("%s: Called with following arguments:\n", __func__);
   LOG_INF("- principal_id    = %s\n", principal_id.c_str());
   LOG_INF("- load_model_only = %s\n",
@@ -256,9 +267,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
     if (!g_llama_init) {
       LOG_ERR("%s: error: common_init_from_params returned null\n", __func__);
-      icpp_error_msg =
-          std::format("{}: error: common_init_from_params returned null)",
-                      __func__);
+      icpp_error_msg = std::format(
+          "{}: error: common_init_from_params returned null)", __func__);
       return 1;
     }
 
@@ -886,8 +896,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
               "context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
               n_past, n_left, n_ctx, params.n_keep, n_discard);
 
-          llama_memory_seq_rm(mem, 0, params.n_keep,
-                              params.n_keep + n_discard);
+          llama_memory_seq_rm(mem, 0, params.n_keep, params.n_keep + n_discard);
           llama_memory_seq_add(mem, 0, params.n_keep + n_discard, n_past,
                                -n_discard);
 
@@ -1413,6 +1422,20 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
   ggml_threadpool_free_fn(threadpool);
   ggml_threadpool_free_fn(threadpool_batch);
+
+  // Exact token accounting for this call (put on the wire by run.cpp). Uses the
+  // robust, consume-based definitions: `n_consumed` counts prompt tokens actually
+  // forwarded into decode, independent of the fragile input/output display split.
+  // All values are non-negative under normal operation; compute signed to avoid
+  // unsigned underflow, then cast to uint64_t.
+  const int64_t decoded_prompt =
+      (int64_t)n_consumed - (int64_t)n_matching_session_tokens;
+  n_prompt_tokens = (uint64_t)embd_inp.size();
+  n_prompt_tokens_cached = (uint64_t)n_matching_session_tokens;
+  n_prompt_tokens_decoded = (uint64_t)decoded_prompt;
+  n_tokens_generated = (uint64_t)((int64_t)n_eval_total - decoded_prompt);
+  n_prompt_tokens_remaining =
+      (uint64_t)((int64_t)embd_inp.size() - (int64_t)n_consumed);
 
   return 0;
 }
