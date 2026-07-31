@@ -68,6 +68,10 @@ def main() -> int:
                 "env": {
                     "SMALL_MAXTOK_MODEL": "models/model.gguf",
                     "SMALL_MAXTOK_KV": "q8_0",
+                    # bounded ctx/batch keep the compute+KV buffers small so
+                    # generation does not trip the local pocket-ic IC0502 flake.
+                    "SMALL_MAXTOK_CTX": "512",
+                    "SMALL_MAXTOK_BATCH": "64",
                 },
                 "test_paths": ["test/test_small_maxtokens.py"],
             },
