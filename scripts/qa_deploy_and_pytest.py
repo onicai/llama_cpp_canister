@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from typing import Any, Dict, List
 import subprocess
 import typer
 from icpp.run_shell_cmd import run_shell_cmd
@@ -28,47 +29,69 @@ def main() -> int:
             cwd=ROOT_PATH,
         )
 
-        tests = [
+        # Tests shared across every model iteration (model-agnostic).
+        shared = [
+            "test/test_canister_functions.py",
+            "test/test_promptcache.py",
+            "test/test_files.py",
+            "test/test_cycle_balance.py",
+        ]
+
+        # Each entry deploys a fresh canister, uploads its model, and runs its own
+        # test_paths. `env` is applied to every pytest run in that iteration (used
+        # to point test_small_maxtokens at the right model / KV type). The
+        # small-max_tokens prompt-cache regression is run on BOTH the tiny model
+        # and gemma-3-270M so both the f16 and q8_0 KV paths are covered.
+        tests: List[Dict[str, Any]] = [
             {
                 "filename": "models/stories260Ktok512.gguf",
                 "canister_filename": "models/tiny.gguf",
-                "test_path_model": "test/test_tiny_stories.py",
+                "wasm_memory_limit": None,
+                "env": {"SMALL_MAXTOK_MODEL": "models/tiny.gguf"},
+                "test_paths": shared
+                + [
+                    "test/test_tiny_stories.py",
+                    # after a model is loaded; exact token-accounting reconciliation.
+                    "test/test_token_counts.py",
+                    # small-max_tokens multi-call ingestion regression (f16 KV).
+                    "test/test_small_maxtokens.py",
+                ],
+            },
+            # gemma-3-270M (gemma3 / iSWA architecture, q8_0 KV): exercises the
+            # small-max_tokens prompt-cache regression on a real model. Requires the
+            # gemma gguf downloaded (see README-gemma-3.md) and the raised wasm
+            # memory limit. test_small_maxtokens loads the model itself.
+            {
+                "filename": "models/google/gemma-3-270m-it-GGUF/gemma-3-270m-it-Q8_0.gguf",  # pylint: disable=line-too-long
+                "canister_filename": "models/model.gguf",
+                "wasm_memory_limit": 4026531840,  # 3.75 GiB
+                "env": {
+                    "SMALL_MAXTOK_MODEL": "models/model.gguf",
+                    "SMALL_MAXTOK_KV": "q8_0",
+                    # bounded ctx/batch keep the compute+KV buffers small so
+                    # generation does not trip the local pocket-ic IC0502 flake.
+                    "SMALL_MAXTOK_CTX": "512",
+                    "SMALL_MAXTOK_BATCH": "64",
+                },
+                "test_paths": ["test/test_small_maxtokens.py"],
             },
             # The Qwen models time out in the Github action; run them locally by
-            # uncommenting. Qwen3-0.6B is the current default reference model; its
-            # multi-turn / non-thinking behaviour is exercised by test_qwen3.py.
+            # uncommenting (schema: filename, canister_filename, wasm_memory_limit,
+            # env, test_paths). Qwen3-0.6B multi-turn is exercised by test_qwen3.py.
             # {
             #     "filename": "models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf",
             #     "canister_filename": "models/model.gguf",
-            #     "test_path_model": "test/test_qwen3.py",
-            # },
-            # {
-            #     "filename": "models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf",  # pylint: disable=line-too-long
-            #     "canister_filename": "models/model.gguf",
-            #     "test_path_model": "test/test_qwen2.py",
+            #     "wasm_memory_limit": 4026531840,
+            #     "env": {},
+            #     "test_paths": ["test/test_qwen3.py"],
             # },
         ]
 
-        test_path_canister = "test/test_canister_functions.py"
-        test_path_promptcache = "test/test_promptcache.py"
-        test_path_files = "test/test_files.py"
-        test_path_cycle_balance = "test/test_cycle_balance.py"
-        test_path_token_counts = "test/test_token_counts.py"
         for test in tests:
             filename = test["filename"]
             canister_filename = test["canister_filename"]
-            test_path_model = test["test_path_model"]
-
-            test_paths = [
-                test_path_canister,
-                test_path_promptcache,
-                test_path_files,
-                test_path_cycle_balance,
-                test_path_model,
-                # after test_path_model so a model is loaded; asserts the v0.15.0
-                # exact token-accounting fields (model-agnostic reconciliation).
-                test_path_token_counts,
-            ]
+            test_paths = test["test_paths"]
+            env_prefix = "".join(f"{k}={v} " for k, v in test.get("env", {}).items())
 
             typer.echo("--\nStop the local network")
             icp_network_stop()
@@ -84,6 +107,24 @@ def main() -> int:
             typer.echo(f"--\nDeploy {ROOT_PATH.name}")
             run_shell_cmd("icp deploy -e local -y", cwd=ROOT_PATH)
 
+            # Top up cycles so loading a larger model can grow wasm memory
+            # (otherwise load_model traps with IC0532 insufficient-cycles).
+            typer.echo("--\nTop up cycles")
+            run_shell_cmd(
+                "icp canister top-up llama_cpp --amount 20000000000000 -e local",
+                cwd=ROOT_PATH,
+            )
+
+            if test.get("wasm_memory_limit"):
+                typer.echo(
+                    f"--\nRaise wasm memory limit to {test['wasm_memory_limit']}"
+                )
+                run_shell_cmd(
+                    "icp canister settings update llama_cpp "
+                    f"--wasm-memory-limit {test['wasm_memory_limit']} -e local",
+                    cwd=ROOT_PATH,
+                )
+
             typer.echo(f"--\nUpload {filename}")
             run_shell_cmd(
                 f" python -m scripts.upload --network local --canister llama_cpp "
@@ -93,7 +134,10 @@ def main() -> int:
 
             for test_path in test_paths:
                 typer.echo(f"--\nRun pytest on {test_path}")
-                run_shell_cmd(f"pytest -vv --network=local {test_path}", cwd=ROOT_PATH)
+                run_shell_cmd(
+                    f"{env_prefix}pytest -vv --network=local {test_path}",
+                    cwd=ROOT_PATH,
+                )
 
             typer.echo("--\nStop the local network")
             icp_network_stop()

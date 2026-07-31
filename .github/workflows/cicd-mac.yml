@@ -13,22 +13,34 @@ on:
       - ".github/trigger.txt"
       - ".github/workflows/cicd-mac.yml"
 
+# Two jobs run in PARALLEL so wall-clock ~= the slower half instead of the sum:
+#   - native      : the native MockIC tests carry ~59 exact-hex token assertions
+#                   that depend on the host libm's last-ULP behaviour, so they are
+#                   pinned to x86_64 macOS (macos-15-intel) to match the release +
+#                   mainnet baselines. See the ci-mac-runner-and-exact-tokens note.
+#   - wasm+static : all-static + the wasm/pytest QA. wasm executes deterministically
+#                   in pocket-ic regardless of host arch, so this half is
+#                   platform-reproducible and runs on the faster/cheaper Apple
+#                   Silicon runner (macos-15).
 jobs:
-  all-mac:
-    name: all-mac
+  cicd-mac:
+    name: ${{ matrix.job }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [3.11]
-        # Use Intel runner to match local x86_64 development environment
-        os: [macos-15-intel]
+        include:
+          - job: native (x86_64 exact-token)
+            os: macos-15-intel
+          - job: wasm+static
+            os: macos-15
 
     runs-on: ${{ matrix.os }}
-    
+
     steps:
       # https://github.com/marketplace/actions/setup-miniconda
       - uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
 
       # -------------------------------------------------------------------
       # Checkout llama_cpp_canister & llama_cpp_onicai_fork as nested directory
@@ -94,28 +106,41 @@ jobs:
         run: |
           make build-info-cpp-wasm
 
+      # --- static analysis: arch-independent, runs on the wasm+static job -------
       - name: all-static
+        if: matrix.job == 'wasm+static'
         shell: bash -l {0}
         run: |
           make all-static
 
-      - name: Create directory for Qwen models
+      # --- native job: Qwen models are loaded by the native MockIC tests --------
+      - name: Download Qwen3 model (current default reference model)
+        if: matrix.job == 'native (x86_64 exact-token)'
         run: |
           mkdir -p ./models/Qwen/Qwen3-0.6B-GGUF
-          mkdir -p ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF
-
-      - name: Download Qwen3 model (current default reference model)
-        run: wget -nv -O ./models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf?download=true
+          wget -nv -O ./models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf?download=true
 
       - name: Download Qwen2.5 model (kept for regression)
-        run: wget -nv -O ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf?download=true
+        if: matrix.job == 'native (x86_64 exact-token)'
+        run: |
+          mkdir -p ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF
+          wget -nv -O ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf?download=true
 
       - name: test-llm-native
+        if: matrix.job == 'native (x86_64 exact-token)'
         shell: bash -l {0}
         run: |
           make test-llm-native
 
+      # --- wasm+static job: gemma is used by the small-max_tokens QA regression --
+      - name: Download gemma-3-270M model (small-max_tokens prompt-cache regression)
+        if: matrix.job == 'wasm+static'
+        run: |
+          mkdir -p ./models/google/gemma-3-270m-it-GGUF
+          wget -nv -O ./models/google/gemma-3-270m-it-GGUF/gemma-3-270m-it-Q8_0.gguf https://huggingface.co/unsloth/gemma-3-270m-it-GGUF/resolve/main/gemma-3-270m-it-Q8_0.gguf?download=true
+
       - name: test-llm-wasm
+        if: matrix.job == 'wasm+static'
         shell: bash -l {0}
         # `icp network start` downloads the network-launcher via the GitHub API.
         # Unauthenticated that is 60 req/hour shared across all GitHub-hosted

@@ -1030,8 +1030,15 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         //
         n_eval_total += n_eval;
         if (generated_eog || (max_tokens > 0 && n_eval_total >= max_tokens)) {
-          if (!path_session.empty() && params.prompt_cache_all &&
-              !params.prompt_cache_ro) {
+          // ICPP-PATCH: NOT gated on params.prompt_cache_all. This canister
+          // reloads the session file at the start of every run_update (see
+          // llama_state_load_file above), so the file — not the in-heap KV
+          // cache — carries state between calls. When max_tokens forces a
+          // prompt to be ingested over several calls, each call MUST append its
+          // freshly-decoded tokens to session_tokens (and save below), or the
+          // next call reloads the same short prefix and ingestion never
+          // advances (prompt_remaining stalls). prompt_cache_ro still opts out.
+          if (!path_session.empty() && !params.prompt_cache_ro) {
             session_tokens.insert(session_tokens.end(), embd.begin(),
                                   embd.begin() + n_eval);
             n_session_consumed = session_tokens.size();
@@ -1395,8 +1402,12 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     }
   }
 
-  if (!path_session.empty() && params.prompt_cache_all &&
-      !params.prompt_cache_ro) {
+  // ICPP-PATCH: NOT gated on params.prompt_cache_all (see the max_tokens break
+  // above). Because every run_update reloads the session file, the file must be
+  // rewritten at the end of every call — otherwise multi-call prompt ingestion
+  // (and multi-call generation) can't persist progress between calls and stalls.
+  // prompt_cache_ro still opts out of writing the cache.
+  if (!path_session.empty() && !params.prompt_cache_ro) {
     LOG("\n%s: saving final output to session file '%s'\n", __func__,
         path_session.c_str());
     llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(),
