@@ -53,6 +53,7 @@ def main() -> int:
         test_path_promptcache = "test/test_promptcache.py"
         test_path_files = "test/test_files.py"
         test_path_cycle_balance = "test/test_cycle_balance.py"
+        test_path_token_counts = "test/test_token_counts.py"
         for test in tests:
             filename = test["filename"]
             canister_filename = test["canister_filename"]
@@ -64,6 +65,9 @@ def main() -> int:
                 test_path_files,
                 test_path_cycle_balance,
                 test_path_model,
+                # after test_path_model so a model is loaded; asserts the v0.15.0
+                # exact token-accounting fields (model-agnostic reconciliation).
+                test_path_token_counts,
             ]
 
             typer.echo("--\nStop the local network")

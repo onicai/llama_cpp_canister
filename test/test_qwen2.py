@@ -22,7 +22,12 @@ To run it against a deployment to the IC, just replace `local` with `production`
 from pathlib import Path
 from typing import Dict
 import pytest
-from .candid_compat import call_canister_api, dict_to_candid_text, norm
+from .candid_compat import (
+    call_canister_api,
+    dict_to_candid_text,
+    norm,
+    strip_token_accounting,
+)
 
 # Path to the icp.yaml file
 ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
@@ -101,7 +106,7 @@ def test__run_update_1(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { output = ""; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user"; error = ""; status_code = 200 : nat16; prompt_remaining = "\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\n"; generated_eog = false;} })'
-    assert response == norm(expected_response)
+    assert strip_token_accounting(response) == norm(expected_response)
 
 def test__copy_prompt_cache_save(network: str) -> None:
     response = call_canister_api(
@@ -185,7 +190,7 @@ def test__run_update_2_2(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { output = "Large"; conversation = "<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\nLarge"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
-    assert response == norm(expected_response)
+    assert strip_token_accounting(response) == norm(expected_response)
 
 def test__chats_resume(network: str) -> None:
     response = call_canister_api(
@@ -318,7 +323,7 @@ def test__run_query_1(network: str) -> None:
         network=network,
     )
     expected_response = '(variant { Ok = record { output = "<|im_start|>"; conversation = "<|im_start|>"; error = ""; status_code = 200 : nat16; prompt_remaining = "system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\nExplain Large Language Models.<|im_end|>\\n<|im_start|>assistant\\n"; generated_eog = false;} })'
-    assert response == norm(expected_response)
+    assert strip_token_accounting(response) == norm(expected_response)
 
 def test__log_pause(network: str) -> None:
     response = call_canister_api(
