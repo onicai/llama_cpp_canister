@@ -58,7 +58,9 @@ icp canister call llama_cpp_qwen25 -e local uploaded_file_details '(record { fil
 )
 ```
 
-Optional pytest QA: `pytest -vv --network local test/test_qwen2.py`
+Optional pytest QA: `pytest -vv --network local --identity "$(icp identity default)" test/test_qwen2.py`
+(since icpp-pro 6.0.0 pytest must be told which identity to run as — it has to be
+the one that deployed the canister; see the main README's smoke-testing section)
 
 ## Load the model
 

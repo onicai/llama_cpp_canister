@@ -23,7 +23,7 @@ Asserted properties:
 Runs against the tiny stories model (models/tiny.gguf) deployed by
 scripts/qa_deploy_and_pytest.py; deterministic at --temp 0.0.
 
-$ pytest -vv --network local test/test_token_counts.py
+$ pytest -vv --network local --identity "$(icp identity default)" test/test_token_counts.py
 """
 
 # pylint: disable=missing-function-docstring, line-too-long

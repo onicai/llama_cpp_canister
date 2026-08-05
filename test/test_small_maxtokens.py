@@ -28,7 +28,7 @@ on a real model; they do not affect the ingestion logic under test.
 Deterministic at --temp 0.0.
 
 $ SMALL_MAXTOK_MODEL=models/model.gguf SMALL_MAXTOK_KV=q8_0 SMALL_MAXTOK_CTX=512 \
-      SMALL_MAXTOK_BATCH=64 pytest -vv --network local test/test_small_maxtokens.py
+      SMALL_MAXTOK_BATCH=64 pytest -vv --network local --identity "$(icp identity default)" test/test_small_maxtokens.py
 """
 
 # pylint: disable=missing-function-docstring, line-too-long

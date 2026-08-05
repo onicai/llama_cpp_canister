@@ -48,18 +48,28 @@ done
 
 echo "Using network type: $NETWORK_TYPE"
 
+# A canister's controller is whoever deployed it, and icpp-pro >= 6.0.0 runs the
+# tests as ${ICPP_PRO_TEST_IDENTITY} instead of the machine-wide active identity.
+# So deploy as that identity whenever it is set, and leave the deploy on the
+# active identity (the normal interactive case) when it is not.
+IDENTITY_ARGS=()
+if [ -n "${ICPP_PRO_TEST_IDENTITY:-}" ]; then
+    IDENTITY_ARGS=(--identity "$ICPP_PRO_TEST_IDENTITY")
+    echo "Using identity: $ICPP_PRO_TEST_IDENTITY"
+fi
+
 #######################################################################
 echo "--------------------------------------------------"
 echo "Deploying the wasm to llama_cpp"
 if [ "$NETWORK_TYPE" = "production" ]; then
     if [ "$SUBNET" = "none" ]; then
-        icp deploy llama_cpp -m $DEPLOY_MODE -y -e $NETWORK_TYPE
+        icp deploy llama_cpp -m $DEPLOY_MODE -y -e $NETWORK_TYPE "${IDENTITY_ARGS[@]}"
     else
-        icp deploy llama_cpp -m $DEPLOY_MODE -y -e $NETWORK_TYPE --subnet $SUBNET
+        icp deploy llama_cpp -m $DEPLOY_MODE -y -e $NETWORK_TYPE --subnet $SUBNET "${IDENTITY_ARGS[@]}"
     fi
 else
-    icp deploy llama_cpp -m $DEPLOY_MODE -y -e $NETWORK_TYPE
-fi 
+    icp deploy llama_cpp -m $DEPLOY_MODE -y -e $NETWORK_TYPE "${IDENTITY_ARGS[@]}"
+fi
 
 echo " "
 echo "--------------------------------------------------"

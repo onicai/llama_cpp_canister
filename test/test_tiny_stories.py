@@ -8,7 +8,7 @@ Then upload the model:
 $ python -m scripts.upload --network local --canister llama_cpp --canister-filename models/tiny.gguf --filetype gguf models/stories260Ktok512.gguf
 
 Then run the tests for this model::
-$ pytest -vv --network local test/test_tiny_stories.py
+$ pytest -vv --network local --identity "$(icp identity default)" test/test_tiny_stories.py
 
 To run it against a deployment to the IC, just replace `local` with `production` in the commands above.
 

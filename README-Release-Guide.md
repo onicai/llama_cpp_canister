@@ -41,9 +41,15 @@ After the workflow completes:
    - `scripts/` with upload/download tooling
    - `test/` with smoke tests
    - `icp.yaml`, `version.txt`, `requirements.txt`
-3. Optionally deploy and run smoke tests:
+3. Optionally deploy and run smoke tests. Since icpp-pro 6.0.0 pytest must be
+   told which icp identity to run as, and it has to be the identity that
+   deployed the canister (most endpoints are controller-only):
    ```bash
+   # once, if you do not have them yet
+   icp identity new llama-cpp-testing --storage plaintext
+   icp identity new llama-cpp-other-user --storage plaintext  # non-controller, for test_files.py
+
    icp network start -d
-   icp deploy -e local -y
-   pytest -vv --network local test/
+   icp deploy -e local -y --identity llama-cpp-testing
+   pytest -vv --network local --identity llama-cpp-testing test/
    ```

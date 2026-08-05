@@ -8,7 +8,7 @@ coherent and contains no `<think>`/`</think>` tokens, and a multi-turn conversat
 recalls facts from earlier turns.
 
 Deploy + upload the model as `models/model.gguf`, then:
-$ pytest -vv --network local test/test_qwen3.py
+$ pytest -vv --network local --identity "$(icp identity default)" test/test_qwen3.py
 
 Notes:
 - Requires the tuned config: the canister's wasm_memory_limit is raised to 3.75 GiB

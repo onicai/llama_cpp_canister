@@ -1,5 +1,6 @@
 """Deploys & runs pytest in a freshly started local network for some LLMs"""
 
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -9,6 +10,31 @@ from icpp.run_shell_cmd import run_shell_cmd
 
 # SCRIPTS_PATH = Path(__file__).parent
 ROOT_PATH = Path(__file__).parent.parent
+
+# The identity to deploy & test as. icpp-pro >= 6.0.0 never uses the
+# machine-wide active identity (`icp identity default`), because any other
+# process can change it mid-run. The `test-llm-wasm` Makefile target creates the
+# identity and exports it; pytest inherits it through the environment, and every
+# icp command below passes it explicitly.
+IDENTITY_ENV_VAR = "ICPP_PRO_TEST_IDENTITY"
+
+
+def get_identity() -> str:
+    """Returns the identity to deploy & test as, or exits with instructions."""
+    identity = os.environ.get(IDENTITY_ENV_VAR, "").strip()
+    if not identity:
+        typer.echo(
+            f"\nERROR: ${IDENTITY_ENV_VAR} is not set.\n\n"
+            "The canister must be deployed by the same identity the tests call\n"
+            "as, because a canister's controller is whoever deployed it.\n\n"
+            "Run this via the Makefile, which creates & exports it:\n\n"
+            "    make test-llm-wasm\n\n"
+            "or set it yourself:\n\n"
+            "    icp identity new <name> --storage plaintext\n"
+            f"    export {IDENTITY_ENV_VAR}=<name>\n"
+        )
+        sys.exit(1)
+    return identity
 
 
 def icp_network_stop() -> None:
@@ -22,7 +48,11 @@ def icp_network_stop() -> None:
 
 def main() -> int:
     """Start local network; Deploy canister; Upload LLM model; Pytest"""
+    identity = get_identity()
+    identity_arg = f" --identity {identity} "
     try:
+        typer.echo(f"--\nDeploying & testing as identity: {identity}")
+
         typer.echo("--\nBuild the wasm")
         run_shell_cmd(
             "icpp build-wasm --to-compile all",
@@ -105,13 +135,14 @@ def main() -> int:
             run_shell_cmd("icp network start -d", cwd=ROOT_PATH)
 
             typer.echo(f"--\nDeploy {ROOT_PATH.name}")
-            run_shell_cmd("icp deploy -e local -y", cwd=ROOT_PATH)
+            run_shell_cmd(f"icp deploy -e local -y{identity_arg}", cwd=ROOT_PATH)
 
             # Top up cycles so loading a larger model can grow wasm memory
             # (otherwise load_model traps with IC0532 insufficient-cycles).
             typer.echo("--\nTop up cycles")
             run_shell_cmd(
-                "icp canister top-up llama_cpp --amount 20000000000000 -e local",
+                "icp canister top-up llama_cpp --amount 20000000000000 -e local"
+                f"{identity_arg}",
                 cwd=ROOT_PATH,
             )
 
@@ -121,7 +152,8 @@ def main() -> int:
                 )
                 run_shell_cmd(
                     "icp canister settings update llama_cpp "
-                    f"--wasm-memory-limit {test['wasm_memory_limit']} -e local",
+                    f"--wasm-memory-limit {test['wasm_memory_limit']} -e local"
+                    f"{identity_arg}",
                     cwd=ROOT_PATH,
                 )
 
@@ -135,7 +167,8 @@ def main() -> int:
             for test_path in test_paths:
                 typer.echo(f"--\nRun pytest on {test_path}")
                 run_shell_cmd(
-                    f"{env_prefix}pytest -vv --network=local {test_path}",
+                    f"{env_prefix}pytest -vv --network=local "
+                    f"--identity={identity} {test_path}",
                     cwd=ROOT_PATH,
                 )
 

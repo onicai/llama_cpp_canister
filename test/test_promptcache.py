@@ -5,7 +5,7 @@ $ icpp build-wasm
 $ icp deploy -e local -y
 
 Then run the tests:
-$ pytest -vv --network local test/test_promptcache.py
+$ pytest -vv --network local --identity "$(icp identity default)" test/test_promptcache.py
 
 To run it against a deployment to the IC, just replace `local` with `production` in the commands above.
 

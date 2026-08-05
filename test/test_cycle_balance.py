@@ -5,7 +5,7 @@ $ icpp build-wasm
 $ icp deploy -e local -y
 
 Then run the tests:
-$ pytest -vv --network local test/test_cycle_balance.py
+$ pytest -vv --network local --identity "$(icp identity default)" test/test_cycle_balance.py
 
 Lifecycle is operator-driven (like the prompt-cache cleanup timer): the timer
 is not auto-armed, so right after a clean deploy `get_cycle_balance` returns a

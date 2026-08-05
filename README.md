@@ -238,8 +238,11 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 - Optional: You can now run a pytest based QA, using the icpp-pro smoketesting framework:
 
   ```bash
-  pytest -vv --network local test/test_qwen3.py
+  pytest -vv --network local --identity "$(icp identity default)" test/test_qwen3.py
   ```
+
+  See [Smoke testing the deployed LLM](#smoke-testing-the-deployed-llm) for what
+  `--identity` is and why it is required.
 
 - Load the gguf file into Orthogonal Persisted (OP) working memory
 
@@ -531,17 +534,50 @@ You can run a smoketest on the deployed LLM:
 
 - Deploy the Qwen3-0.6B model as described above
 
+- Tell pytest which icp identity to run as. Since icpp-pro 6.0.0 this is
+  required: the tests never pick up the machine-wide active identity by
+  themselves, because any other process can change it mid-run. Most endpoints
+  are controller-only, so it must be **the identity you deployed the canister
+  with** — if you followed the steps above, that is your active identity:
+
+  ```bash
+  icp identity default    # prints the name to pass as --identity
+  ```
+
+  It must not be password protected: icpp-pro exports the key to sign the calls
+  locally, which a password-protected identity cannot do non-interactively.
+
+  Pass the name as `--identity <name>` (as below), or export
+  `ICPP_PRO_TEST_IDENTITY=<name>` once per shell.
+
 - Run the smoketests for the Qwen3-0.6B LLM deployed to your local IC network:
 
   ```
   # First test the canister functions, like 'health'
-  pytest -vv --network local test/test_canister_functions.py
+  pytest -vv --network local --identity "$(icp identity default)" test/test_canister_functions.py
 
   # Then run the inference tests (multi-turn, non-thinking)
-  pytest -vv --network local test/test_qwen3.py
+  pytest -vv --network local --identity "$(icp identity default)" test/test_qwen3.py
   ```
 
   _(The previous default, Qwen2.5-0.5B, is still covered by `test/test_qwen2.py`.)_
+
+  `test/test_files.py` additionally needs a SECOND identity that is *not* a
+  controller, to verify that the filesystem endpoints deny an authenticated but
+  unauthorized caller. It defaults to `llama-cpp-other-user` and is overridden
+  with `$ICPP_PRO_TEST_IDENTITY_NON_CONTROLLER`:
+
+  ```bash
+  icp identity new llama-cpp-other-user --storage plaintext
+  ```
+
+- Or let the full QA do all of it for you — it creates the two identities
+  (`llama-cpp-testing` and `llama-cpp-other-user`), deploys as the first, and
+  runs every suite, without ever changing your active identity:
+
+  ```bash
+  make test-llm-wasm
+  ```
 
 # Prompt Caching
 

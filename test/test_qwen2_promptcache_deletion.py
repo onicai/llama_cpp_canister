@@ -3,7 +3,7 @@
 Prerequisites:
 - Canister deployed and ready (`icp deploy -e local -y`).
 - Qwen2.5 gguf uploaded as `models/model.gguf` (`scripts.upload`).
-- `pytest -vv test/test_qwen2.py` was run first so the model is loaded into
+- `pytest -vv --identity "$(icp identity default)" test/test_qwen2.py` was run first so the model is loaded into
   the canister's working memory and `set_max_tokens` was called.
 
 What this file proves:
@@ -17,9 +17,9 @@ What this file proves:
 
 Run:
 
-    $ pytest -vv test/test_qwen2_promptcache_deletion.py
+    $ pytest -vv --identity "$(icp identity default)" test/test_qwen2_promptcache_deletion.py
     # (or with explicit network)
-    $ pytest -vv --network local test/test_qwen2_promptcache_deletion.py
+    $ pytest -vv --network local --identity "$(icp identity default)" test/test_qwen2_promptcache_deletion.py
 """
 
 # pylint: disable=missing-function-docstring, line-too-long

@@ -5,10 +5,10 @@ $ icp network start -d
 $ icp deploy -e local -y
 
 Then run the tests:
-$ pytest -vv --network local test/test_admin_rbac.py
+$ pytest -vv --network local --identity "$(icp identity default)" test/test_admin_rbac.py
 
 Or run a specific test:
-$ pytest -vv --network local test/test_admin_rbac.py::test__getAdminRoles_anonymous
+$ pytest -vv --network local --identity "$(icp identity default)" test/test_admin_rbac.py::test__getAdminRoles_anonymous
 
 """
 # pylint: disable=missing-function-docstring, unused-import, wildcard-import, unused-wildcard-import, line-too-long

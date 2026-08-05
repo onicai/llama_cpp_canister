@@ -5,7 +5,7 @@ $ icpp build-wasm
 $ icp deploy -e local -y
 
 Then run the tests:
-$ pytest -vv --network local test/test_cache_cleanup.py
+$ pytest -vv --network local --identity "$(icp identity default)" test/test_cache_cleanup.py
 
 The initial-state assertion ("right after a clean deploy") is NOT in this
 file — it must be verified once before the rest of the test suite runs (see
