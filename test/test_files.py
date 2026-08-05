@@ -1,11 +1,16 @@
-"""Test promptcache APIs
+"""Test the filesystem APIs
 
 First deploy the canister:
 $ icpp build-wasm
 $ icp deploy -e local -y
 
 Then run the tests:
-$ pytest -vv --network local test/test_promptcache.py
+$ pytest -vv --network local --identity "$(icp identity default)" test/test_files.py
+
+The `*_non_controller` tests call as a SECOND identity, which must not be a
+controller of the canister. It defaults to `llama-cpp-other-user` and is
+overridden with $ICPP_PRO_TEST_IDENTITY_NON_CONTROLLER. Create it once with:
+$ icp identity new llama-cpp-other-user --storage plaintext
 
 To run it against a deployment to the IC, just replace `local` with `production` in the commands above.
 
@@ -95,30 +100,30 @@ def test__recursive_dir_content_anonymous(identity_anonymous: Dict[str, str], ne
     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
     assert response == norm(expected_response)
 
-# This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
-#
-# def test__recursive_dir_content_non_controller(identity_default: Dict[str, str], network: str) -> None:
-#     principal = identity_default["principal"]
+def test__recursive_dir_content_non_controller(identity_non_controller: Dict[str, str], network: str) -> None:
+    identity = identity_non_controller["identity"]
 
-#     response = call_canister_api(
-#         icp_yaml_path=ICP_YAML_PATH,
-#         canister_name=CANISTER_NAME,
-#         canister_method="recursive_dir_content_query",
-#         canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
-#         network=network,
-#     )
-#     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-#     assert response == expected_response
+    response = call_canister_api(
+        icp_yaml_path=ICP_YAML_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="recursive_dir_content_query",
+        canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
+        network=network,
+        identity=identity,
+    )
+    expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
+    assert response == norm(expected_response)
 
-#     response = call_canister_api(
-#         icp_yaml_path=ICP_YAML_PATH,
-#         canister_name=CANISTER_NAME,
-#         canister_method="recursive_dir_content_update",
-#         canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
-#         network=network,
-#     )
-#     expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
-#     assert response == expected_response
+    response = call_canister_api(
+        icp_yaml_path=ICP_YAML_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="recursive_dir_content_update",
+        canister_argument='(record {dir = ".canister_cache"; max_entries = 0 : nat64})',
+        network=network,
+        identity=identity,
+    )
+    expected_response = '(variant { Err = variant { Other = "Access Denied" } })'
+    assert response == norm(expected_response)
 
 def test__recursive_dir_content_controller(network: str, principal: str) -> None:
 
@@ -172,21 +177,21 @@ def test__filesystem_file_size_anonymous(identity_anonymous: Dict[str, str], net
     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
     assert response == norm(expected_response)
 
-# This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
-#
-# def test__filesystem_file_size_non_controller(identity_default: Dict[str, str], network: str) -> None:
-#     principal = identity_default["principal"]
-#     filename = f".canister_cache/{principal}/sessions/prompt.cache"
+def test__filesystem_file_size_non_controller(identity_non_controller: Dict[str, str], network: str) -> None:
+    identity = identity_non_controller["identity"]
+    principal = identity_non_controller["principal"]
+    filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
-#     response = call_canister_api(
-#         icp_yaml_path=ICP_YAML_PATH,
-#         canister_name=CANISTER_NAME,
-#         canister_method="filesystem_file_size",
-#         canister_argument=f'(record {{filename = "{filename}"}})',
-#         network=network,
-#     )
-#     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
-#     assert response == expected_response
+    response = call_canister_api(
+        icp_yaml_path=ICP_YAML_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="filesystem_file_size",
+        canister_argument=f'(record {{filename = "{filename}"}})',
+        network=network,
+        identity=identity,
+    )
+    expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+    assert response == norm(expected_response)
 
 def test__filesystem_file_size_controller(network: str, principal: str) -> None:
     filename = f".canister_cache/{principal}/sessions/prompt.cache"
@@ -231,21 +236,21 @@ def test__get_creation_timestamp_ns_anonymous(identity_anonymous: Dict[str, str]
     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
     assert response == norm(expected_response)
 
-# This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
-#
-# def test__get_creation_timestamp_ns_non_controller(identity_default: Dict[str, str], network: str) -> None:
-#     principal = identity_default["principal"]
-#     filename = f".canister_cache/{principal}/sessions/prompt.cache"
+def test__get_creation_timestamp_ns_non_controller(identity_non_controller: Dict[str, str], network: str) -> None:
+    identity = identity_non_controller["identity"]
+    principal = identity_non_controller["principal"]
+    filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
-#     response = call_canister_api(
-#         icp_yaml_path=ICP_YAML_PATH,
-#         canister_name=CANISTER_NAME,
-#         canister_method="get_creation_timestamp_ns",
-#         canister_argument=f'(record {{filename = "{filename}"}})',
-#         network=network,
-#     )
-#     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
-#     assert response == expected_response
+    response = call_canister_api(
+        icp_yaml_path=ICP_YAML_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_creation_timestamp_ns",
+        canister_argument=f'(record {{filename = "{filename}"}})',
+        network=network,
+        identity=identity,
+    )
+    expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+    assert response == norm(expected_response)
 
 def test__get_creation_timestamp_ns_controller(network: str, principal: str) -> None:
     filename = f".canister_cache/{principal}/sessions/prompt.cache"
@@ -290,21 +295,21 @@ def test__filesystem_remove_anonymous(identity_anonymous: Dict[str, str], networ
     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
     assert response == norm(expected_response)
 
-# This test requires to run the test with non-default identity --> TODO: qa script must run with non-default identity
-# 
-# def test__filesystem_remove_non_controller(identity_default: Dict[str, str], network: str) -> None:
-#     principal = identity_default["principal"]
-#     filename = f".canister_cache/{principal}/sessions/prompt.cache"
+def test__filesystem_remove_non_controller(identity_non_controller: Dict[str, str], network: str) -> None:
+    identity = identity_non_controller["identity"]
+    principal = identity_non_controller["principal"]
+    filename = f".canister_cache/{principal}/sessions/prompt.cache"
 
-#     response = call_canister_api(
-#         icp_yaml_path=ICP_YAML_PATH,
-#         canister_name=CANISTER_NAME,
-#         canister_method="filesystem_remove",
-#         canister_argument=f'(record {{filename = "{filename}"}})',
-#         network=network,
-#     )
-#     expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
-#     assert response == expected_response
+    response = call_canister_api(
+        icp_yaml_path=ICP_YAML_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="filesystem_remove",
+        canister_argument=f'(record {{filename = "{filename}"}})',
+        network=network,
+        identity=identity,
+    )
+    expected_response = f'(variant {{ Err = variant {{ Other = "Access Denied" }} }})'
+    assert response == norm(expected_response)
 
 def test__filesystem_remove_controller(network: str, principal: str) -> None:
     filename = f".canister_cache/{principal}/sessions/prompt.cache"

@@ -8,7 +8,10 @@
 # file separately.
 
 -r scripts/requirements.txt
-icpp-pro>=5.6.0
+# 6.0.0 is a breaking change: pytest is told which icp identity to run as, with
+# `pytest --identity <name>` or ${ICPP_PRO_TEST_IDENTITY}. It never reads or
+# writes the machine-wide active identity. See the Makefile's test-llm-wasm.
+icpp-pro>=6.0.0
 icp-py-core==2.3.1
 # cbor2 is intentionally unpinned: icp-py-core 2.3.1 adds cbor2 6.x compatibility,
 # resolving the frozendict/isinstance(response, dict) breakage that previously

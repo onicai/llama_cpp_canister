@@ -69,11 +69,18 @@ pip install -r requirements.txt
 `icp.yaml` defines two canisters — deploy **`llama_cpp`** (the Qwen3 default), not both.
 `icp network start -d` picks a random ephemeral port; never hardcode `localhost:8000`.
 
+Deploy as `llama-cpp-testing`: since icpp-pro 6.0.0 pytest is told which identity to
+run as, and a canister's controller is whoever deployed it, so the two must agree.
+Create it once with `icp identity new llama-cpp-testing --storage plaintext`.
+Exporting `ICPP_PRO_TEST_IDENTITY` makes `python -m scripts.upload` (step 7) sign as
+that identity too, which it must — only a controller may upload.
+
 ```bash
 cd /tmp/llama_cpp_release_test/<TAG>
+export ICPP_PRO_TEST_IDENTITY=llama-cpp-testing
 icp network start -d
-icp deploy llama_cpp -e local -y
-icp canister settings update llama_cpp --wasm-memory-limit 4026531840 -e local   # 3.75 GiB — REQUIRED for Qwen3
+icp deploy llama_cpp -e local -y --identity "$ICPP_PRO_TEST_IDENTITY"
+icp canister settings update llama_cpp --wasm-memory-limit 4026531840 -e local --identity "$ICPP_PRO_TEST_IDENTITY"   # 3.75 GiB — REQUIRED for Qwen3
 icp canister top-up llama_cpp --amount 20000000000000 -e local                   # ~20T cycles
 icp canister call llama_cpp health '()' -e local --query                         # -> Ok 200
 icp canister status llama_cpp -e local | grep "Wasm memory limit"                # -> 4_026_531_840
@@ -82,8 +89,8 @@ icp canister status llama_cpp -e local | grep "Wasm memory limit"               
 ## 5. Check the get_memory_status endpoint (new in v0.13.0)
 
 ```bash
-icp canister call llama_cpp get_memory_status '()' -e local --query                      # -> Ok { wasm_heap_bytes; stable_bytes }
-icp canister call llama_cpp get_memory_status '()' -e local --query --identity anonymous  # -> Err "Access Denied"
+icp canister call llama_cpp get_memory_status '()' -e local --query --identity "$ICPP_PRO_TEST_IDENTITY"  # -> Ok { wasm_heap_bytes; stable_bytes }
+icp canister call llama_cpp get_memory_status '()' -e local --query --identity anonymous                  # -> Err "Access Denied"
 ```
 
 ## 6. Get the Qwen3 model
@@ -121,7 +128,7 @@ Optionally confirm on-chain: `icp canister call llama_cpp -e local uploaded_file
 
 ```bash
 cd /tmp/llama_cpp_release_test/<TAG>
-pytest -vv --network local test/test_qwen3.py
+pytest -vv --network local --identity "$ICPP_PRO_TEST_IDENTITY" test/test_qwen3.py
 ```
 
 The suite loads Qwen3 at `--ctx-size 16384 --batch-size 64 --ubatch-size 64` (dual q8_0)
@@ -139,9 +146,9 @@ deterministic failure of the other tests is a real problem.
 ## 9. (Optional) Qwen2.5 regression
 
 The release also serves the previous default, Qwen2.5-0.5B, via the `llama_cpp_qwen25`
-canister and `test/test_qwen2.py`. To exercise it: `icp deploy llama_cpp_qwen25 -e local -y`, download
+canister and `test/test_qwen2.py`. To exercise it: `icp deploy llama_cpp_qwen25 -e local -y --identity "$ICPP_PRO_TEST_IDENTITY"`, download
 the Qwen2.5 gguf (sha256 `ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e`),
-upload it to `llama_cpp_qwen25`, then `pytest -vv --network local test/test_qwen2.py`.
+upload it to `llama_cpp_qwen25`, then `pytest -vv --network local --identity "$ICPP_PRO_TEST_IDENTITY" test/test_qwen2.py`.
 
 ## 10. Cleanup
 

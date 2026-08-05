@@ -100,15 +100,20 @@ source /opt/miniconda3/etc/profile.d/conda.sh && conda activate llama_cpp_canist
 icpp build-native && ./build-native/mockic.exe
 
 # WASM build + local deploy (regenerates declarations):
+# Deploy as the identity the tests call as: since icpp-pro 6.0.0 pytest is told
+# which identity to run as, and a canister's controller is whoever deployed it.
+# `make test-llm-wasm` creates it; otherwise:
+#   icp identity new llama-cpp-testing --storage plaintext
+export ICPP_PRO_TEST_IDENTITY=llama-cpp-testing
 icpp build-wasm
 icp network start -d
-icp deploy -e local -y
+icp deploy -e local -y --identity "$ICPP_PRO_TEST_IDENTITY"
 
 # Exercise the new endpoints:
-icp canister call llama_cpp <new_endpoint> '()' -e local
+icp canister call llama_cpp <new_endpoint> '()' -e local --identity "$ICPP_PRO_TEST_IDENTITY"
 
 # New smoke tests:
-pytest -vv --network local test/test_<feature>.py
+pytest -vv --network local --identity "$ICPP_PRO_TEST_IDENTITY" test/test_<feature>.py
 ```
 
 ## 8. Verify — full regression
@@ -137,8 +142,8 @@ set_max_tokens → new_chat → run_update until `generated_eog = true`), then
 exercise the new feature on the live, model-loaded canister. Confirms no
 regression in the inference path. Also run:
 ```bash
-pytest -vv --network local test/test_canister_functions.py
-pytest -vv --network local test/test_qwen2.py
+pytest -vv --network local --identity "$ICPP_PRO_TEST_IDENTITY" test/test_canister_functions.py
+pytest -vv --network local --identity "$ICPP_PRO_TEST_IDENTITY" test/test_qwen2.py
 ```
 
 ## 10. Commit

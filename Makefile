@@ -46,6 +46,23 @@ CLANG_TIDY = $(ICPP_COMPILER_ROOT)/bin/clang-tidy
 
 
 ###########################################################################
+# The icp identities used by the wasm QA (deploy + pytest).
+#
+# icpp-pro >= 6.0.0 never reads or writes the machine-wide active identity
+# (`icp identity default`): pytest is told which identity to run as, via
+# ${ICPP_PRO_TEST_IDENTITY}. A canister's controller is whoever deployed it, so
+# scripts/qa_deploy_and_pytest.py deploys as that same identity.
+#
+# ICPP_PRO_TEST_IDENTITY_NON_CONTROLLER is a second identity that is never a
+# controller. It is what the `*_non_controller` tests in test/test_files.py call
+# as, to prove the endpoints deny a caller who is neither a controller nor an
+# admin.
+ICPP_PRO_TEST_IDENTITY ?= llama-cpp-testing
+ICPP_PRO_TEST_IDENTITY_NON_CONTROLLER ?= llama-cpp-other-user
+export ICPP_PRO_TEST_IDENTITY
+export ICPP_PRO_TEST_IDENTITY_NON_CONTROLLER
+
+###########################################################################
 # CI/CD - Phony Makefile targets
 #
 .PHONY: all-tests
@@ -86,14 +103,24 @@ test-llm-native:
 	./build-native/mockic.exe
 
 .PHONY: test-llm-wasm
-test-llm-wasm:
-	# icp does not auto-create a `default` identity (dfx did). Create a keyed,
-	# plaintext-stored one so the uploader can export its key non-interactively;
-	# tolerate "already exists" on machines that have it.
-	icp identity new default --storage plaintext 2>/dev/null || true
-	icp identity default default
+test-llm-wasm: icp-test-identities
 	python -m scripts.qa_deploy_and_pytest
-	
+
+# Creates the two QA identities if they do not exist yet, without ever touching
+# the machine-wide active identity.
+#
+# The existence check is `icp identity principal --identity <name>`, not
+# `icp identity list | grep -w <name>`: grep treats `-` as a word boundary, so
+# `<name>-old` would match `<name>` and the identity would silently not be
+# created. They are stored in plaintext because icpp-pro exports the key to sign
+# locally, which a password-protected identity cannot do non-interactively.
+.PHONY: icp-test-identities
+icp-test-identities:
+	@icp identity principal --identity "$(ICPP_PRO_TEST_IDENTITY)" >/dev/null 2>&1 || \
+	  icp identity new "$(ICPP_PRO_TEST_IDENTITY)" --storage plaintext
+	@icp identity principal --identity "$(ICPP_PRO_TEST_IDENTITY_NON_CONTROLLER)" >/dev/null 2>&1 || \
+	  icp identity new "$(ICPP_PRO_TEST_IDENTITY_NON_CONTROLLER)" --storage plaintext
+
 .PHONY: all-static
 all-static: \
 	cpp-format cpp-lint \

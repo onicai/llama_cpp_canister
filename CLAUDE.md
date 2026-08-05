@@ -113,22 +113,38 @@ def test__your_test_name(network: str, principal: str) -> None:
 ```
 
 **Running smoke tests:**
+
+Since icpp-pro 6.0.0, pytest must be told which icp identity to run as — it
+never reads or writes the machine-wide active identity (`icp identity default`).
+Most endpoints are controller-only, so it must be the identity that deployed the
+canister.
+
 ```bash
-# Deploy first
+# Once: create the two test identities (plaintext, so icpp-pro can export the
+# key and sign locally). `make test-llm-wasm` does this for you.
+icp identity new llama-cpp-testing --storage plaintext
+icp identity new llama-cpp-other-user --storage plaintext   # never a controller
+
+# Deploy first, as the identity the tests will call as
 icp network start -d
-icp deploy -e local -y
+icp deploy -e local -y --identity llama-cpp-testing
 
 # Run specific test
-pytest -vv --network local test/test_files.py::test__your_test_name
+pytest -vv --network local --identity llama-cpp-testing test/test_files.py::test__your_test_name
 
 # Run all tests in a file
-pytest -vv --network local test/test_files.py
+pytest -vv --network local --identity llama-cpp-testing test/test_files.py
 ```
+
+`--identity` can be replaced by exporting `ICPP_PRO_TEST_IDENTITY`.
 
 **Available fixtures (from conftest.py):**
 - `network` - "local" or "production"
-- `principal` - Current identity's principal
-- `identity_anonymous` - Dict with anonymous identity info
+- `identity` - Name of the identity the tests run as
+- `principal` - That identity's principal
+- `identity_default` - Dict with the session identity's info (name kept for backwards compat; it is NOT an identity called `default`)
+- `identity_anonymous` - Dict with anonymous identity info; makes a test's calls run as anonymous
+- `identity_non_controller` - Dict with a second, non-controller identity's info (project fixture, see `test/conftest.py`). Pass its `identity` to `call_canister_api(..., identity=...)` to call as an authenticated but unauthorized caller
 
 ## Code Patterns
 
@@ -202,7 +218,7 @@ llama_cpp_canister/
 3. **Add unit test** to appropriate `native/test_*.cpp`
 4. **Build and run unit tests**: `icpp build-native && ./build-native/mockic.exe`
 5. **Add smoke test** to appropriate `test/test_*.py`
-6. **Deploy and run smoke tests**: `icp deploy -e local -y && pytest -vv --network local test/test_*.py`
+6. **Deploy and run smoke tests**: `icp deploy -e local -y --identity llama-cpp-testing && pytest -vv --network local --identity llama-cpp-testing test/test_*.py`
 
 ## Tips
 

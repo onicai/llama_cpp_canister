@@ -1,6 +1,7 @@
 """Returns the icp-py-core Canister instance, for calling the endpoints."""
 
 import json
+import os
 import sys
 import subprocess
 from pathlib import Path
@@ -10,10 +11,16 @@ from icpp.run_shell_cmd import run_shell_cmd
 
 ROOT_PATH = Path(__file__).parent.parent
 
-# We use the `icp` CLI to look up the network URL, the active identity's private
-# key, and canister ids. (This project migrated from dfx to icp-cli. Unlike dfx,
-# icp emits no deprecation banner on stdout, so no output-scrubbing is needed.)
+# We use the `icp` CLI to look up the network URL, the identity's private key,
+# and canister ids. (This project migrated from dfx to icp-cli. Unlike dfx, icp
+# emits no deprecation banner on stdout, so no output-scrubbing is needed.)
 ICP = "icp"
+
+# The wasm QA deploys as ${ICPP_PRO_TEST_IDENTITY} (see the Makefile), and only
+# a controller may upload. So when that variable is set, sign as that identity
+# rather than as the machine-wide active one - otherwise the upload would be
+# rejected by a canister this process just deployed under a different identity.
+IDENTITY_ENV_VAR = "ICPP_PRO_TEST_IDENTITY"
 
 
 def run_icp_command(cmd: str, quiet: bool = False) -> Optional[str]:
@@ -62,11 +69,14 @@ def get_agent(network: str = "local") -> Agent:
     network_url = json.loads(status_json)["api_url"].rstrip("/")
     print(f"Network URL        = {network_url}")
 
-    # Get the name of the active identity (equivalent of `dfx identity whoami`).
-    identity_whoami = run_icp_command(f"{ICP} identity default")
+    # Get the name of the identity to sign as: ${ICPP_PRO_TEST_IDENTITY} when
+    # set, else the machine-wide active one (`dfx identity whoami`'s successor).
+    identity_whoami = os.environ.get(IDENTITY_ENV_VAR, "").strip() or run_icp_command(
+        f"{ICP} identity default"
+    )
     print(f"Using identity = {identity_whoami}")
 
-    # Get the private key (PEM) of the active identity.
+    # Get the private key (PEM) of that identity.
     private_key = run_icp_command(f"{ICP} identity export {identity_whoami}")
 
     # Create an Identity instance using the private key
