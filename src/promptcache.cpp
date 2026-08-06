@@ -12,6 +12,7 @@
 #include "utils.h"
 
 #include "arg.h"
+#include "llama.h" // llama_model_desc, for the model-identity stamp
 #include "log.h"
 
 #include <filesystem>
@@ -47,6 +48,19 @@ prompt_cache_stamp_path(const std::string &canister_path_session) {
   return canister_path_session + ".icppfmt";
 }
 
+std::string prompt_cache_model_id() {
+  // Identity of the currently loaded model, e.g. "qwen3 1.7B Q4_K_M".
+  // Empty when no model is loaded yet (g_model is set by main_ at load_model).
+  if (g_model == nullptr || *g_model == nullptr) return "";
+
+  char buf[256];
+  buf[0] = '\0';
+  // snprintf semantics: the return value is the length the description WOULD
+  // have, so read the (always NUL-terminated) buffer instead of trusting it.
+  llama_model_desc(*g_model, buf, sizeof(buf));
+  return std::string(buf);
+}
+
 bool prompt_cache_format_is_current(const std::string &canister_path_session) {
   const std::string stamp_path = prompt_cache_stamp_path(canister_path_session);
 
@@ -55,7 +69,19 @@ bool prompt_cache_format_is_current(const std::string &canister_path_session) {
 
   std::string stamp;
   std::getline(f, stamp);
-  return stamp == PROMPT_CACHE_FORMAT;
+  if (stamp != PROMPT_CACHE_FORMAT) return false;
+
+  // Second line: the model the cache was written with. A cache is only valid
+  // for the model that produced it -- see prompt_cache_discard_if_stale.
+  // Absent (older stamp) counts as a mismatch, so those caches are discarded.
+  std::string stamped_model;
+  if (!std::getline(f, stamped_model)) return false;
+
+  const std::string current_model = prompt_cache_model_id();
+  // No model loaded => nothing to compare against; do not discard on that basis.
+  if (current_model.empty()) return true;
+
+  return stamped_model == current_model;
 }
 
 void prompt_cache_write_format_stamp(const std::string &canister_path_session) {
@@ -63,6 +89,7 @@ void prompt_cache_write_format_stamp(const std::string &canister_path_session) {
                   std::ios::trunc);
   if (f.is_open()) {
     f << PROMPT_CACHE_FORMAT << std::endl;
+    f << prompt_cache_model_id() << std::endl;
   }
 }
 
@@ -72,15 +99,26 @@ bool prompt_cache_discard_if_stale(const std::string &canister_path_session,
   if (!std::filesystem::exists(canister_path_session)) return false;
   if (prompt_cache_format_is_current(canister_path_session)) return false;
 
-  // Written by an older llama.cpp. llama.cpp would ACCEPT it (same magic and
-  // version) and then misparse it, so delete it rather than let that happen.
+  // Two ways a cache becomes unusable, both of which llama.cpp handles by
+  // throwing -- and in this canister a throw is a TRAP (IC0503), which also
+  // leaves the half-read cache in place so every later call re-traps:
+  //
+  //  (-) written by an older llama.cpp: b4531 and b10076 share magic 'ggsn'
+  //      and version 9, so llama.cpp ACCEPTS the file and then misparses it.
+  //  (-) written with a different model: llama_context::state_read_data
+  //      compares the serialized arch against the loaded model and throws
+  //      "wrong model arch: 'llama' instead of 'qwen3'". Comparing the full
+  //      model description also catches same-arch/different-size swaps
+  //      (e.g. Qwen3-0.6B -> Qwen3-1.7B), which the arch check alone misses.
+  //
+  // Either way: delete it and start cold. That is recoverable; a trap is not.
   std::error_code ec;
   std::filesystem::remove(canister_path_session, ec);
   std::filesystem::remove(prompt_cache_stamp_path(canister_path_session), ec);
 
-  msg = "Discarded prompt-cache file written by an older llama.cpp build "
-        "(incompatible session format): " +
-        canister_path_session;
+  msg = "Discarded prompt-cache file that was not written by this build with "
+        "the currently loaded model (" +
+        prompt_cache_model_id() + "): " + canister_path_session;
   return true;
 }
 

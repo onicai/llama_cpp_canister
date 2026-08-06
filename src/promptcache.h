@@ -18,10 +18,21 @@ bool get_canister_path_session(const std::string &path_session,
 // A cache written by the old build therefore PASSES llama.cpp's check and is
 // then misparsed -- silently, with no error.
 //
-// So we stamp each cache with our own format generation, in a sidecar file
-// "<cache>.icppfmt", and discard any cache that is unstamped or mismatched.
-// Bump PROMPT_CACHE_FORMAT whenever a llama.cpp upgrade changes the session
-// serialization.
+// The same applies to the MODEL: a cache is only valid for the model that
+// wrote it. llama_context::state_read_data compares the serialized arch with
+// the loaded model and THROWS on a mismatch ("wrong model arch: 'llama'
+// instead of 'qwen3'"), and in this canister a throw is a trap -- which also
+// leaves the offending cache in place, so every later call re-traps.
+//
+// So we stamp each cache with our own format generation AND the model it was
+// written with, in a sidecar file "<cache>.icppfmt" (line 1 = format,
+// line 2 = model description), and discard any cache that is unstamped or
+// mismatched. Bump PROMPT_CACHE_FORMAT whenever a llama.cpp upgrade changes
+// the session serialization.
+
+// Description of the currently loaded model, e.g. "qwen3 1.7B Q4_K_M".
+// Empty string when no model is loaded.
+std::string prompt_cache_model_id();
 
 bool prompt_cache_format_is_current(const std::string &canister_path_session);
 void prompt_cache_write_format_stamp(const std::string &canister_path_session);
