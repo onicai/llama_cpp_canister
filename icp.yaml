@@ -20,6 +20,16 @@ canisters:
       steps:
         - type: pre-built
           path: build/llama_cpp.wasm
+  # Our own Qwen3-1.7B canister, so experiments on the larger model do not have
+  # to borrow ICGPT's production canister (as the IC0522 slice-overrun
+  # investigation had to). Same wasm; it differs only in which gguf is uploaded
+  # and the settings it is given (3.75 GiB wasm_memory_limit, max_tokens 4).
+  # See README-qwen3-1.7B.md.
+  - name: llama_cpp_qwen3_17b
+    build:
+      steps:
+        - type: pre-built
+          path: build/llama_cpp.wasm
 
 networks:
   # A project-local replica, started with `icp network start`. icp-cli runs one

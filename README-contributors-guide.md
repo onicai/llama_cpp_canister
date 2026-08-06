@@ -107,6 +107,42 @@ is clean but the IC traps, suspect the DEPLOY PIPELINE (stale `.icp/cache` cache
 not the binary. In b10076, a multi-hour "install trap" chase was ultimately the deploy pipeline installing a
 stale cached wasm.
 
+### Gate 0: plain llama.cpp on the host, for fast iteration
+
+Before any of the four gates above, remember the vendored fork is just llama.cpp — you can build
+and run its normal `llama-cli` / `llama-server` on your machine, against the same gguf files in
+`models/`. No canister, no replica, no 20-minute wasm build, and you get llama.cpp's full logging
+at native speed.
+
+Use it whenever the question is "what does llama.cpp actually do here?" rather than "how does the
+IC react to it?" — model/context/KV behaviour, allocation sizes and counts, tokenization, sampler
+behaviour, what a flag changes. It is far faster than instrumenting the canister for the same
+answer.
+
+```bash
+cd src/llama_cpp_onicai_fork
+cmake -B build && cmake --build build -j        # or: make
+./build/bin/llama-cli -m ../../models/Qwen/Qwen3-1.7B-GGUF/Qwen3-1.7B-Q4_K_M.gguf \
+    -c 16384 --batch-size 8 --ubatch-size 8 --cache-type-k q8_0 --cache-type-v q8_0 -v -p "hi"
+```
+
+`-v` (`--verbose`, sets verbosity to INT_MAX) is the flag that turns on llama.cpp's INFO logging —
+`llama_context: n_ctx`, `llama_kv_cache: CPU KV buffer size = ... MiB`, `graph_reserve`,
+`sched_reserve`, and so on. Those lines are how the KV allocation was sized and counted during the
+IC0522 investigation.
+
+The same `-v` works through `load_model` on a canister, which is how to get those lines out of a
+replica — but note the canister's log ring defaults to 4 KiB and needs raising first:
+
+```bash
+icp canister settings update <canister> --log-memory-limit 2mib -n ic   # max 2 MiB
+icp canister logs <canister> -n ic                                       # controller-only
+```
+
+Canister log records are FRAGMENTS of lines and must be reassembled in `index` order to be
+readable. Logs survive a rejected message (you see how far execution got, which is often the whole
+diagnosis), but the ring is small, so capture right after the call.
+
 ## Two classes of bug that upstream does NOT have — re-check both on every upgrade
 
 These are not llama.cpp bugs, so there is nothing to send upstream. They exist only because

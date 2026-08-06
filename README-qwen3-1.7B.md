@@ -92,6 +92,7 @@ Quantize both K and V caches and keep the micro-batch small:
 icp canister call llama_cpp -e local load_model '(record {
   args = vec {
     "--model"; "models/model.gguf";
+    "--no-warmup";
     "-c"; "16384";
     "--batch-size"; "8";
     "--ubatch-size"; "8";
@@ -103,7 +104,42 @@ icp canister call llama_cpp -e local load_model '(record {
 ```
 
 You can watch the heap with the `get_memory_status` query (see main README) — it
-should report ~2.07 GiB used after load.
+should report **~2.04 GiB** used after load.
+
+**`--no-warmup` is worth ~316 MiB of permanent headroom.** Warmup runs a dummy decode
+whose transient peak is far above what normal inference needs, and because wasm linear
+memory never shrinks, that peak becomes the canister's permanent high-water. Measured on
+mainnet at `-c 16384`, from a fresh heap each time:
+
+| load | heap after load |
+| ---- | --------------- |
+| with `--no-warmup` | 2_187_264_000 (**2.04 GiB**) |
+| without | 2_518_351_872 (2.35 GiB) |
+
+The memory is saved, not merely deferred: after `--no-warmup`, running a real
+`new_chat` + `run_update` left the heap unchanged at 2_187_264_000. (Verified with
+`--batch-size 8` and `max_tokens_update = 4`; a much larger batch could still reach the
+warmup peak.)
+
+> **`-c 16384` requires v0.16.4 or later.** Between 2026-07-30 and v0.16.4 this load
+> was rejected on mainnet with
+> `IC0522: ... large memory operation that used 4_1xx_xxx_xxx instructions and exceeded
+> the slice limit 2_000_000_000`, and `-c 4096` was the stopgap.
+>
+> Cause: an IC platform change (`dfinity/ic` `b7225383e` / `#10789`, the deterministic
+> memory tracker) made every touched 4 KiB page cost ~10 000 instructions (5 000
+> `accessed` + 5 000 `dirty`; heap writes used to be 1 000 and heap reads free). Zeroing
+> the KV cache is a single `memset` the IC cannot interrupt, so its whole cost lands in
+> one slice. At `-c 16384` that is ~2.44 B instructions — more than a full 2 B slice,
+> and over the 4 B carry-over allowance whenever it happens to start late in a slice.
+> (That timing dependence is why the failure was *not* monotonic in `--ctx-size`:
+> `-c 24576` loaded fine while `-c 16384` failed, reproducibly.)
+>
+> Fix in v0.16.4: the CPU buffer type now reports a 128 MiB `get_max_size`
+> (`ggml-backend.cpp`, `#ifdef __wasi__`), so llama.cpp's own
+> `ggml_backend_alloc_ctx_tensors_from_buft()` splits the KV cache into several buffers
+> whose `clear()` does one `memset` each — giving the scheduler a pause point between
+> them. Verified on mainnet.
 
 ## Set max_tokens
 
@@ -120,8 +156,8 @@ your app must loop `run_update` more times per response than with the 0.6B.
 
 ### Measured ceilings
 
-Probed on a local replica (same 40 B instruction limit as mainnet) with the load
-settings above — `-c 4096 --batch-size 8 --ubatch-size 8`, dual q8_0 KV — walking
+Probed on a local replica (same 40 B instruction limit as mainnet) at
+**`-c 4096` `--batch-size 8 --ubatch-size 8`, dual q8_0 KV** — walking
 `max_tokens_update` up until the call is rejected with `IC0522`:
 
 | Phase                          | highest value that worked | first value rejected |
@@ -131,10 +167,19 @@ settings above — `-c 4096 --batch-size 8 --ubatch-size 8`, dual q8_0 KV — wa
 
 Ingestion is cheaper per token than generation, which is why its ceiling is higher.
 
-**These were measured at a short context (~20–30 tokens).** The per-token cost grows
-with the KV span, so both ceilings *shrink* as a conversation gets longer. That is
-why **4** — not the measured maximum — is the recommended setting: it has to hold for
-the whole conversation, not just the first call.
+**These were measured at a short context (~20–30 tokens), at `-c 4096`.** Two things
+make them shrink:
+
+- The per-token cost grows with the KV span, so both ceilings drop as a conversation
+  gets longer.
+- **At a larger `--ctx-size` they drop again**, because `run_update` clears the whole
+  KV cache on every call (`llama_memory_clear(mem, true)` in `main_.cpp`). That costs
+  roughly 10 000 instructions per 4 KiB page of KV: **~0.61 B per call at `-c 4096`**
+  but **~2.44 B at `-c 16384`** — spent before a single token is decoded. Re-measure
+  the ceiling if you run at a larger context.
+
+That is why **4** — not the measured maximum — is the recommended setting: it has to
+hold for the whole conversation, at whatever context you loaded.
 
 If you want the extra throughput, `max_tokens_update` is a normal setting you can
 change between phases. Ingesting a long system prompt at 8 halves the round-trips:

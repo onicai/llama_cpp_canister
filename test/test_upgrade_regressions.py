@@ -43,6 +43,15 @@ CANISTER_NAME = "llama_cpp"
 
 MODEL = "models/tiny.gguf"
 
+# The vendored fork is a SEPARATE repo (onicai/llama_cpp_onicai_fork, branch
+# `onicai`) re-vendored on every llama.cpp upgrade, so patches in it are at risk
+# of being silently dropped -- exactly as b10076 lost the use_mmap and warmup
+# patches (README-0003-305ba519.md, Bugs #3/#4).
+GGML_BACKEND_CPP = (
+    Path(__file__).parent
+    / "../src/llama_cpp_onicai_fork/ggml/src/ggml-backend.cpp"
+)
+
 # The whole point: load with a batch far below the max_tokens used later, so the
 # context's n_batch and common_params' 2048 default are unmistakably different.
 LOAD_BATCH = 8
@@ -169,6 +178,59 @@ def _run(network: str, cache: str, prompt: str, n: str) -> str:
         + '"; "-n"; "'
         + n
         + '"} })',
+    )
+
+
+# ---------------------------------------------------------------------------
+# Class 3: a patch in the vendored fork, lost on re-vendor.
+# Guards the CPU-buffer get_max_size split (fixes IC0522 at large --ctx-size).
+# ---------------------------------------------------------------------------
+def test__cpu_buffer_max_size_patch_is_present() -> None:
+    """The CPU buffer type must cap buffer size, so big memsets get split.
+
+    WHY THIS IS A SOURCE CHECK AND NOT A BEHAVIOURAL TEST
+    -----------------------------------------------------
+    The split cannot be observed at runtime from outside the canister:
+
+      * native never splits -- get_max_size returns SIZE_MAX off-WASI by design,
+        so n_buffers is always 1 there;
+      * the local replica cannot fail either way -- it runs at
+        dirty_page_overhead = 1000 (its network-launcher predates dfinity/ic
+        b7225383e), where the ceiling is ~5x higher than mainnet's and
+        unreachable in a wasm32 heap;
+      * the split is invisible in the logs -- llama.cpp prints
+        `ggml_backend_buffer_name(buf)`, which resolves to the BUFFER TYPE's
+        name ("CPU") for a multi_buffer too, and the size it prints is the
+        total either way.
+
+    So a behavioural test would pass with or without the fix, i.e. it could
+    never go red -- which makes it worthless as a regression test. The failure
+    mode actually worth guarding is the patch being dropped when the fork is
+    re-vendored, and that is exactly what this checks.
+
+    If this fails: re-apply the ICPP-PATCH in ggml-backend.cpp, or Qwen3-1.7B at
+    --ctx-size 16384 will again be rejected on mainnet with IC0522 "large memory
+    operation ... exceeded the slice limit". See
+    TMP-fix-load-model-large-ctx-ic0522.md.
+    """
+    assert GGML_BACKEND_CPP.exists(), f"vendored fork missing: {GGML_BACKEND_CPP}"
+    src = GGML_BACKEND_CPP.read_text(encoding="utf-8")
+
+    assert "ggml_backend_cpu_buffer_type_get_max_size" in src, (
+        "The ICPP-PATCH that bounds CPU buffer size is GONE from the vendored "
+        "fork -- most likely dropped in a re-vendor. Without it "
+        "ggml_backend_alloc_ctx_tensors_from_buft() never splits, the whole KV "
+        "cache is cleared by one memset, and load_model at a large --ctx-size "
+        "is rejected with IC0522 on mainnet."
+    )
+
+    # ...and it must actually be wired into the buffer type, not merely defined.
+    assert re.search(
+        r"\.get_max_size\s*=\s*\*/\s*ggml_backend_cpu_buffer_type_get_max_size", src
+    ), (
+        "ggml_backend_cpu_buffer_type_get_max_size() exists but is NOT wired "
+        "into ggml_backend_cpu_buffer_type's iface (.get_max_size), so it has "
+        "no effect."
     )
 
 
