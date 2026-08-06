@@ -85,6 +85,10 @@ def main() -> int:
                     "test/test_token_counts.py",
                     # small-max_tokens multi-call ingestion regression (f16 KV).
                     "test/test_small_maxtokens.py",
+                    # Guards the two bug classes a llama.cpp upgrade re-introduces
+                    # (lost ICPP-PATCHes in main_.cpp). MUST stay last: it
+                    # reloads the model with a deliberately small --batch-size.
+                    "test/test_upgrade_regressions.py",
                 ],
             },
             # gemma-3-270M (gemma3 / iSWA architecture, q8_0 KV): exercises the
