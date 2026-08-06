@@ -84,6 +84,34 @@ bool prompt_cache_format_is_current(const std::string &canister_path_session) {
   return stamped_model == current_model;
 }
 
+void prompt_cache_remove_stamp(const std::string &canister_path_session) {
+  // Drop the sidecar so the cache counts as UNSTAMPED and will be discarded.
+  // Must be called by anything that removes or overwrites the cache bytes:
+  // a stamp that outlives the file it describes is worse than no stamp at all,
+  // because prompt_cache_discard_if_stale() would then vouch for content this
+  // build never wrote and llama.cpp would trap on it.
+  if (canister_path_session.empty()) return;
+  std::error_code ec;
+  std::filesystem::remove(prompt_cache_stamp_path(canister_path_session), ec);
+}
+
+void prompt_cache_copy_stamp(const std::string &from_session,
+                             const std::string &to_session) {
+  // The stamp describes the BYTES, so it must travel with them. A cache copied
+  // from another of this caller's caches really was written by this build with
+  // this model, so its stamp stays valid and the restored cache stays warm.
+  // (Without this, save/restore via copy_prompt_cache silently degrades into a
+  // cold start on every restore.)
+  const std::string from_stamp = prompt_cache_stamp_path(from_session);
+  const std::string to_stamp = prompt_cache_stamp_path(to_session);
+
+  std::error_code ec;
+  std::filesystem::remove(to_stamp, ec);
+  if (std::filesystem::exists(from_stamp)) {
+    std::filesystem::copy(from_stamp, to_stamp, ec);
+  }
+}
+
 void prompt_cache_write_format_stamp(const std::string &canister_path_session) {
   std::ofstream f(prompt_cache_stamp_path(canister_path_session),
                   std::ios::trunc);
@@ -199,6 +227,9 @@ void remove_prompt_cache() {
     // Remove the file if it exists
     if (std::filesystem::exists(path_session)) {
       bool success = std::filesystem::remove(path_session);
+      // Never leave the stamp behind: it would vouch for whatever bytes appear
+      // at this path next (e.g. an uploaded cache from another build/model).
+      prompt_cache_remove_stamp(path_session);
       if (success) {
         msg = "Cache file " + path_session + " deleted successfully";
       } else {
@@ -290,6 +321,11 @@ void copy_prompt_cache() {
     return;
   }
 
+  // The format/model stamp describes the bytes we just copied, so carry it
+  // across. Without this the restored cache is unstamped, gets discarded on
+  // first use, and the save/restore workflow silently loses its warm cache.
+  prompt_cache_copy_stamp(from_path, to_path);
+
   CandidTypeRecord status_code_record;
   status_code_record.append("status_code", CandidTypeNat16{200});
   ic_api.to_wire(CandidTypeVariant{"Ok", status_code_record});
@@ -361,6 +397,12 @@ void upload_prompt_cache_chunk() {
         "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
     return;
   }
+
+  // The uploaded bytes did not come from this canister, so any existing stamp
+  // no longer describes this file. Drop it: the cache is then treated as
+  // unstamped and discarded on first use (a cold start), instead of being
+  // handed to llama.cpp, which traps on a session it cannot parse.
+  prompt_cache_remove_stamp(filename);
 
   file_upload_chunk_(ic_api, filename, v, chunksize, offset);
 }

@@ -37,6 +37,19 @@ std::string prompt_cache_model_id();
 bool prompt_cache_format_is_current(const std::string &canister_path_session);
 void prompt_cache_write_format_stamp(const std::string &canister_path_session);
 
+// Drop the stamp, so the cache counts as unstamped and is discarded on next
+// use. MUST be called by anything that removes or overwrites the cache bytes
+// (remove_prompt_cache, upload_prompt_cache_chunk): a stamp that outlives the
+// file it describes vouches for content this build never wrote, and llama.cpp
+// then traps on it.
+void prompt_cache_remove_stamp(const std::string &canister_path_session);
+
+// Carry the stamp along when the cache BYTES are copied (copy_prompt_cache).
+// The copied cache really was written by this build with this model, so it
+// stays valid — without this, save/restore silently degrades to a cold start.
+void prompt_cache_copy_stamp(const std::string &from_session,
+                             const std::string &to_session);
+
 // If a cache exists but was not written by this build, delete it (and its
 // sidecar) so a fresh one is created. Returns true if something was discarded;
 // `msg` describes what happened.
