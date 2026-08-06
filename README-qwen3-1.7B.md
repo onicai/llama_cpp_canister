@@ -92,6 +92,7 @@ Quantize both K and V caches and keep the micro-batch small:
 icp canister call llama_cpp -e local load_model '(record {
   args = vec {
     "--model"; "models/model.gguf";
+    "--no-warmup";
     "-c"; "16384";
     "--batch-size"; "8";
     "--ubatch-size"; "8";
@@ -103,7 +104,22 @@ icp canister call llama_cpp -e local load_model '(record {
 ```
 
 You can watch the heap with the `get_memory_status` query (see main README) — it
-should report ~2.07 GiB used after load.
+should report **~2.04 GiB** used after load.
+
+**`--no-warmup` is worth ~316 MiB of permanent headroom.** Warmup runs a dummy decode
+whose transient peak is far above what normal inference needs, and because wasm linear
+memory never shrinks, that peak becomes the canister's permanent high-water. Measured on
+mainnet at `-c 16384`, from a fresh heap each time:
+
+| load | heap after load |
+| ---- | --------------- |
+| with `--no-warmup` | 2_187_264_000 (**2.04 GiB**) |
+| without | 2_518_351_872 (2.35 GiB) |
+
+The memory is saved, not merely deferred: after `--no-warmup`, running a real
+`new_chat` + `run_update` left the heap unchanged at 2_187_264_000. (Verified with
+`--batch-size 8` and `max_tokens_update = 4`; a much larger batch could still reach the
+warmup peak.)
 
 > **`-c 16384` requires v0.16.4 or later.** Between 2026-07-30 and v0.16.4 this load
 > was rejected on mainnet with
