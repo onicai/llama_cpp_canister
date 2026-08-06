@@ -374,6 +374,23 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   const int n_ctx_train = llama_model_n_ctx_train(model);
   const int n_ctx = llama_n_ctx(ctx);
 
+  // ICPP-PATCH-START
+  // The llama_context is Orthogonally Persisted and was created by load_model
+  // with ITS --batch-size. A run_update/run_query call does not repeat that
+  // flag, so `params.n_batch` here is common_params' 2048 default, not the
+  // batch the context actually has. Sizing a decode from params.n_batch is
+  // therefore wrong: llama_decode asserts `n_tokens_all <= cparams.n_batch`
+  // (llama-context.cpp) and a failed GGML_ASSERT does not return an error --
+  // it traps the canister (IC0502 'unreachable'), which also leaves the
+  // caller's prompt-cache file half-written.
+  // Always size batches from the context, which is the value llama_decode
+  // checks against. Same for n_ubatch, used by the non-causal assert.
+  const int n_batch_ctx = (int)llama_n_batch(ctx);
+  const int n_ubatch_ctx = (int)llama_n_ubatch(ctx);
+  LOG_INF("%s: context batch sizes: n_batch = %d, n_ubatch = %d\n", __func__,
+          n_batch_ctx, n_ubatch_ctx);
+  // ICPP-PATCH-END
+
   if (n_ctx > n_ctx_train) {
     LOG_WRN("%s: model was trained on only %d context tokens (%d specified)\n",
             __func__, n_ctx_train, n_ctx);
@@ -449,6 +466,21 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   if (!path_session.empty()) {
     LOG_INF("%s: attempting to load saved session from '%s'\n", __func__,
             path_session.c_str());
+
+    // ICPP-PATCH-START
+    // Self-heal: drop a cache this build/model cannot read, and start cold.
+    // new_chat does this too, but a caller can reach run_update without a
+    // new_chat (a model swap between calls is enough), and llama.cpp handles
+    // an unreadable session by THROWING -- which traps the canister and
+    // leaves the bad file in place, so every later call re-traps.
+    std::string stale_msg;
+    if (prompt_cache_discard_if_stale(path_session, stale_msg)) {
+      LOG_INF("%s: %s\n", __func__, stale_msg.c_str());
+      std::cout << "llama_cpp: " << std::string(__func__) << " - " << stale_msg
+                << std::endl;
+    }
+    // ICPP-PATCH-END
+
     if (!file_exists(path_session)) {
       LOG_INF("%s: session file does not exist, will create.\n", __func__);
     } else if (file_is_empty(path_session)) {
@@ -734,8 +766,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   LOG_INF("sampler params: \n%s\n", sparams.print().c_str());
   LOG_INF("sampler chain: %s\n", common_sampler_print(smpl).c_str());
 
+  // ICPP-PATCH: report the context's batch (what decode is actually bounded
+  // by), not params.n_batch which is the unused per-call default.
   LOG_INF("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n",
-          n_ctx, params.n_batch, params.n_predict, params.n_keep);
+          n_ctx, n_batch_ctx, params.n_predict, params.n_keep);
 
   // group-attention state
   // number of grouped KV tokens so far (used only if params.grp_attn_n > 1)
@@ -978,10 +1012,13 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       // ICPP-PATCH: upstream replaced this loop with common_prompt_batch_decode,
       //             but we need per-batch control to honor the max_tokens budget
       //             and to track conversation_ss, so we keep our own eval loop.
-      for (int i = 0; i < (int)embd.size(); i += params.n_batch) {
+      for (int i = 0; i < (int)embd.size(); i += n_batch_ctx) {
         int n_eval = (int)embd.size() - i;
-        if (n_eval > params.n_batch) {
-          n_eval = params.n_batch;
+        // ICPP-PATCH: clamp to the CONTEXT's batch (see n_batch_ctx above),
+        // not params.n_batch -- exceeding it trips a GGML_ASSERT in
+        // llama_decode, which traps instead of returning an error.
+        if (n_eval > n_batch_ctx) {
+          n_eval = n_batch_ctx;
         }
 
         // ICPP-PATCH-START
@@ -1039,8 +1076,12 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           // next call reloads the same short prefix and ingestion never
           // advances (prompt_remaining stalls). prompt_cache_ro still opts out.
           if (!path_session.empty() && !params.prompt_cache_ro) {
-            session_tokens.insert(session_tokens.end(), embd.begin(),
-                                  embd.begin() + n_eval);
+            // Append THIS chunk: [i, i + n_eval). embd holds at most one batch
+            // (see the n_batch_ctx cap on the fill loop), so i is 0 today, but
+            // offsetting by i keeps the append correct — and the cache
+            // uncorrupted — if embd ever spans more than one chunk.
+            session_tokens.insert(session_tokens.end(), embd.begin() + i,
+                                  embd.begin() + i + n_eval);
             n_session_consumed = session_tokens.size();
           }
           break_while_loop = true;
@@ -1111,7 +1152,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
                               /* accept_grammar= */ false);
 
         ++n_consumed;
-        if ((int)embd.size() >= params.n_batch) {
+        // ICPP-PATCH: bound by the CONTEXT's batch (see n_batch_ctx above), not
+        // params.n_batch. This keeps embd at most one batch, so the decode loop
+        // below always runs a single chunk (i == 0) and every decoded token is
+        // appended to session_tokens.
+        if ((int)embd.size() >= n_batch_ctx) {
           break;
         }
 
@@ -1412,6 +1457,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         path_session.c_str());
     llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(),
                           session_tokens.size());
+    // ICPP-PATCH: (re)stamp the sidecar so it always describes the file we
+    // just wrote, with the model that wrote it. Without this, a cache the
+    // load above discarded would be re-created unstamped and discarded again
+    // on every subsequent call -- a permanent cold start.
+    prompt_cache_write_format_stamp(path_session);
   }
 
   LOG("\n\n");

@@ -23,9 +23,19 @@ These are not tuning preferences — get them wrong and the canister traps:
 
 2. **Set `max_tokens_update` to 4.** A message may execute at most 40 B
    instructions (`IC0522`). The 1.7B is ~2.8× the compute of the 0.6B, so decoding
-   the 0.6B's ~8–20 tokens per call traps. Decoding **4 tokens per call** stays
-   safely under the limit — for both prompt ingestion and generation. The trade-off
-   is more `run_update` round-trips per response.
+   the 0.6B's ~8–20 tokens per call is rejected. Decoding **4 tokens per call**
+   stays safely under the limit — for both prompt ingestion and generation. The
+   trade-off is more `run_update` round-trips per response.
+
+   > **Note (fixed):** there used to be a *second*, undocumented ceiling here.
+   > `run_update` sized its decode batches from the per-call `--batch-size`
+   > default (2048) instead of the batch the persisted context was actually
+   > created with, so any `max_tokens_update` above the loaded `--batch-size`
+   > (**8** for this model) tripped
+   > `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` and **trapped the canister**
+   > (`IC0502`), corrupting that caller's `prompt.cache`. Decode is now chunked
+   > at the context's real batch, so the instruction limit above is the only
+   > ceiling, and exceeding it is a clean `IC0522` rejection rather than a trap.
 
 ## Upload the gguf file
 
@@ -104,9 +114,43 @@ icp canister call llama_cpp -e local set_max_tokens '(record {
 })'
 ```
 
-`max_tokens_update = 4` is the ceiling for this model (see limit #2 above). Ingestion
-and generation both advance 4 tokens per `run_update` call, so your app must loop
-`run_update` more times per response than with the 0.6B.
+`max_tokens_update = 4` is the recommended value for this model (see limit #2
+above). Ingestion and generation both advance 4 tokens per `run_update` call, so
+your app must loop `run_update` more times per response than with the 0.6B.
+
+### Measured ceilings
+
+Probed on a local replica (same 40 B instruction limit as mainnet) with the load
+settings above — `-c 4096 --batch-size 8 --ubatch-size 8`, dual q8_0 KV — walking
+`max_tokens_update` up until the call is rejected with `IC0522`:
+
+| Phase                          | highest value that worked | first value rejected |
+| ------------------------------ | ------------------------- | -------------------- |
+| Prompt ingestion (`-p <text>`) | **8**                     | 9                    |
+| Generation (`-p ""`)           | **6**                     | 7                    |
+
+Ingestion is cheaper per token than generation, which is why its ceiling is higher.
+
+**These were measured at a short context (~20–30 tokens).** The per-token cost grows
+with the KV span, so both ceilings *shrink* as a conversation gets longer. That is
+why **4** — not the measured maximum — is the recommended setting: it has to hold for
+the whole conversation, not just the first call.
+
+If you want the extra throughput, `max_tokens_update` is a normal setting you can
+change between phases. Ingesting a long system prompt at 8 halves the round-trips:
+
+```bash
+# ingest at 8 ...
+icp canister call llama_cpp -e local set_max_tokens '(record { max_tokens_query = 1 : nat64; max_tokens_update = 8 : nat64 })'
+#   ... loop run_update with -p "<prompt>" until prompt_remaining is empty ...
+# ... then generate at 4
+icp canister call llama_cpp -e local set_max_tokens '(record { max_tokens_query = 1 : nat64; max_tokens_update = 4 : nat64 })'
+```
+
+Overshooting is now **safe to recover from**: since the batch fix in limit #2, a value
+that is too large is rejected with `IC0522` and the message is rolled back, leaving the
+prompt cache intact — so an app may probe upward and fall back on rejection. Before
+that fix, any value above the loaded `--batch-size` trapped and corrupted the cache.
 
 ## Chat — word-guessing game example
 
