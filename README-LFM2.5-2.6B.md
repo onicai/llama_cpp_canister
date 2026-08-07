@@ -25,6 +25,7 @@ This document records what that costs, measured on mainnet.
 | metric                                  | Qwen3-1.7B      | LFM2.5-1.2B    | **LFM2.5-2.6B**     |
 | --------------------------------------- | --------------- | -------------- | ------------------- |
 | gguf size (Q4_K_M)                      | 1,107,409,472 B | 730,895,168 B  | **1,674,454,848 B** |
+| wasm heap after load                    | ~2.69 GiB       | ~2.06 GiB      | **1.67 GiB**        |
 | **generation ceiling (tokens/call)**    | 6               | **9**          | **4**               |
 | **ingestion ceiling (tokens/call)**     | 8               | 11             | **4**               |
 | cycles per `run_update` (max_tokens 4)  | 26,836,073,673  | 12,446,618,543 | **38,865,179,739**  |
@@ -232,31 +233,37 @@ VOLCANO  'A large mountain formed by volcanic activity.  \nStop!'
 So the prompt is part of the model choice, not independent of it. Adopting the
 2.6B would mean adopting a prompt that degrades the model we would be replacing.
 
-## Known issue: `get_memory_status` traps above 4 GB of stable memory
+## A bug this model surfaced: `get_memory_status` above 4 GB of stable memory
 
-With three ggufs uploaded, this canister's stable memory crossed 4 GB and the
-endpoint now traps:
+Uploading a third gguf pushed this canister's stable memory past 4 GB, and
+`get_memory_status` started trapping:
 
 ```
 IC0502: Canister trapped: 32 bit stable memory api used on a memory larger than 4GB
 Canister Backtrace: stable_size
 ```
 
-`src/memory_status.cpp:29` calls the 32-bit `stable_size()`. It needs the 64-bit
-`stable64_size` — which icpp-pro's `ic0.h` does not declare, so the import has to
-be added by hand (the same way `ic0.performance_counter` was). Until then the
-wasm heap after loading this model is **not measured**; it loads and runs inside
-the 3.75 GiB `wasm_memory_limit`, which is all we can currently assert.
+It called the 32-bit `stable_size()`. **Fixed** — `src/memory_status.cpp` now
+declares and calls `ic0.stable64_size`, an import added by hand because
+icpp-pro's `ic0.h` does not provide it. Confirmed on this canister at
+**5,914,034,176 bytes (5.51 GiB) of stable memory**, where the old build
+trapped.
+
+> **Heap is a high-water mark.** `__builtin_wasm_memory_size(0)` reports wasm
+> linear memory, which never shrinks. The 1.67 GiB above was measured right
+> after an upgrade followed by a single `load_model`, so it is the true cost of
+> this model. Readings taken on a canister that has already loaded something
+> larger will report that larger figure instead — which is why the 1.2B's
+> ~2.06 GiB looks anomalous next to its 0.68 GiB of weights.
 
 ## Status and what is not verified
 
 Verified on mainnet: uploads and checksums, loads in wasm at `-c 4096` with dual
 q8_0 KV, non-thinking prefill works, both `max_tokens` ceilings, prompt-cache
-round trip across calls.
+round trip across calls, wasm heap after load.
 
 Not verified:
 
-- **Wasm heap after load** — blocked by the `get_memory_status` bug above.
 - **Only `-c 4096`.** Larger contexts are untested; the ceiling is already 4, so
   a bigger context may push generation below one token per call.
 - **Tool calling / agentic use**, which is the model's actual selling point and
