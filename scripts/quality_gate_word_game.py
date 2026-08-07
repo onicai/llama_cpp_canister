@@ -42,6 +42,22 @@ WORDS = [
     "CLOCK",
 ]
 
+# The 10 words above are a quick screen. Ranking decisions are made on all 20
+# (see --full): a model can look perfect on the first 10 and still leak on the
+# wider list - that is exactly how both Granite variants were eliminated.
+WORDS_EXTRA = [
+    "OCEAN",
+    "GUITAR",
+    "PENGUIN",
+    "CASTLE",
+    "RAINBOW",
+    "COFFEE",
+    "MOUNTAIN",
+    "TELEPHONE",
+    "BUTTERFLY",
+    "HOSPITAL",
+]
+
 SYSTEM = (
     "You support a word-guessing game. When asked for a hint about a word, give "
     "ONE short clue that describes what the thing IS or DOES, using other words, "
@@ -203,7 +219,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--format", default="qwen3", choices=sorted(FORMATS))
-    ap.add_argument("--words", default=",".join(WORDS))
+    ap.add_argument("--words", default=None)
+    ap.add_argument(
+        "--full",
+        action="store_true",
+        help="use all 20 words instead of the 10-word screen. Combined with "
+        "--repeat 5 this is the 100-sample score models are ranked on.",
+    )
     ap.add_argument("--n-predict", type=int, default=64)
     # Threads affect SPEED only, never quality - use the machine.
     ap.add_argument("--threads", type=int, default=8)
@@ -241,7 +263,9 @@ def main() -> int:
 
     system = a.system if a.system is not None else SYSTEM
     tmpl = FORMATS[a.format]
-    words = [w.strip().upper() for w in a.words.split(",") if w.strip()]
+    default_words = WORDS + WORDS_EXTRA if a.full else WORDS
+    spec = a.words if a.words is not None else ",".join(default_words)
+    words = [w.strip().upper() for w in spec.split(",") if w.strip()]
     if a.smoke:
         words = words[:1]
 

@@ -933,8 +933,9 @@ We tested several LLM models available on HuggingFace:
 | [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)       | 630 M     | 0.68 GB   | q8_0         | q8_0           | -                             | 25                             |
 | [LFM2.5-1.2B-Instruct-Q4_K_M.gguf](https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF) ‡ | 1.2 B     | 0.73 GB   | Q4_K_M       | q8_0           | 11                            | 9                              |
 | [Qwen3-1.7B-Q4_K_M.gguf](https://huggingface.co/unsloth/Qwen3-1.7B-GGUF) ‡                      | 1.7 B     | 1.11 GB   | Q4_K_M       | q8_0           | 8                             | 6                              |
+| [LFM2.5-2.6B-Q4_K_M.gguf](https://huggingface.co/LiquidAI/LFM2.5-2.6B-GGUF) ‡                   | 2.7 B     | 1.67 GB   | Q4_K_M       | q8_0           | 4                             | 4                              |
 
-‡ The two bottom rows are the **larger models**, and their numbers were measured
+‡ The three bottom rows are the **larger models**, and their numbers were measured
 with **`--ctx-size 4096 --batch-size 8 --ubatch-size 8`** — not the `--batch-size 64
 --ctx-size 16384` used for the rows above, so they are not directly comparable.
 
