@@ -12,6 +12,7 @@ To run it against a deployment to the IC, just replace `local` with `production`
 """
 # pylint: disable=missing-function-docstring, unused-import, wildcard-import, unused-wildcard-import, line-too-long
 
+import re
 from pathlib import Path
 from typing import Dict
 import pytest
@@ -22,6 +23,63 @@ ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 
 # Canister in the icp.yaml file we want to test
 CANISTER_NAME = "llama_cpp"
+
+# Source-checked by test__get_memory_status_source_uses_64bit_api.
+MEMORY_STATUS_CPP = Path(__file__).parent / "../src/memory_status.cpp"
+
+
+def _extract_nat64(response: str, name: str) -> int:
+    """Pull a `<name> = <int> : nat64` field out of a candid response."""
+    match = re.search(rf"{name}\s*=\s*([0-9_]+)\s*:\s*nat64", response)
+    if not match:
+        raise AssertionError(f"field {name!r} not found in response: {response}")
+    return int(match.group(1).replace("_", ""))
+
+
+def test__get_memory_status_source_uses_64bit_api(network: str) -> None:
+    # THE actual regression guard. get_memory_status used ic0.stable_size, the
+    # 32-bit API, which TRAPS with IC0502 ("32 bit stable memory api used on a
+    # memory larger than 4GB") as soon as a canister holds more than one large
+    # gguf. It now uses ic0.stable64_size, an import declared by hand in
+    # src/memory_status.cpp because icpp-pro's ic0.h does not provide it.
+    #
+    # This is a SOURCE check, deliberately, because neither runtime check bites:
+    #   - the >4 GiB condition cannot be reproduced on a local replica, so
+    #     test__get_memory_status below passes happily on a reverted 32-bit build
+    #   - a misspelled import cannot reach production at all: the replica
+    #     rejects the module at install time with IC0505 ("not exported by the
+    #     runtime"), verified by deliberately breaking the name
+    # so a revert to the 32-bit call is only visible in the source itself.
+    source = MEMORY_STATUS_CPP.read_text(encoding="utf-8")
+    assert "ic0_stable64_size()" in source, (
+        f"{MEMORY_STATUS_CPP} no longer calls ic0_stable64_size(); the 32-bit "
+        "stable_size() traps above 4 GiB of stable memory"
+    )
+    assert not re.search(r"[^0-9a-z_]stable_size\s*\(", source), (
+        f"{MEMORY_STATUS_CPP} calls the 32-bit stable_size(); it traps above "
+        "4 GiB of stable memory"
+    )
+
+
+def test__get_memory_status(network: str) -> None:
+    # Complements the source check above: the endpoint answers, and both
+    # counters are non-zero whole 64 KiB pages.
+    response = call_canister_api(
+        icp_yaml_path=ICP_YAML_PATH,
+        canister_name=CANISTER_NAME,
+        canister_method="get_memory_status",
+        canister_argument="()",
+        network=network,
+    )
+    assert "Ok" in response, response
+
+    wasm_heap_bytes = _extract_nat64(response, "wasm_heap_bytes")
+    stable_bytes = _extract_nat64(response, "stable_bytes")
+
+    assert wasm_heap_bytes > 0, response
+    assert stable_bytes > 0, response
+    assert wasm_heap_bytes % 65536 == 0, response
+    assert stable_bytes % 65536 == 0, response
 
 
 def test__health(network: str) -> None:

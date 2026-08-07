@@ -6,9 +6,11 @@
 //     toward the canister's wasm_memory_limit and, when it reaches it, causes
 //     "heap out of bounds" (IC0502) traps during model load / decode. Useful to
 //     watch when running larger models (e.g. Qwen3-0.6B) close to the limit.
-//   - stable_bytes : stable-memory size (ic0.stable_size() * 64 KiB), which
+//   - stable_bytes : stable-memory size (ic0.stable64_size() * 64 KiB), which
 //     holds the uploaded model file and the virtual filesystem (prompt caches,
-//     logs) via ic-wasi-polyfill.
+//     logs) via ic-wasi-polyfill. The 64-bit API is required: the 32-bit
+//     ic0.stable_size traps once stable memory passes 4 GiB, which happens as
+//     soon as a canister holds more than one large gguf.
 //
 // Access: non-anonymous callers only (anonymous -> access denied).
 #pragma once
