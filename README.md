@@ -926,23 +926,53 @@ The instruction limit is 40 billion instructions per update call
 
 We tested several LLM models available on HuggingFace:
 
-| Model                                                                                     | # weights | file size | quantization | --cache-type-k | max*tokens<br> *(ingestion)\_ | max*tokens<br> *(generation)\_ |
-| ----------------------------------------------------------------------------------------- | --------- | --------- | ------------ | -------------- | ----------------------------- | ------------------------------ |
-| [Qwen3-0.6B-Q8_0.gguf](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF) (default)             | 600 M     | 0.64 GB   | q8_0         | q8_0           | -                             | 25                             |
-| [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF) | 630 M     | 0.68 GB   | q8_0         | q8_0           | -                             | 25                             |
-| [gemma-3-270m-it-Q8_0.gguf](https://huggingface.co/unsloth/gemma-3-270m-it-GGUF) (tiniest) | 270 M     | 0.29 GB   | q8_0         | q8_0           | -                             | 44                             |
+| Model                                                                                           | # weights | file size | quantization | --cache-type-k | max*tokens<br> *(ingestion)\_ | max*tokens<br> *(generation)\_ |
+| ----------------------------------------------------------------------------------------------- | --------- | --------- | ------------ | -------------- | ----------------------------- | ------------------------------ |
+| [gemma-3-270m-it-Q8_0.gguf](https://huggingface.co/unsloth/gemma-3-270m-it-GGUF) (tiniest)      | 270 M     | 0.29 GB   | q8_0         | q8_0           | -                             | 44                             |
+| [Qwen3-0.6B-Q8_0.gguf](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF) (default)                   | 600 M     | 0.64 GB   | q8_0         | q8_0           | -                             | 25                             |
+| [qwen2.5-0.5b-instruct-q8_0.gguf](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)       | 630 M     | 0.68 GB   | q8_0         | q8_0           | -                             | 25                             |
+| [LFM2.5-1.2B-Instruct-Q4_K_M.gguf](https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF) ‡ | 1.2 B     | 0.73 GB   | Q4_K_M       | q8_0           | 11                            | 9                              |
+| [Qwen3-1.7B-Q4_K_M.gguf](https://huggingface.co/unsloth/Qwen3-1.7B-GGUF) ‡                      | 1.7 B     | 1.11 GB   | Q4_K_M       | q8_0           | 8                             | 6                              |
+
+‡ The two bottom rows are the **larger models**, and their numbers were measured
+with **`--ctx-size 4096 --batch-size 8 --ubatch-size 8`** — not the `--batch-size 64
+--ctx-size 16384` used for the rows above, so they are not directly comparable.
+
+**A larger `--ctx-size` costs you tokens per call.** Qwen3-1.7B drops from 6
+tokens/call at `-c 4096` to 5 at `-c 16384`. The reason: every update call gets
+the same 40 B instruction budget, and part of it is spent *before* the first
+token is produced, on housekeeping the KV cache.
+
+`--ctx-size` is chosen **once, at `load_model`**, and the KV cache is allocated
+in full right then — for the entire context you asked for. Every call afterwards
+pays the same housekeeping cost over that whole allocation, whether the
+conversation is 20 tokens or 4000 tokens long. So it is a **flat tax on every
+call, fixed by the number you picked at load time** — it does not creep up as a
+conversation grows.
+
+Measured on mainnet for Qwen3-1.7B, on two separately loaded models:
+
+| `--ctx-size` | spent before the first token | per generated token | tokens/call |
+| ------------ | ---------------------------- | ------------------- | ----------- |
+| 4096         | 1.4 B instructions           | 6.4 B instructions  | 6           |
+| 24576        | 7.0 B instructions           | 6.4 B instructions  | 5           |
+
+So pick the smallest `--ctx-size` your conversations actually need: the unused
+part of the context is not free.
 
 _(We have benchmarked other models too — SmolLM2, Llama-3.2, DeepSeek-R1 1.5B, and other Qwen2.5 quants — but their pre-b10076 numbers must be re-measured before we list them here.)_
 
 NOTEs:
 
-- **`Qwen3-0.6B-Q8_0` is the current default** (top row): ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --batch-size 64 --ubatch-size 64 --ctx-size 16384` and a `wasm_memory_limit` of 3.75 GiB; the small batch shrinks the compute buffers so a 16K context fits with ~2 GiB headroom — see [Context size & memory](#appendix-b-context-size--memory) for the mechanism, levers, and risks.
-- **`qwen2.5-0.5b-instruct-q8_0` was re-measured on b10076**: 25 tokens/call sustained, 28 first-call ceiling — up ~2.8x from ~10, thanks to the hand-written WASM SIMD q8_0 kernel.
-- **`gemma-3-270m-it-Q8_0` is the smallest model we run on-chain** — the b10076 fork loads the `gemma3` architecture. With a **q8_0 KV cache** the measured **generation ceiling is ~55 tokens/call** (55 OK / 60 traps at short context, on a local replica whose instruction limit is the same 40 B as mainnet; ~50 with the default f16 cache), so `max_tokens_update = 44` is a safe value. Use `--temp 0.7` — greedy decoding can end a turn immediately. Its heap peaks at only ~0.9 GiB after load, so the **default `wasm_memory_limit` is enough** (no 3.75 GiB bump). See [README-gemma-3.md](README-gemma-3.md) for the full recipe.
+- To experiment with prompt design and determine their exact costs, use [ICGPT](https://icgpt.onicai.com/docs)
+- **`gemma-3-270m-it-Q8_0` is the smallest model we tested** — the b10076 fork loads the `gemma3` architecture. With a **q8_0 KV cache** the measured **generation ceiling is ~55 tokens/call** (55 OK / 60 traps at short context, on a local replica whose instruction limit is the same 40 B as mainnet; ~50 with the default f16 cache), so `max_tokens_update = 44` is a safe value. Use `--temp 0.7` — greedy decoding can end a turn immediately. Its heap peaks at only ~0.9 GiB after load, so the **default `wasm_memory_limit` is enough** (no 3.75 GiB bump). See [README-gemma-3.md](README-gemma-3.md) for the full recipe.
+- **`qwen2.5-0.5b-instruct-q8_0 is an older model**: 25 tokens/call sustained, 28 first-call ceiling. This is the current model in [funnAI](https://funnai.onicai.com).
+- **`Qwen3-0.6B-Q8_0`**: ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --batch-size 64 --ubatch-size 64 --ctx-size 16384` and a `wasm_memory_limit` of 3.75 GiB; the small batch shrinks the compute buffers so a 16K context fits with ~2 GiB headroom — see [Context size & memory](#appendix-b-context-size--memory) for the mechanism, levers, and risks.
+- **`LFM2.5-1.2B-Instruct-Q4_K_M` is the fastest model that still passes our word-guessing quality gate** — Liquid AI's hybrid architecture (only 6 of 16 blocks are attention; the other 10 are short convolutions). Measured on mainnet at `-c 4096`: **9 tokens/call generation, 11 ingestion**, and **12.4 B cycles per `run_update` versus Qwen3-1.7B's 26.8 B — 2.16x cheaper per call** at 34 % less disk. Note it needs one word ("small") removed from the word-game example prompt, or it copies it into its hints. See [README-LFM2.5-1.2B.md](README-LFM2.5-1.2B.md).
+- **`Qwen3-1.7B-Q4_K_M` is the largest model we tested on-chain so far.** Use Q4_K_M, not Q8_0: a single message can read at most ~2 GiB from stable memory and the Q8_0 gguf (~1.83 GB) trips `IC0524` on load. It needs `--batch-size 8 --ubatch-size 8` and a 3.75 GiB `wasm_memory_limit`, and `--ctx-size 16384` requires v0.16.4 or later. See [README-qwen3-1.7B.md](README-qwen3-1.7B.md).
 - During prompt ingestion phase, the max_tokens before hitting the instruction limit is higher as during the generation phase.
 - We use `"--temp"; "0.6"; "--repeat-penalty"; "1.1";`, as recommended on several model cards
 - For each model, we selected a `--cache-type-k` that gives the highest max_tokens while still providing good results.
-- The python notebook [scripts/promt-design.ipynb](./scripts/prompt-design.ipynb) allows you to try out these models w/o using an IC canister, to decide what model will work best for your on-chain AI agent
 
 # Appendix B: Context size & memory
 
@@ -987,20 +1017,6 @@ conversation (16× the old ctx-1024 default) with a comfortable ~2 GiB safety ma
 verified end-to-end on mainnet. You can push `--ctx-size` toward the native 40960 (~30K
 words) if you accept a tighter margin.
 
-### ⚠️ The risk — a memory trap bricks the canister
-
-Memory here is a hard wall, and hitting it is **not** a graceful error. If a `load_model`
-or (more likely) an inference call needs to grow the heap past `wasm_memory_limit`, the
-canister traps with `heap out of bounds` (IC0502). Recovery requires a
-**`icp canister install --mode reinstall`** (which wipes the heap *and* the uploaded model),
-then **re-uploading the gguf** and reloading.
-
-Practical guidance:
-- Keep real headroom (the default 16384 leaves ~2 GiB) rather than maxing out `--ctx-size`.
-- The KV cost is committed at `load_model`, so a load that succeeds with headroom will not
-  surprise you mid-conversation. Watch `wasm_heap_bytes` with `get_memory_status`.
-- A pre-decode headroom guard (a clean `Err` instead of a trap) is planned hardening; until
-  then, treat the memory limit as a wall to stay well clear of.
 
 # Appendix C: heap-out-of-bounds
 

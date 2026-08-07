@@ -172,11 +172,28 @@ make them shrink:
 
 - The per-token cost grows with the KV span, so both ceilings drop as a conversation
   gets longer.
-- **At a larger `--ctx-size` they drop again**, because `run_update` clears the whole
-  KV cache on every call (`llama_memory_clear(mem, true)` in `main_.cpp`). That costs
-  roughly 10 000 instructions per 4 KiB page of KV: **~0.61 B per call at `-c 4096`**
-  but **~2.44 B at `-c 16384`** — spent before a single token is decoded. Re-measure
-  the ceiling if you run at a larger context.
+- **At a larger `--ctx-size` they drop again.** Measured on mainnet with the same
+  model and settings, varying only `--ctx-size`:
+
+  | `--ctx-size` | cycles per `run_update` call | generation ceiling |
+  | ------------ | ---------------------------- | ------------------ |
+  | 4096  | 26,836,073,673 | **6** |
+  | 16384 | —              | **5** |
+  | 24576 | 31,132,686,530 | **5** |
+
+  So a smaller context really does buy tokens per call: `-c 4096` gives 6 where
+  `-c 24576` gives 5, at ~16 % fewer cycles. Re-measure the ceiling if you change
+  the context.
+
+  > Why: profiled on mainnet with the IC instruction counter, the per-call
+  > `llama_memory_clear(mem, true)` costs **0.86 B instructions at `-c 4096` and
+  > 5.16 B at `-c 24576`** — exactly linear in `--ctx-size`. Token generation
+  > itself (`llama_decode`) is **25.72 B instructions regardless of context**, so
+  > everything the larger context costs you is KV bookkeeping, not inference.
+  > Switching to `clear(false)` only recovers ~4.6 %, because the IC charges a
+  > page on first touch and the session restore then pays what the memset no
+  > longer does. See [Appendix A: max_tokens](README.md#appendix-a-max_tokens)
+  > for the per-context instruction budget.
 
 That is why **4** — not the measured maximum — is the recommended setting: it has to
 hold for the whole conversation, at whatever context you loaded.
