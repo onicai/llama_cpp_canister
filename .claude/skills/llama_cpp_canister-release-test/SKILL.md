@@ -33,8 +33,22 @@ unzip /tmp/llama_cpp_release_test/llama_cpp_canister_<TAG>.zip -d /tmp/llama_cpp
 
 All subsequent commands run from `/tmp/llama_cpp_release_test/<TAG>/`.
 
-Sanity-check the zip: `build/llama_cpp.wasm` + `build/llama_cpp.did` present, `icp.yaml`
-has **two** canisters (`llama_cpp` + `llama_cpp_qwen25`), and `test/test_qwen3.py` exists.
+Sanity-check the zip: `build/llama_cpp.wasm`, `build/llama_cpp.did` and
+`build/llama_cpp.wasm.sha256` present, `icp.yaml` has **three** canisters
+(`llama_cpp`, `llama_cpp_qwen25`, `llama_cpp_qwen3_17b`), and `test/test_qwen3.py` exists.
+
+Since the build became reproducible, confirm the zip carries the wasm the release
+advertises — the release title and body both state the sha256, and the release publishes
+the bare wasm alongside the zip:
+
+```bash
+shasum -a 256 /tmp/llama_cpp_release_test/<TAG>/build/llama_cpp.wasm
+cat /tmp/llama_cpp_release_test/<TAG>/build/llama_cpp.wasm.sha256
+cat /tmp/llama_cpp_release_test/<TAG>/BUILD-PROVENANCE.txt   # fork commit + pinned toolchain
+```
+
+All three must agree with the hash in the release title. If they do not, abort — the
+release is not trustworthy.
 
 ## 2. Start from a CLEAN local network
 
@@ -54,7 +68,7 @@ Verify the icp-cli version (`icp --version`); this flow was validated on 1.2.0.
 ## 3. Create conda environment + install deps
 
 ```bash
-source /opt/miniconda3/etc/profile.d/conda.sh
+source /Users/arjaan/miniconda3/etc/profile.d/conda.sh
 conda create -y -n llama_cpp_canister_release_test python=3.11
 conda activate llama_cpp_canister_release_test
 cd /tmp/llama_cpp_release_test/<TAG>
@@ -66,7 +80,7 @@ pip install -r requirements.txt
 
 ## 4. Deploy + configure the Qwen3 canister
 
-`icp.yaml` defines two canisters — deploy **`llama_cpp`** (the Qwen3 default), not both.
+`icp.yaml` defines three canisters — deploy only **`llama_cpp`** (the Qwen3 default).
 `icp network start -d` picks a random ephemeral port; never hardcode `localhost:8000`.
 
 Deploy as `llama-cpp-testing`: since icpp-pro 6.0.0 pytest is told which identity to
@@ -161,7 +175,7 @@ Ask the user if they want to remove the test directory and conda environment. If
 
 ```bash
 rm -rf /tmp/llama_cpp_release_test
-source /opt/miniconda3/etc/profile.d/conda.sh
+source /Users/arjaan/miniconda3/etc/profile.d/conda.sh
 conda env remove -y -n llama_cpp_canister_release_test
 ```
 
