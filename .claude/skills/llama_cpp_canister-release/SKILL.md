@@ -103,7 +103,11 @@ gh run list --repo onicai/llama_cpp_canister --workflow=release.yml --limit 1 --
 
 ## 6. Monitor release workflow
 
-Poll `gh run view <run_id> --repo onicai/llama_cpp_canister` every 60 seconds for up to 30 minutes.
+Poll `gh run view <run_id> --repo onicai/llama_cpp_canister` every 60 seconds for up to 45 minutes.
+
+The workflow builds the wasm inside the pinned Docker image (`make docker-build-base`
+then `make docker-build-wasm`), which is slower than the old on-runner build. The base
+image step alone takes ~10 minutes on a cold cache.
 
 At each check, report the current status to the user.
 
@@ -120,6 +124,18 @@ gh release view v<NEW_VERSION> --repo onicai/llama_cpp_canister
 Print:
 - The release URL
 - The zip download URL
+- The wasm sha256, which the release title and body both carry
+
+Confirm the published wasm matches the hash the release advertises:
+
+```bash
+curl -sL https://github.com/onicai/llama_cpp_canister/releases/download/v<NEW_VERSION>/llama_cpp.wasm -o /tmp/rel.wasm
+shasum -a 256 /tmp/rel.wasm
+curl -sL https://github.com/onicai/llama_cpp_canister/releases/download/v<NEW_VERSION>/llama_cpp.wasm.sha256
+```
+
+The two must be equal, and must equal the hash in the release title. If they differ,
+abort and report -- the release is not trustworthy.
 
 ## 8. Summary
 
@@ -128,3 +144,13 @@ Print a summary of what was done:
 - Tag: v<NEW_VERSION>
 - Release URL
 - Zip download URL
+- wasm sha256, the commit it was built from, and the pinned fork commit
+
+## 9. Remind about WASM-HASHES.md
+
+A release records the hash; it does not record what is *deployed*. Remind the user that
+once canisters are upgraded to this release, a row must be added to
+`funnAI/WASM-HASHES.md` with the hash, the `llama_cpp_canister` commit and the pinned
+fork commit -- read the deployed hash live, never copied from notes.
+
+Do NOT add that row as part of the release: nothing is deployed yet at this point.

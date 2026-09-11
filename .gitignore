@@ -67,6 +67,8 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+# Artifacts of the reproducible Docker build (docker/, make docker-build-wasm)
+out/
 develop-eggs/
 dist/
 downloads/

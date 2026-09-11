@@ -4,140 +4,108 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag for the release (e.g., v0.0.1)"
+        description: "Tag for the release (e.g., v0.16.5)"
         required: true
 
 permissions:
-  contents: write  # ✅ Grants permission to create a release
+  contents: write  # to create the release
 
 jobs:
   check-cicd-mac-status:
     name: Check if cicd-mac succeeded
-    # Use Intel runner to match local x86_64 development environment
-    runs-on: macos-15-intel
+    # Only runs `gh run list`, so it does not need a macOS runner.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4  # ✅ This ensures GitHub CLI can detect the repo
-
-      - name: Set up GitHub CLI authentication
-        run: echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+        uses: actions/checkout@v4
 
       - name: Get the latest `cicd-mac.yml` run status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           echo "Fetching the latest run of cicd-mac..."
-          latest_run=$(gh run list --repo ${{ github.repository }} --workflow="cicd-mac.yml" --limit 1 --json conclusion --jq '.[0].conclusion')
+          latest_run=$(gh run list --repo ${{ github.repository }} \
+            --workflow="cicd-mac.yml" --limit 1 --json conclusion --jq '.[0].conclusion')
           if [ "$latest_run" != "success" ]; then
-            echo "The latest cicd-mac run was not successful. Exiting."
+            echo "The latest cicd-mac run was not successful ($latest_run). Exiting."
             exit 1
           fi
           echo "The latest cicd-mac run was successful."
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release:
     name: Build and Release
-    needs: check-cicd-mac-status  # Ensures this job runs only if check-cicd-mac-status is successful
-    strategy:
-      matrix:
-        python-version: [3.11]
-        # Use Intel runner to match local x86_64 development environment
-        os: [macos-15-intel]
+    needs: check-cicd-mac-status
+    # The wasm is built inside a pinned linux/amd64 Docker image, NOT on the
+    # runner, so that anyone can reproduce this exact artifact with
+    # `make docker-build-wasm`. GitHub's macOS runners cannot run Linux
+    # containers, which is why this job moved off macos-15-intel.
+    #
+    # The exact-token NATIVE tests stay on macos-15-intel, in cicd-mac.yml, and
+    # this job is gated on them above. Docker replaces the build, not the tests.
+    runs-on: ubuntu-22.04
 
-    runs-on: ${{ matrix.os }}
-    
     steps:
-      # https://github.com/marketplace/actions/setup-miniconda
-      - uses: conda-incubator/setup-miniconda@v3
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      # -------------------------------------------------------------------
-      # Checkout llama_cpp_canister & llama_cpp_onicai_fork as nested directory
       - name: checkout llama_cpp_canister
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: checkout llama_cpp_onicai_fork
-        uses: actions/checkout@v4
-        with:
-          repository: onicai/llama_cpp_onicai_fork
-          ref: onicai  # Specify the branch name here
-          # ref: onicai-615212  # While working on the upgrade...
-          path: src/llama_cpp_onicai_fork
-          fetch-depth: 1 # Get just the last commit
-          submodules: 'recursive'
-      # -------------------------------------------------------------------
+      # The pinned llama.cpp fork commit. The Docker build clones it itself, so
+      # the fork is deliberately NOT checked out on the runner.
+      - name: read fork pin
+        run: cat version_fork.env >> "$GITHUB_ENV"
 
-      - name: install
-        shell: bash -l {0} # activates the default conda environment ('test')
-        run: |
-          echo "Installing tool chains & dependencies"
-          pwd
-          make summary
-          make install-icp
-          make install-python
-          make install-homebrew-mac
-          make install-jp-mac
+      # A cold cache is part of the guarantee: a stale layer could otherwise
+      # mask a step that is not actually reproducible.
+      - name: clean docker build cache
+        run: docker builder prune --all --force
 
       - name: versions
-        shell: bash -l {0}
         run: |
-          echo "icpp --version: $(icpp --version)"
-          echo "clang++ --version: $(clang++ --version)"
-          echo "g++ --version: $(g++ --version)"
-          #echo "wasm2wat version: $(wasm2wat --version)"
-          echo "pip version     : $(pip --version)"
-          echo "python version  : $(python --version)"
-          echo "jp version      : $(jp --version)"
-          #echo "rustc version   : $(rustc --version)"
-          echo "icp version    : $(icp --version)"
-          echo "Ensure conda works properly"
-          conda info
-          which pip
-          which python
-          which icpp
+          echo "Runner OS    : $RUNNER_OS $(uname -m)"
+          echo "OS version   : $(lsb_release -d 2>/dev/null | cut -f2)"
+          echo "Docker       : $(docker --version)"
+          echo "fork commit  : ${FORK_COMMIT}"
+          echo "fork build # : ${FORK_BUILD_NUMBER}"
 
-      - name: install-wasi-sdk
-        shell: bash -l {0}
-        run: |
-          echo "Installing wasi-sdk"
-          icpp install-wasi-sdk
+      - name: build Docker base image
+        run: make docker-build-base
 
-      - name: install-rust
-        shell: bash -l {0}
-        run: |
-          echo "Installing rust"
-          icpp install-rust
+      - name: build wasm with Docker
+        run: make docker-build-wasm
 
-      - name: build-info-cpp-wasm
-        shell: bash -l {0}
+      - name: compute hashes
+        id: hashes
         run: |
-          make build-info-cpp-wasm
-
-      - name: all-static
-        shell: bash -l {0}
-        run: |
-          make all-static
-      
-      - name: build-wasm
-        shell: bash -l {0}
-        run: |
-          icpp build-wasm
+          set -euo pipefail
+          WASM_SHA256=$(sha256sum out/llama_cpp.wasm | cut -d ' ' -f 1)
+          ICPP_VERSION=$(grep -E '^icpp-pro==' requirements.txt | cut -d '=' -f 3)
+          {
+            echo "wasm_sha256=${WASM_SHA256}"
+            echo "icpp_version=${ICPP_VERSION}"
+            echo "date=$(date -u +%Y-%m-%d)"
+          } >> "$GITHUB_OUTPUT"
+          # Surface it in the run summary too, so the release skill can copy the
+          # value into WASM-HASHES.md without re-deriving it.
+          {
+            echo "## llama_cpp.wasm"
+            echo ""
+            echo '| | |'
+            echo '| --- | --- |'
+            echo "| sha256 | \`${WASM_SHA256}\` |"
+            echo "| commit | \`${GITHUB_SHA}\` |"
+            echo "| fork commit | \`${FORK_COMMIT}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Zip Release Files
         run: |
-          mkdir -p release
-          cp version.txt release/
-          cp requirements.txt release/
-          cp README.md release/
-          cp icp.yaml release/
-          cp LICENSE release/
-          cp __init__.py release/
-          mkdir -p release/build
-          cp build/llama_cpp.wasm release/build/
-          cp build/llama_cpp.did release/build/
-          mkdir -p release/scripts
+          set -euo pipefail
+          mkdir -p release/build release/scripts release/test
+          mkdir -p release/src/llama_cpp_onicai_fork
+          cp version.txt requirements.txt README.md icp.yaml LICENSE __init__.py release/
+          cp out/llama_cpp.wasm out/llama_cpp.did out/llama_cpp.wasm.sha256 release/build/
+          cp out/BUILD-PROVENANCE.txt release/
           cp scripts/__init__.py release/scripts/
           cp scripts/download.py release/scripts/
           cp scripts/ic_py_canister.py release/scripts/
@@ -146,21 +114,73 @@ jobs:
           cp scripts/upload.py release/scripts/
           cp scripts/calculate_sha256.py release/scripts/
           cp scripts/requirements.txt release/scripts/
-          mkdir -p release/src/llama_cpp_onicai_fork
-          cp src/llama_cpp_onicai_fork/requirements.txt release/src/llama_cpp_onicai_fork/
-          cp -r src/llama_cpp_onicai_fork/requirements release/src/llama_cpp_onicai_fork/
-          mkdir release/test
+          # These come out of the container: the fork is not on the runner.
+          cp    out/fork/requirements.txt release/src/llama_cpp_onicai_fork/
+          cp -r out/fork/requirements     release/src/llama_cpp_onicai_fork/
           cp test/*.py release/test/
-          cd release
-          zip -r ../llama_cpp_canister_${{ github.event.inputs.tag }}.zip .
-          cd ..
+          (cd release && zip -qr ../llama_cpp_canister_${{ github.event.inputs.tag }}.zip .)
+          # Also publish the bare wasm + hash, so verifying a release is a
+          # `curl | sha256sum` with no unzip step.
+          cp out/llama_cpp.wasm        llama_cpp.wasm
+          cp out/llama_cpp.wasm.sha256 llama_cpp.wasm.sha256
+
+      - name: Write release notes
+        run: |
+          set -euo pipefail
+          cat > RELEASE_NOTES.md <<EOF
+          ## Reproducible build
+
+          | | |
+          | --- | --- |
+          | **\`llama_cpp.wasm\` sha256** | \`${{ steps.hashes.outputs.wasm_sha256 }}\` |
+          | **llama_cpp_canister commit** | [\`${GITHUB_SHA}\`](https://github.com/${{ github.repository }}/commit/${GITHUB_SHA}) |
+          | **llama_cpp_onicai_fork commit** | [\`${FORK_COMMIT}\`](https://github.com/${FORK_REPO}/commit/${FORK_COMMIT}) |
+          | **built with** | Docker, \`linux/amd64\`, icpp-pro ${{ steps.hashes.outputs.icpp_version }} |
+          | **built on** | ${{ steps.hashes.outputs.date }} |
+
+          ### Reproduce this wasm yourself
+
+          \`\`\`bash
+          git clone https://github.com/${{ github.repository }}.git
+          cd llama_cpp_canister
+          git checkout ${GITHUB_SHA}
+          make docker-build-base
+          make docker-build-wasm
+          \`\`\`
+
+          The last command prints the sha256. It must equal
+          \`${{ steps.hashes.outputs.wasm_sha256 }}\`.
+
+          No Mac and no local toolchain are needed: the llama.cpp fork commit,
+          icpp-pro, wasi-sdk, Rust and Binaryen are all pinned inside the image.
+
+          ### Check what a deployed canister is running
+
+          \`\`\`bash
+          icp canister status <canister-id> -n ic | grep "Module hash"
+          \`\`\`
+
+          It must print \`0x${{ steps.hashes.outputs.wasm_sha256 }}\`, or compare
+          in one step with:
+
+          \`\`\`bash
+          make docker-verify-wasm VERIFY_CANISTER=<canister-id>
+          \`\`\`
+          EOF
+          cat RELEASE_NOTES.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: llama_cpp_canister_${{ github.event.inputs.tag }}.zip
+          files: |
+            llama_cpp_canister_${{ github.event.inputs.tag }}.zip
+            llama_cpp.wasm
+            llama_cpp.wasm.sha256
           tag_name: ${{ github.event.inputs.tag }}
-          name: "Release ${{ github.event.inputs.tag }}"
+          # The hash is in the title as well as the body, so it is visible in the
+          # releases LIST, not only on the detail page.
+          name: "${{ github.event.inputs.tag }} — wasm ${{ steps.hashes.outputs.wasm_sha256 }}"
+          body_path: RELEASE_NOTES.md
           draft: false
           prerelease: false
         env:

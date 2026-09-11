@@ -97,6 +97,89 @@ summary:
 	@echo ICPP_COMPILER_ROOT=$(ICPP_COMPILER_ROOT)
 	@echo "-------------------------------------------------------------"
 
+###########################################################################
+# Docker-based reproducible builds
+#
+# The wasm that gets released is built in a pinned linux/amd64 container, so the
+# same commit produces the same sha256 on any machine with Docker. This replaces
+# the build only -- the tests still run on macOS (see cicd-mac.yml), because the
+# native exact-token assertions depend on the host libm.
+#
+#   make docker-build-base    # once; the toolchain image
+#   make docker-build-wasm    # the wasm + its sha256
+#
+# version_fork.env is the single source of truth for the pinned llama.cpp fork
+# commit, shared by make, docker compose and the GitHub workflows.
+include version_fork.env
+export FORK_REPO FORK_COMMIT FORK_COMMIT_SHORT FORK_BUILD_NUMBER
+
+CANISTER_NAME := llama_cpp
+COMPOSE       := docker compose --env-file ../version_fork.env
+
+# Which mainnet canister `docker-verify-wasm` compares the build against.
+# Defaults to this repo's own llama_cpp canister
+# (.icp/data/mappings/production.ids.json). Override for any other, e.g. an
+# onicai SNS LLM canister:
+#   make docker-verify-wasm VERIFY_CANISTER=psgg4-iqaaa-aaaac-qgtza-cai
+VERIFY_CANISTER ?= 6uo7o-dyaaa-aaaag-ay5ha-cai
+VERIFY_NETWORK  ?= ic
+
+.PHONY: docker-build-base
+docker-build-base:
+	cd docker && $(COMPOSE) build base
+
+.PHONY: docker-build-wasm
+docker-build-wasm:
+	cd docker && $(COMPOSE) build --no-cache wasm && $(COMPOSE) run --rm wasm
+	@echo "Wasm hash (Docker build):"
+	@shasum -a 256 out/$(CANISTER_NAME).wasm | cut -d ' ' -f 1
+	@mkdir -p build
+	@cp out/$(CANISTER_NAME).wasm out/$(CANISTER_NAME).did build/
+	@echo "Copied the hashed artifact to build/, so \`icp deploy\` installs exactly it"
+	@echo "  (icp.yaml declares every canister as pre-built: build/$(CANISTER_NAME).wasm)"
+
+.PHONY: docker-verify-wasm
+docker-verify-wasm:
+	@echo "Building wasm with Docker..."
+	@cd docker && $(COMPOSE) build --no-cache wasm && $(COMPOSE) run --rm wasm
+	@LOCAL_HASH=$$(shasum -a 256 out/$(CANISTER_NAME).wasm | cut -d ' ' -f 1); \
+	echo "Docker wasm hash : $$LOCAL_HASH"; \
+	DEPLOYED_HASH=$$(icp canister status $(VERIFY_CANISTER) -n $(VERIFY_NETWORK) 2>&1 \
+	                 | grep "Module hash" | awk '{print $$3}' | sed 's/^0x//'); \
+	echo "Deployed hash    : $$DEPLOYED_HASH  ($(VERIFY_CANISTER) on $(VERIFY_NETWORK))"; \
+	if [ -z "$$DEPLOYED_HASH" ]; then \
+		echo "ERROR: could not read a module hash for $(VERIFY_CANISTER)."; \
+		echo "  \`icp canister status\` is a controller-only management call, so it"; \
+		echo "  fails with IC0542 unless you control the canister. Anyone can read the"; \
+		echo "  hash from the PUBLIC read-state path instead:"; \
+		echo "      dfx canister --network ic info $(VERIFY_CANISTER)"; \
+		exit 1; \
+	elif [ "$$LOCAL_HASH" = "$$DEPLOYED_HASH" ]; then \
+		echo "MATCH: the Docker build matches deployed canister $(VERIFY_CANISTER)"; \
+	else \
+		echo "MISMATCH: the Docker build does NOT match deployed canister $(VERIFY_CANISTER)"; \
+		exit 1; \
+	fi
+
+# Interactive shell in the build image, for debugging the build itself.
+.PHONY: docker-shell
+docker-shell:
+	cd docker && $(COMPOSE) run --rm --entrypoint /bin/bash wasm
+
+.PHONY: help
+help:
+	@echo "Makefile targets:"
+	@echo "  docker-build-base  - build the pinned toolchain image (icpp-pro, wasi-sdk, rust, binaryen)"
+	@echo "  docker-build-wasm  - build llama_cpp.wasm reproducibly in Docker; prints its sha256"
+	@echo "  docker-verify-wasm - docker-build, then compare against a deployed canister's module hash"
+	@echo "  docker-shell       - interactive shell in the build image"
+	@echo "  all-tests          - all-static + wasm + native tests (needs a Mac)"
+	@echo "  test-llm-native    - native MockIC unit tests (needs x86_64)"
+	@echo "  test-llm-wasm      - deploy to a local network and run pytest"
+	@echo "  all-static         - clang-format + black + pylint + mypy"
+	@echo "  summary            - print the detected toolchain paths"
+	@echo "  help               - show this message"
+
 .PHONY: test-llm-native
 test-llm-native:
 	icpp build-native

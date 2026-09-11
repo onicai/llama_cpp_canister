@@ -11,9 +11,15 @@
 # 6.0.0 is a breaking change: pytest is told which icp identity to run as, with
 # `pytest --identity <name>` or ${ICPP_PRO_TEST_IDENTITY}. It never reads or
 # writes the machine-wide active identity. See the Makefile's test-llm-wasm.
-icpp-pro>=6.0.0
+# PINNED, not a range: icpp-pro decides the wasm bytes. Inside the package it
+# hard-codes wasi-sdk 25.0 (the clang that compiles every TU), Rust 1.93.0, and
+# the wasi2ic / ic-wasi-polyfill commits that get linked in. Bumping it changes
+# the wasm hash, so it needs a new WASM-HASHES.md row -- see docker/.
+icpp-pro==6.0.0
 icp-py-core==2.3.1
 # cbor2 is intentionally unpinned: icp-py-core 2.3.1 adds cbor2 6.x compatibility,
 # resolving the frozendict/isinstance(response, dict) breakage that previously
 # required a cbor2<6 pin. See https://github.com/eliezhao/icp-py-core/issues/14.
-binaryen.py
+# PINNED for the same reason: icpp.toml runs it as post_wasm_function
+# (scripts/optimize_wasm.py), so it rewrites the wasm after linking.
+binaryen.py==0.0.2

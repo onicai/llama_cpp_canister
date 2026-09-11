@@ -99,7 +99,23 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
   _(skip when using the [release](https://github.com/onicai/llama_cpp_canister/releases))_
 
-  - Compile & link to WebAssembly (wasm):
+  - Reproducible build (what a release ships) — needs only Docker:
+
+    ```bash
+    make docker-build-base   # once; the pinned toolchain image
+    make docker-build-wasm   # builds out/llama_cpp.wasm and prints its sha256
+    ```
+
+    This builds inside a pinned `linux/amd64` image, so the same commit produces
+    the same sha256 on any machine. It also copies the hashed artifact into
+    `build/`, which is where `icp deploy` picks it up. The llama.cpp fork commit
+    is pinned in [`version_fork.env`](version_fork.env), and the toolchain
+    versions in [`docker/docker-compose.yml`](docker/docker-compose.yml).
+
+    On Apple Silicon this runs under emulation and is slow. That is deliberate:
+    pinning the platform is what makes the hash match everywhere.
+
+  - Local development build — faster, but *not* the reproducible one:
 
     ```bash
     make build-info-cpp-wasm
@@ -108,7 +124,14 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
     Notes:
 
-    - The build of the wasm must be done on a `Mac` !
+    - This path needs a local toolchain (`icpp install-wasi-sdk`,
+      `icpp install-rust`) and currently only works on a `Mac`: `binaryen.py`
+      ships a *static* `libbinaryen.a` for Linux and then `dlopen()`s it, so
+      `icpp build-wasm` fails at the `post_wasm_function` step there. The Docker
+      image works around it by re-linking that archive into a shared object.
+    - Its output will not have the same hash as a release, because the absolute
+      source paths differ (they are baked in via `GGML_ABORT`/`__FILE__`). Use
+      the Docker build whenever the hash matters.
     - Instead of building the wasm, you can also grab the latest [release](https://github.com/onicai/llama_cpp_canister/releases) and unzip it.
 
 - Deploy the wasm to a canister on the local network:
@@ -913,9 +936,26 @@ with `icp canister status llama_cpp`. If `wasm_heap_bytes` approaches the limit,
 `--batch-size`/`--ubatch-size` (biggest win), reduce `--ctx-size`, and/or quantize the KV
 cache (`--cache-type-k`/`-v q8_0`) when loading — see [Context size & memory](#appendix-b-context-size--memory).
 
-# Wasm Verification (pre onicai SNS)
+# Wasm Verification
 
-Anyone can independently verify that the deployed funnAI LLM canisters run the exact code built from this repo. See [README-wasm-verification.md](README-wasm-verification.md).
+Every release is built by the reproducible Docker build in [`docker/`](docker/), so anyone
+can rebuild a release from source and confirm a deployed canister is running exactly that
+wasm. Each GitHub release shows the commit it was built from and the sha256 it produced.
+
+Rebuild a release and compare it against a live canister in one step:
+
+```bash
+git checkout <the commit shown on the release page>
+make docker-build-base
+make docker-verify-wasm VERIFY_CANISTER=<canister-id>
+```
+
+Or read a deployed module hash directly — this needs no special rights, because
+`icp canister status` uses a public read-state call:
+
+```bash
+icp canister status <canister-id> -n ic | grep "Module hash"
+```
 
 # Appendix A: max_tokens
 

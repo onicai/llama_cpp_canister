@@ -1,0 +1,51 @@
+# Reproducible build configuration for llama_cpp_canister.
+#
+# PoAIW is a multi-canister monorepo, so it puts a docker/ under each canister
+# directory. This repo produces ONE wasm, so docker/ and out/ live at the repo
+# root instead.
+#
+# Tool versions - update these when upgrading, and record a new row in
+# WASM-HASHES.md, because every one of them changes the wasm hash.
+x-versions:
+  # icpp-pro transitively pins the whole native toolchain: wasi-sdk 25.0,
+  # rust 1.93.0, wasi2ic c0f5063e, ic-wasi-polyfill b3ef0051.
+  icpp: &icpp "6.0.0"
+  binaryen_py: &binaryen_py "0.0.2"
+  # Must equal binaryen/libbinaryen/version.txt inside the wheel above; the base
+  # image asserts it.
+  binaryen: &binaryen "116"
+
+x-base-image:
+  # Naming convention: {repo}-build:icpp-{version}  (lowercase for Docker).
+  # An anchor cannot be interpolated into a string in compose, so the version
+  # appears literally here and must be bumped together with *icpp.
+  name: &base_name "llama-cpp-canister-build:icpp-6.0.0"
+
+services:
+  base:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        ICPP_VERSION: *icpp
+        BINARYEN_PY_VERSION: *binaryen_py
+        BINARYEN_VERSION: *binaryen
+    image: *base_name
+
+  wasm:
+    image: llama-cpp-canister-wasm:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        IMAGE: *base_name
+        FORK_REPO: ${FORK_REPO:?run via `make docker-build-wasm`, or pass --env-file ../version_fork.env}
+        FORK_COMMIT: ${FORK_COMMIT:?run via `make docker-build-wasm`, or pass --env-file ../version_fork.env}
+    environment:
+      FORK_REPO: ${FORK_REPO}
+      FORK_COMMIT: ${FORK_COMMIT}
+      FORK_COMMIT_SHORT: ${FORK_COMMIT_SHORT}
+      FORK_BUILD_NUMBER: ${FORK_BUILD_NUMBER}
+    volumes:
+      - ../out:/app/llama_cpp_canister/out
+    command: bash scripts/build_wasm_docker.sh

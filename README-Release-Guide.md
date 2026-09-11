@@ -24,12 +24,20 @@ Commit and push to `main`.
 
 ### 3. What the workflow does
 
-| Step                        | Description                                                                   |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| **check-cicd-mac-status**   | Verifies the latest `cicd-mac.yml` run succeeded                              |
-| **install & build**         | Sets up miniconda, installs toolchains, builds the Wasm canister              |
-| **zip release files**       | Packages `build/`, `scripts/`, `test/`, `icp.yaml`, `version.txt`, etc.       |
-| **create GitHub release**   | Creates a GitHub release with tag and attaches `llama_cpp_canister_<tag>.zip` |
+| Step                      | Description                                                                                  |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
+| **check-cicd-mac-status** | Verifies the latest `cicd-mac.yml` run succeeded                                               |
+| **docker build**          | Builds the wasm in the pinned `linux/amd64` image (`make docker-build-base`, `docker-build-wasm`) |
+| **compute hashes**        | sha256 of `out/llama_cpp.wasm`; also written to the run summary                                 |
+| **zip release files**     | Packages `build/`, `scripts/`, `test/`, `icp.yaml`, `version.txt`, `BUILD-PROVENANCE.txt`, etc. |
+| **create GitHub release** | Attaches the zip, the bare `llama_cpp.wasm` and `llama_cpp.wasm.sha256`                        |
+
+The build runs on `ubuntu-22.04` inside Docker, not on a macOS runner: the point is that
+anyone can reproduce the artifact. The tests still run on macOS in `cicd-mac.yml`, which
+this workflow is gated on.
+
+The release page shows, at the top, the wasm sha256 and the two commits it was built from
+(this repo, and the pinned `llama_cpp_onicai_fork`), plus the commands to reproduce it.
 
 ### 4. Post-release verification
 
@@ -41,7 +49,13 @@ After the workflow completes:
    - `scripts/` with upload/download tooling
    - `test/` with smoke tests
    - `icp.yaml`, `version.txt`, `requirements.txt`
-3. Optionally deploy and run smoke tests. Since icpp-pro 6.0.0 pytest must be
+3. Confirm the wasm in the zip matches what the release page advertises:
+   ```bash
+   shasum -a 256 build/llama_cpp.wasm   # must equal the sha256 in the release title/body
+   ```
+4. Record the rollout in `funnAI/WASM-HASHES.md` once the canisters have been
+   upgraded to this release — hash, plus the commit it was built from.
+5. Optionally deploy and run smoke tests. Since icpp-pro 6.0.0 pytest must be
    told which icp identity to run as, and it has to be the identity that
    deployed the canister (most endpoints are controller-only):
    ```bash

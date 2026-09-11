@@ -10,6 +10,10 @@ on:
       - "test/**"
       - "Makefile"
       - "requirements.txt"
+      # Bumping the pinned llama.cpp fork commit changes what is built and tested.
+      - "version_fork.env"
+      # The reproducible build image decides the released wasm's bytes.
+      - "docker/**"
       - ".github/trigger.txt"
       - ".github/workflows/cicd-mac.yml"
 
@@ -49,14 +53,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The pinned fork commit, shared with the Docker build and release.yml.
+      - name: read fork pin
+        run: cat version_fork.env >> "$GITHUB_ENV"
+
       - name: checkout llama_cpp_onicai_fork
         uses: actions/checkout@v4
         with:
-          repository: onicai/llama_cpp_onicai_fork
-          ref: onicai  # Specify the branch name here
-          # ref: onicai-615212  # While working on the upgrade...
+          repository: ${{ env.FORK_REPO }}
+          # Pinned to an exact commit via version_fork.env, not the moving
+          # `onicai` branch: otherwise a push to the fork silently changes what
+          # CI tests, with no commit in this repo to show for it.
+          ref: ${{ env.FORK_COMMIT }}
           path: src/llama_cpp_onicai_fork
-          fetch-depth: 1 # Get just the last commit
+          fetch-depth: 1 # Get just the pinned commit
           submodules: 'recursive'
       # -------------------------------------------------------------------
 

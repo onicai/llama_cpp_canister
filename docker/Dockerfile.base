@@ -1,0 +1,130 @@
+# Reproducible toolchain image for llama_cpp_canister.
+#
+# Mirrors PoAIW/src/docker/Dockerfile.base: base image pinned by DIGEST, the
+# toolchain pinned by build args, and a version echo at the end so the build log
+# is itself evidence of what produced the wasm.
+#
+# python:3.11-slim-bookworm rather than PoAIW's ubuntu:22.04 because this build
+# is driven by a Python toolchain (icpp-pro), and Python 3.11 is what the repo
+# targets (README.md "Use Python 3.11"). Ubuntu 22.04 ships Python 3.10, which
+# would mean adding the deadsnakes PPA -- a moving target inside an image whose
+# whole purpose is to stop moving.
+#
+# --platform=linux/amd64 is deliberate and must not be relaxed: it is what makes
+# an Apple Silicon Mac, an x86_64 Linux box and the ubuntu-22.04 GitHub runner
+# all produce the same bytes. On Apple Silicon this runs under emulation and is
+# slow; that is the price of a hash that is the same everywhere.
+ARG PLATFORM=linux/amd64
+FROM --platform=${PLATFORM} python:3.11-slim-bookworm@sha256:528257d48c1da0dcecc2e725d1ae34498d60c965f1241e39cd6a85a8859bdf84
+
+# Determinism knobs, set image-wide so an interactive `make docker-shell` sees
+# the same environment the build does.
+#   LC_ALL/LANG : icpp-pro links with a literal `*.o` shell glob and archives
+#                 with `llvm-ar qc ... *.o`. Pathname expansion sorts by the
+#                 locale's collating sequence, so the locale decides link order.
+#   PYTHONHASHSEED : icpp_toml.expand_paths() returns list(set(...)), whose order
+#                 is per-process random without this.
+ENV DEBIAN_FRONTEND=noninteractive \
+    LC_ALL=C \
+    LANG=C \
+    TZ=UTC \
+    SOURCE_DATE_EPOCH=0 \
+    PYTHONHASHSEED=0 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Deliberately NOT pinned to exact apt versions. The base image above is pinned
+# by digest, so its filesystem is fixed, but `apt-get update` reads the LIVE
+# Debian archive index. Debian drops a superseded version as soon as a security
+# update lands, so an exact pin here has a shelf life of weeks and then fails the
+# build with `E: Version '...' was not found`. PoAIW hit this three times and it
+# broke their CI on main for ~6 weeks; see PoAIW/src/docker/Dockerfile.base.
+#
+# Pinning these buys no reproducibility that matters, because none of them emit
+# a single byte of the wasm:
+#   curl / ca-certificates / git : fetch pinned tarballs and pinned commits
+#   build-essential              : provides g++ for the libbinaryen relink below
+#                                  and cc for cargo's build scripts.
+#   clang                        : icpp-pro's requires_native_compiler() decorator
+#                                  refuses to run build-wasm unless shutil.which()
+#                                  finds clang AND clang++. It is a presence check
+#                                  only -- this compiler never touches the wasm,
+#                                  which is built ONLY by the wasi-sdk clang that
+#                                  ICPP_VERSION pins.
+#   make / xz-utils / zip        : drive the build and unpack the wasi-sdk
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        build-essential \
+        clang \
+        make \
+        xz-utils \
+        zip \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# icpp-pro. This one pin transitively fixes the entire native toolchain -- each
+# of these is a hard-coded constant inside the icpp-pro package, not a range:
+#   wasi-sdk-25.0                                  icpp/version_wasi_sdk.py
+#   rust 1.93.0                                    icpp/version_rust.py
+#   wasi2ic          c0f5063e734f8365f1946baf2845d8322cc9bfec
+#   ic-wasi-polyfill b3ef005140e7eebf7d0b5471ccc3a6d4cbec4ee5
+ARG ICPP_VERSION
+ARG BINARYEN_PY_VERSION
+RUN pip install --no-cache-dir \
+        icpp-pro==${ICPP_VERSION} \
+        binaryen.py==${BINARYEN_PY_VERSION}
+
+# ---------------------------------------------------------------------------
+# Make binaryen.py importable on Linux.
+#
+# THIS is why README.md used to say "the build of the wasm must be done on a
+# Mac". binaryen.py ships a prebuilt native library per platform and dlopen()s
+# it, but for Linux the wheel contains a STATIC archive:
+#
+#   binaryen/lib.py:  libbinaryen/x86_64-linux/libbinaryen.a
+#                     -> ffi.dlopen(...) -> OSError: invalid ELF header
+#
+# (macOS gets a real libbinaryen.dylib, which is why it only ever worked there.)
+# icpp.toml runs `post_wasm_function = "scripts.optimize_wasm.main"`, which does
+# `from binaryen import ffi, lib`, so without this every Linux `icpp build-wasm`
+# dies at the post-wasm optimize step.
+#
+# Re-link the shipped archive into a shared object. This keeps the SAME Binaryen
+# object code the wheel was built from -- the closest possible match to the
+# macOS .dylib -- instead of compiling a different Binaryen from source. The
+# bundled version is asserted below so a future binaryen.py cannot change the
+# optimizer underneath us without failing the build loudly.
+ARG BINARYEN_VERSION
+RUN set -eux; \
+    BDIR="$(python -c "import importlib.util,os;print(os.path.dirname(importlib.util.find_spec('binaryen').origin))")"; \
+    test "$(cat "$BDIR/libbinaryen/version.txt")" = "${BINARYEN_VERSION}"; \
+    cd "$BDIR/libbinaryen/x86_64-linux"; \
+    g++ -shared -o libbinaryen.so \
+        -Wl,--whole-archive libbinaryen.a -Wl,--no-whole-archive \
+        -lstdc++ -lm; \
+    rm -f libbinaryen.a; \
+    sed -i 's#libbinaryen\.a#libbinaryen.so#' "$BDIR/lib.py"; \
+    python -c "from binaryen import ffi, lib; print('binaryen import OK')"
+
+# ---------------------------------------------------------------------------
+# wasi-sdk 25.0 -> ~/.icpp/wasi-sdk/wasi-sdk-25.0  (the clang that builds the wasm)
+RUN icpp install-wasi-sdk
+
+# rust 1.93.0 + wasm32-wasip1 target, wasi2ic, and libic_wasi_polyfill.a -> ~/.icpp/rust
+RUN icpp install-rust
+
+ENV PATH="/root/.icpp/rust/1.93.0/bin:${PATH}"
+
+# Print versions for verification. `clang --version` and `clang -dumpmachine`
+# matter more than they look: scripts/build-info-cpp.sh embeds both strings into
+# build-info.cpp, which is compiled INTO the wasm.
+RUN echo "python       : $(python --version)" \
+ && echo "icpp-pro     : $(icpp --version | tr '\n' ' ')" \
+ && echo "wasi-sdk cc  : $($HOME/.icpp/wasi-sdk/wasi-sdk-25.0/bin/clang --version | head -1)" \
+ && echo "wasi target  : $($HOME/.icpp/wasi-sdk/wasi-sdk-25.0/bin/clang -dumpmachine)" \
+ && echo "rustc        : $(rustc --version)" \
+ && echo "wasi2ic      : $(command -v wasi2ic)" \
+ && echo "binaryen     : $(cat $(python -c "import importlib.util,os;print(os.path.dirname(importlib.util.find_spec('binaryen').origin))")/libbinaryen/version.txt)"
+
+CMD ["/bin/bash"]

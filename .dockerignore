@@ -1,0 +1,38 @@
+# Docker does NOT honour .gitignore, so everything excluded from the build
+# context has to be listed here as well.
+#
+# Without this file `docker compose build wasm` uploads ~2.9 GB: models/ holds
+# multi-GB gguf files and src/llama_cpp_onicai_fork/ is 1.2 GB of sources plus
+# git history. None of it is needed to compile the wasm.
+
+.git/
+**/.git/
+.github/
+
+# The llama.cpp fork is cloned INSIDE the image at the commit pinned in
+# version_fork.env -- never copied from the working tree, which is untracked
+# here and may be dirty or on a different commit. This exclusion is what makes
+# the build reproducible by someone who only has this repo.
+src/llama_cpp_onicai_fork/
+
+# Model weights: uploaded to the canister at runtime, never compiled in.
+models/
+models_bitnet/
+*.gguf
+
+# Build outputs, including this build's own bind-mounted out/.
+build/
+build-native/
+build-native-unit/
+build-library/
+build-library-native/
+out/
+
+# Local tooling state.
+.icp/
+.claude/
+__pycache__/
+**/__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
