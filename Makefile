@@ -175,7 +175,8 @@ help:
 	@echo "  docker-shell       - interactive shell in the build image"
 	@echo "  all-tests          - all-static + wasm + native tests (needs a Mac)"
 	@echo "  test-llm-native    - native MockIC unit tests (needs x86_64)"
-	@echo "  test-llm-wasm      - deploy to a local network and run pytest"
+	@echo "  test-llm-wasm      - rebuild on the host, deploy to a local network, run pytest"
+	@echo "  test-llm-wasm-prebuilt - same, but test the wasm already in build/ (the shipped one)"
 	@echo "  all-static         - clang-format + black + pylint + mypy"
 	@echo "  summary            - print the detected toolchain paths"
 	@echo "  help               - show this message"
@@ -188,6 +189,18 @@ test-llm-native:
 .PHONY: test-llm-wasm
 test-llm-wasm: icp-test-identities
 	python -m scripts.qa_deploy_and_pytest
+
+# Same QA, but against the wasm already in build/ instead of rebuilding it.
+# Pair it with docker-build-wasm to test the artifact that actually ships:
+#
+#     make docker-build-wasm test-llm-wasm-prebuilt
+#
+# This is what cicd-linux does. `make test-llm-wasm` rebuilds on the host, so it
+# tests DIFFERENT BYTES than the release - and cannot run on Linux at all, where
+# binaryen.py's static libbinaryen.a breaks icpp.toml's post_wasm_function.
+.PHONY: test-llm-wasm-prebuilt
+test-llm-wasm-prebuilt: icp-test-identities
+	SKIP_BUILD_WASM=1 python -m scripts.qa_deploy_and_pytest
 
 # Creates the two QA identities if they do not exist yet, without ever touching
 # the machine-wide active identity.

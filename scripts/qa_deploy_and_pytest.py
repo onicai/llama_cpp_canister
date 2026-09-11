@@ -46,6 +46,26 @@ def icp_network_stop() -> None:
     subprocess.run(["icp", "network", "stop"], cwd=ROOT_PATH, check=False)
 
 
+# Set SKIP_BUILD_WASM=1 to test a wasm that is already in build/, instead of
+# rebuilding it here.
+#
+# That is how CI tests the RELEASED artifact: `make docker-build-wasm` builds the
+# wasm in the pinned Docker image and copies it to build/llama_cpp.wasm, which is
+# what icp.yaml installs (every canister is declared `pre-built`). Rebuilding here
+# would silently replace it with a host build, so the QA would be testing
+# different bytes than the ones that ship.
+#
+# It is also the only way to run this on Linux at all: binaryen.py ships a static
+# libbinaryen.a there and dlopen()s it, so a host `icpp build-wasm` fails in
+# icpp.toml's post_wasm_function. The Docker image works around that.
+SKIP_BUILD_WASM_ENV_VAR = "SKIP_BUILD_WASM"
+
+
+def skip_build_wasm() -> bool:
+    """True if the wasm already in build/ should be tested as-is."""
+    return os.environ.get(SKIP_BUILD_WASM_ENV_VAR, "").strip() not in ("", "0")
+
+
 def main() -> int:
     """Start local network; Deploy canister; Upload LLM model; Pytest"""
     identity = get_identity()
@@ -53,11 +73,27 @@ def main() -> int:
     try:
         typer.echo(f"--\nDeploying & testing as identity: {identity}")
 
-        typer.echo("--\nBuild the wasm")
-        run_shell_cmd(
-            "icpp build-wasm --to-compile all",
-            cwd=ROOT_PATH,
-        )
+        wasm_path = ROOT_PATH / "build" / "llama_cpp.wasm"
+        if skip_build_wasm():
+            if not wasm_path.is_file():
+                typer.echo(
+                    f"\nERROR: ${SKIP_BUILD_WASM_ENV_VAR} is set, but there is no\n"
+                    f"       {wasm_path}\n\n"
+                    "Build it first with:\n\n"
+                    "    make docker-build-wasm\n"
+                )
+                return 1
+            typer.echo(
+                f"--\nSkipping the wasm build (${SKIP_BUILD_WASM_ENV_VAR} is set).\n"
+                f"   Testing the wasm already in build/, as-is."
+            )
+            run_shell_cmd(f"shasum -a 256 {wasm_path}", cwd=ROOT_PATH)
+        else:
+            typer.echo("--\nBuild the wasm")
+            run_shell_cmd(
+                "icpp build-wasm --to-compile all",
+                cwd=ROOT_PATH,
+            )
 
         # Tests shared across every model iteration (model-agnostic).
         shared = [
