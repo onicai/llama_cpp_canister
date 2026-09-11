@@ -54,7 +54,7 @@ jobs:
       # The pinned llama.cpp fork commit. The Docker build clones it itself, so
       # the fork is deliberately NOT checked out on the runner.
       - name: read fork pin
-        run: cat version_fork.env >> "$GITHUB_ENV"
+        run: grep -E '^[A-Z_]+=' version_fork.env >> "$GITHUB_ENV"
 
       # A cold cache is part of the guarantee: a stale layer could otherwise
       # mask a step that is not actually reproducible.
@@ -156,16 +156,23 @@ jobs:
 
           ### Check what a deployed canister is running
 
+          Anyone can read a deployed module hash, with no special rights, from the
+          public read-state path:
+
           \`\`\`bash
-          icp canister status <canister-id> -n ic | grep "Module hash"
+          dfx canister --network ic info <canister-id>
           \`\`\`
 
-          It must print \`0x${{ steps.hashes.outputs.wasm_sha256 }}\`, or compare
-          in one step with:
+          It must print \`Module hash: 0x${{ steps.hashes.outputs.wasm_sha256 }}\`.
+
+          If you control the canister you can instead build and compare in one step:
 
           \`\`\`bash
           make docker-verify-wasm VERIFY_CANISTER=<canister-id>
           \`\`\`
+
+          (That target uses \`icp canister status\`, a controller-only management
+          call; it fails with IC0542 for anyone else.)
           EOF
           cat RELEASE_NOTES.md
 

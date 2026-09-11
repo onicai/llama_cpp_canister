@@ -55,7 +55,7 @@ jobs:
 
       # The pinned fork commit, shared with the Docker build and release.yml.
       - name: read fork pin
-        run: cat version_fork.env >> "$GITHUB_ENV"
+        run: grep -E '^[A-Z_]+=' version_fork.env >> "$GITHUB_ENV"
 
       - name: checkout llama_cpp_onicai_fork
         uses: actions/checkout@v4

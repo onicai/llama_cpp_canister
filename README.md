@@ -950,12 +950,16 @@ make docker-build-base
 make docker-verify-wasm VERIFY_CANISTER=<canister-id>
 ```
 
-Or read a deployed module hash directly — this needs no special rights, because
-`icp canister status` uses a public read-state call:
+Or just read the deployed module hash. This needs no special rights, because
+`dfx canister info` reads the public read-state path:
 
 ```bash
-icp canister status <canister-id> -n ic | grep "Module hash"
+dfx canister --network ic info <canister-id>   # prints "Module hash: 0x..."
 ```
+
+Note that `make docker-verify-wasm` uses `icp canister status`, which is a
+controller-only management call and fails with `IC0542` for anyone else. Use the
+`dfx canister info` form above when you do not control the canister.
 
 # Appendix A: max_tokens
 
