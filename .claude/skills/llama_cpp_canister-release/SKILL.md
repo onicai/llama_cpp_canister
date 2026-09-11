@@ -46,11 +46,18 @@ If any check fails, report the issue and abort.
 
 ## 2. Check CI status
 
+Both CI workflows must be green. They cover different ground and neither covers
+the other: `cicd-linux` runs static analysis plus the wasm QA against the
+Docker-built wasm (the bytes the release ships); `cicd-mac` runs the native
+exact-token tests, which only build on x86_64 macOS.
+
 ```bash
-gh run list --repo onicai/llama_cpp_canister --workflow=cicd-mac.yml --limit 1 --json conclusion --jq '.[0].conclusion'
+for wf in cicd-linux.yml cicd-mac.yml; do
+  echo "$wf: $(gh run list --repo onicai/llama_cpp_canister --workflow=$wf --limit 1 --json conclusion --jq '.[0].conclusion')"
+done
 ```
 
-If the result is not `success`, abort immediately with: "CI is not green. Latest cicd-mac.yml conclusion: <result>. Fix CI before releasing."
+If either result is not `success`, abort immediately with: "CI is not green. Latest <workflow> conclusion: <result>. Fix CI before releasing."
 
 ## 3. Determine version
 

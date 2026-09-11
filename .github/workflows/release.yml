@@ -11,38 +11,51 @@ permissions:
   contents: write  # to create the release
 
 jobs:
-  check-cicd-mac-status:
-    name: Check if cicd-mac succeeded
-    # Only runs `gh run list`, so it does not need a macOS runner.
+  check-ci-status:
+    name: Check if CI succeeded
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Get the latest `cicd-mac.yml` run status
+      # BOTH halves of CI must be green. They test different things and neither
+      # covers the other:
+      #   cicd-linux : all-static + the wasm QA, run against the Docker-built
+      #                wasm -- the exact bytes this release ships.
+      #   cicd-mac   : the native MockIC exact-token assertions, which only build
+      #                and only have baselines on x86_64 macOS.
+      - name: Get the latest CI run statuses
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          echo "Fetching the latest run of cicd-mac..."
-          latest_run=$(gh run list --repo ${{ github.repository }} \
-            --workflow="cicd-mac.yml" --limit 1 --json conclusion --jq '.[0].conclusion')
-          if [ "$latest_run" != "success" ]; then
-            echo "The latest cicd-mac run was not successful ($latest_run). Exiting."
+          rc=0
+          for wf in cicd-linux.yml cicd-mac.yml; do
+            latest_run=$(gh run list --repo ${{ github.repository }} \
+              --workflow="$wf" --limit 1 --json conclusion --jq '.[0].conclusion')
+            echo "$wf: ${latest_run:-<no runs>}"
+            if [ "$latest_run" != "success" ]; then
+              echo "  ERROR: the latest $wf run was not successful."
+              rc=1
+            fi
+          done
+          if [ "$rc" -ne 0 ]; then
+            echo "CI is not green. Fix it before releasing."
             exit 1
           fi
-          echo "The latest cicd-mac run was successful."
+          echo "Both CI workflows are green."
 
   release:
     name: Build and Release
-    needs: check-cicd-mac-status
+    needs: check-ci-status
     # The wasm is built inside a pinned linux/amd64 Docker image, NOT on the
     # runner, so that anyone can reproduce this exact artifact with
     # `make docker-build-wasm`. GitHub's macOS runners cannot run Linux
     # containers, which is why this job moved off macos-15-intel.
     #
     # The exact-token NATIVE tests stay on macos-15-intel, in cicd-mac.yml, and
-    # this job is gated on them above. Docker replaces the build, not the tests.
+    # the wasm QA runs in cicd-linux.yml against this very artifact. This job is
+    # gated on both above. Docker replaces the build, not the tests.
     runs-on: ubuntu-22.04
 
     steps:

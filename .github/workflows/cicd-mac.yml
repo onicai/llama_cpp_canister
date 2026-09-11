@@ -7,25 +7,27 @@ on:
       - "scripts/**"
       - "native/**"
       - "src/**"
-      - "test/**"
       - "Makefile"
       - "requirements.txt"
       # Bumping the pinned llama.cpp fork commit changes what is built and tested.
       - "version_fork.env"
-      # The reproducible build image decides the released wasm's bytes.
-      - "docker/**"
       - ".github/trigger.txt"
       - ".github/workflows/cicd-mac.yml"
 
-# Two jobs run in PARALLEL so wall-clock ~= the slower half instead of the sum:
-#   - native      : the native MockIC tests carry ~59 exact-hex token assertions
-#                   that depend on the host libm's last-ULP behaviour, so they are
-#                   pinned to x86_64 macOS (macos-15-intel) to match the release +
-#                   mainnet baselines. See the ci-mac-runner-and-exact-tokens note.
-#   - wasm+static : all-static + the wasm/pytest QA. wasm executes deterministically
-#                   in pocket-ic regardless of host arch, so this half is
-#                   platform-reproducible and runs on the faster/cheaper Apple
-#                   Silicon runner (macos-15).
+# The native MockIC tests, and ONLY those. They carry ~59 exact-hex token
+# assertions that depend on the host libm's last-ULP behaviour, so they are
+# pinned to x86_64 macOS (macos-15-intel) to match the baselines they were
+# recorded against. See the ci-mac-runner-and-exact-tokens note.
+#
+# Everything else -- all-static, and the wasm QA -- moved to cicd-linux.yml,
+# which builds the wasm in the pinned Docker image and tests THAT artifact, so CI
+# exercises the exact bytes a release ships. A macOS runner has no Docker, so it
+# cannot do that.
+#
+# The native build does not compile on Linux at all: src/utils.h uses
+# std::filesystem without including <filesystem>, src/main_.cpp includes <format>
+# (libstdc++ 13+), and ggml-cpu.c's Linux-only sched-affinity paths need
+# -D_GNU_SOURCE. That is why this job stays here.
 jobs:
   cicd-mac:
     name: ${{ matrix.job }}
@@ -35,8 +37,6 @@ jobs:
         include:
           - job: native (x86_64 exact-token)
             os: macos-15-intel
-          - job: wasm+static
-            os: macos-15
 
     runs-on: ${{ matrix.os }}
 
@@ -116,13 +116,6 @@ jobs:
         run: |
           make build-info-cpp-wasm
 
-      # --- static analysis: arch-independent, runs on the wasm+static job -------
-      - name: all-static
-        if: matrix.job == 'wasm+static'
-        shell: bash -l {0}
-        run: |
-          make all-static
-
       # --- native job: Qwen models are loaded by the native MockIC tests --------
       - name: Download Qwen3 model (current default reference model)
         if: matrix.job == 'native (x86_64 exact-token)'
@@ -141,21 +134,3 @@ jobs:
         shell: bash -l {0}
         run: |
           make test-llm-native
-
-      # --- wasm+static job: gemma is used by the small-max_tokens QA regression --
-      - name: Download gemma-3-270M model (small-max_tokens prompt-cache regression)
-        if: matrix.job == 'wasm+static'
-        run: |
-          mkdir -p ./models/google/gemma-3-270m-it-GGUF
-          wget -nv -O ./models/google/gemma-3-270m-it-GGUF/gemma-3-270m-it-Q8_0.gguf https://huggingface.co/unsloth/gemma-3-270m-it-GGUF/resolve/main/gemma-3-270m-it-Q8_0.gguf?download=true
-
-      - name: test-llm-wasm
-        if: matrix.job == 'wasm+static'
-        shell: bash -l {0}
-        # `icp network start` downloads the network-launcher via the GitHub API.
-        # Unauthenticated that is 60 req/hour shared across all GitHub-hosted
-        # runners, so authenticate with the job's token to avoid 403 rate limits.
-        env:
-          ICP_CLI_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          make test-llm-wasm

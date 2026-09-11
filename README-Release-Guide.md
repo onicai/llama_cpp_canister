@@ -4,8 +4,11 @@ How to create a new release of `llama_cpp_canister`.
 
 ## Prerequisites
 
-- The latest `cicd-mac` workflow run on the `main` branch must have succeeded.
-  The release workflow checks this automatically and will fail if CI/CD is red.
+- The latest `cicd-linux` AND `cicd-mac` workflow runs on `main` must both have
+  succeeded. The release workflow checks both automatically and will fail if
+  either is red. They cover different ground: `cicd-linux` runs static analysis
+  and the wasm QA against the Docker-built wasm (the bytes this release ships),
+  `cicd-mac` runs the native exact-token tests, which only build on x86_64 macOS.
 - All changes intended for the release are merged into `main`.
 
 ## Steps
@@ -26,15 +29,16 @@ Commit and push to `main`.
 
 | Step                      | Description                                                                                  |
 | ------------------------- | -------------------------------------------------------------------------------------------- |
-| **check-cicd-mac-status** | Verifies the latest `cicd-mac.yml` run succeeded                                               |
+| **check-ci-status**       | Verifies the latest `cicd-linux.yml` AND `cicd-mac.yml` runs both succeeded                    |
 | **docker build**          | Builds the wasm in the pinned `linux/amd64` image (`make docker-build-base`, `docker-build-wasm`) |
 | **compute hashes**        | sha256 of `out/llama_cpp.wasm`; also written to the run summary                                 |
 | **zip release files**     | Packages `build/`, `scripts/`, `test/`, `icp.yaml`, `version.txt`, `BUILD-PROVENANCE.txt`, etc. |
 | **create GitHub release** | Attaches the zip, the bare `llama_cpp.wasm` and `llama_cpp.wasm.sha256`                        |
 
 The build runs on `ubuntu-22.04` inside Docker, not on a macOS runner: the point is that
-anyone can reproduce the artifact. The tests still run on macOS in `cicd-mac.yml`, which
-this workflow is gated on.
+anyone can reproduce the artifact. The tests run in `cicd-linux.yml` (the wasm QA, against
+a Docker build of this same commit) and `cicd-mac.yml` (the native exact-token tests), both
+of which this workflow is gated on.
 
 The release page shows, at the top, the wasm sha256 and the two commits it was built from
 (this repo, and the pinned `llama_cpp_onicai_fork`), plus the commands to reproduce it.

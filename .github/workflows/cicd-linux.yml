@@ -5,7 +5,6 @@ on:
   push:
     paths:
       - "scripts/**"
-      - "native/**"
       - "src/**"
       - "test/**"
       - "Makefile"
@@ -15,28 +14,23 @@ on:
       - ".github/trigger.txt"
       - ".github/workflows/cicd-linux.yml"
 
-# Two jobs run in PARALLEL so wall-clock ~= the slower half instead of the sum:
-#   - wasm+static : builds the wasm in the pinned Docker image and runs the QA
-#                   against THAT artifact, so CI tests the exact bytes a release
-#                   ships. `make test-llm-wasm` rebuilds on the host and would
-#                   test different bytes, which is what cicd-mac did.
-#   - native      : the native MockIC tests carry exact-hex token assertions.
-#                   native/test_qwen3.cpp records them as ARCHITECTURE dependent,
-#                   and ubuntu-22.04 is x86_64 just like macos-15-intel, so the
-#                   stated constraint still holds. What is genuinely new here is
-#                   glibc's libm instead of Apple's: if any exact-token assertion
-#                   fails, re-baseline it on Linux (never hand-edit the hexes)
-#                   rather than assuming the canister changed.
+# Static analysis + the wasm QA, on Linux.
+#
+# The point of this job is that it builds the wasm in the pinned Docker image and
+# then runs the QA against THAT artifact -- the exact bytes a release ships.
+# `make test-llm-wasm` rebuilds on the host and would test different bytes (the
+# absolute source paths baked in via GGML_ABORT/__FILE__ differ), which is what
+# the macOS job used to do.
+#
+# The native MockIC tests are NOT here: they stay on macos-15-intel in
+# cicd-mac.yml. The native build does not compile on Linux -- src/utils.h uses
+# std::filesystem without including <filesystem> and src/main_.cpp includes
+# <format> (libstdc++ 13+), and ggml-cpu.c's Linux-only sched-affinity paths
+# (CPU_ZERO, pthread_getaffinity_np, getcpu) need -D_GNU_SOURCE. Those tests also
+# assert exact token hexes that are baselined on x86_64 macOS.
 jobs:
-  cicd-linux:
-    name: ${{ matrix.job }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - job: wasm+static
-          - job: native (x86_64 exact-token)
-
+  wasm-static:
+    name: wasm+static
     runs-on: ubuntu-22.04
 
     steps:
@@ -45,20 +39,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: read fork pin
-        run: grep -E '^[A-Z_]+=' version_fork.env >> "$GITHUB_ENV"
-
-      # Only the native job compiles the fork on the runner. The wasm job does
-      # not need it at all: the Docker image clones the pinned commit itself.
-      - name: checkout llama_cpp_onicai_fork
-        if: matrix.job == 'native (x86_64 exact-token)'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.FORK_REPO }}
-          ref: ${{ env.FORK_COMMIT }}
-          path: src/llama_cpp_onicai_fork
-          fetch-depth: 1
-          submodules: 'recursive'
+      # The llama.cpp fork is deliberately NOT checked out: the Docker image
+      # clones the commit pinned in version_fork.env itself.
 
       - uses: actions/setup-python@v5
         with:
@@ -78,16 +60,7 @@ jobs:
 
       # clang-format (used by all-static) ships inside the wasi-sdk.
       - name: install-wasi-sdk
-        if: matrix.job == 'wasm+static'
         run: icpp install-wasi-sdk
-
-      # icpp build-native needs a native clang/clang++ on the runner.
-      - name: install-clang
-        if: matrix.job == 'native (x86_64 exact-token)'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-          make install-clang-ubuntu
 
       - name: versions
         run: |
@@ -98,58 +71,30 @@ jobs:
           echo "icp        : $(icp --version)"
           echo "node       : $(node --version)"
           echo "docker     : $(docker --version)"
-          echo "fork commit: ${FORK_COMMIT}"
 
-      # --- static analysis: arch-independent ------------------------------------
       - name: all-static
-        if: matrix.job == 'wasm+static'
         run: make all-static
 
-      # --- wasm job: build the RELEASED artifact, then test exactly it ----------
+      # A cold cache is part of the guarantee: a stale layer could otherwise mask
+      # a step that is not actually reproducible.
       - name: clean docker build cache
-        if: matrix.job == 'wasm+static'
         run: docker builder prune --all --force
 
       - name: build Docker base image
-        if: matrix.job == 'wasm+static'
         run: make docker-build-base
 
       - name: build wasm with Docker
-        if: matrix.job == 'wasm+static'
         run: make docker-build-wasm
 
       - name: Download gemma-3-270M model (small-max_tokens prompt-cache regression)
-        if: matrix.job == 'wasm+static'
         run: |
           mkdir -p ./models/google/gemma-3-270m-it-GGUF
           wget -nv -O ./models/google/gemma-3-270m-it-GGUF/gemma-3-270m-it-Q8_0.gguf https://huggingface.co/unsloth/gemma-3-270m-it-GGUF/resolve/main/gemma-3-270m-it-Q8_0.gguf?download=true
 
       - name: test-llm-wasm (against the Docker-built wasm)
-        if: matrix.job == 'wasm+static'
         # `icp network start` downloads the network-launcher via the GitHub API.
         # Unauthenticated that is 60 req/hour shared across all GitHub-hosted
         # runners, so authenticate with the job's token to avoid 403 rate limits.
         env:
           ICP_CLI_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make test-llm-wasm-prebuilt
-
-      # --- native job: exact-token assertions ----------------------------------
-      - name: build-info-cpp-native
-        if: matrix.job == 'native (x86_64 exact-token)'
-        run: make build-info-cpp-native
-
-      - name: Download Qwen3 model (current default reference model)
-        if: matrix.job == 'native (x86_64 exact-token)'
-        run: |
-          mkdir -p ./models/Qwen/Qwen3-0.6B-GGUF
-          wget -nv -O ./models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf?download=true
-
-      - name: Download Qwen2.5 model (kept for regression)
-        if: matrix.job == 'native (x86_64 exact-token)'
-        run: |
-          mkdir -p ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF
-          wget -nv -O ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf?download=true
-
-      - name: test-llm-native
-        if: matrix.job == 'native (x86_64 exact-token)'
-        run: make test-llm-native
