@@ -8,6 +8,8 @@ on:
       - "src/**"
       - "test/**"
       - "Makefile"
+      # Compile flags and the source list: these decide the wasm bytes.
+      - "icpp.toml"
       - "requirements.txt"
       - "version_fork.env"
       - "docker/**"

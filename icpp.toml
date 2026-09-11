@@ -128,7 +128,12 @@ cpp_compile_flags = [
     "-D_WASI_EMULATED_PTHREAD",
     "-D_WASI_EMULATED_GETPID",
     "-D_WASI_EMULATED_PROCESS_CLOCKS",
-    "-DGGML_DEFAULT_N_THREADS=1",
+    # NOTE: do not add -DGGML_DEFAULT_N_THREADS=1 here. ggml.h defines
+    # GGML_DEFAULT_N_THREADS unconditionally (no #ifndef guard, unlike
+    # GGML_MAX_NAME right above it), so the header always wins and the -D only
+    # produced a -Wmacro-redefined warning in every translation unit. The
+    # canister is single-threaded because src/main_.cpp sets
+    # params.cpuparams.n_threads = 1 explicitly at runtime.
 ]
 
 # 8MB stack to prevent "heap out of bounds" (actually stack overflow).

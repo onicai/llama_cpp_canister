@@ -8,6 +8,8 @@ on:
       - "native/**"
       - "src/**"
       - "Makefile"
+      # Compile flags and the source list: these decide the wasm bytes.
+      - "icpp.toml"
       - "requirements.txt"
       # Bumping the pinned llama.cpp fork commit changes what is built and tested.
       - "version_fork.env"
