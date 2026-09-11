@@ -39,8 +39,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The llama.cpp fork is deliberately NOT checked out: the Docker image
-      # clones the commit pinned in version_fork.env itself.
+      - name: read fork pin
+        run: grep -E '^[A-Z_]+=' version_fork.env >> "$GITHUB_ENV"
+
+      # The Docker build does NOT use this checkout -- .dockerignore excludes
+      # src/llama_cpp_onicai_fork/ from the build context, and the image clones
+      # the pinned commit itself. It is here because part of the QA inspects the
+      # vendored fork's SOURCE rather than the canister's behaviour:
+      # test_upgrade_regressions.py asserts the ICPP-PATCHes are still present in
+      # ggml-backend.cpp, which is the thing a fork re-vendor silently drops.
+      #
+      # Both this checkout and the image's clone resolve FORK_COMMIT from
+      # version_fork.env, so they cannot drift apart.
+      - name: checkout llama_cpp_onicai_fork
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FORK_REPO }}
+          ref: ${{ env.FORK_COMMIT }}
+          path: src/llama_cpp_onicai_fork
+          fetch-depth: 1
+          submodules: 'recursive'
 
       - uses: actions/setup-python@v5
         with:
