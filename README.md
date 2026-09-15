@@ -988,12 +988,11 @@ tokens/call at `-c 4096` to 5 at `-c 16384`. The reason: every update call gets
 the same 40 B instruction budget, and part of it is spent *before* the first
 token is produced, on housekeeping the KV cache.
 
-`--ctx-size` is chosen **once, at `load_model`**, and the KV cache is allocated
-in full right then — for the entire context you asked for. Every call afterwards
-pays the same housekeeping cost over that whole allocation, whether the
-conversation is 20 tokens or 4000 tokens long. So it is a **flat tax on every
-call, fixed by the number you picked at load time** — it does not creep up as a
-conversation grows.
+**The per-call cost also grows as the conversation grows.** Measured on mainnet
+(`6uo7o-dyaaa-aaaag-ay5ha-cai`, Qwen3-0.6B, `max_tokens_update = 20`): nine
+generation calls succeeded, the tenth trapped with IC0522, after ~200 cumulative
+generated tokens. Same args on every call — only the conversation length changed.
+Independent of language.
 
 Measured on mainnet for Qwen3-1.7B, on two separately loaded models:
 
