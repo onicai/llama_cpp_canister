@@ -12,6 +12,7 @@
 #include <iostream>
 #include <string>
 #include <system_error>
+#include <utility>
 
 #include "ic_api.h"
 
@@ -309,7 +310,7 @@ void get_chats() {
       // `text` must be valid UTF-8, so serving those bytes raw would trap a
       // strict caller (Motoko RTS) exactly as run_update used to. See utils.h.
       timestamps.emplace_back(timestamp);
-      chats.emplace_back(utf8_sanitize(chat));
+      chats.emplace_back(utf8_sanitize(std::move(chat)));
     }
   }
 

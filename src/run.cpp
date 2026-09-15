@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <system_error>
+#include <utility>
 
 #include "ic_api.h"
 
@@ -212,12 +213,17 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   const bool have_session_key = !is_query && !session_key.empty();
   if (have_session_key) {
     std::string full = utf8_carry_get(session_key) + output_text;
-    const size_t n = utf8_valid_prefix_len(full);
-    output_text = utf8_sanitize(full.substr(0, n));
-    std::string tail = full.substr(n);
+    // ONE pass yields both the split point and whether the prefix holds an
+    // invalid byte, so the common case (valid text) never walks it twice nor
+    // builds a second buffer.
+    bool clean = true;
+    const size_t n = utf8_valid_prefix_len(full, &clean);
+    std::string tail = full.substr(n); // 0-3 bytes of a split codepoint
+    full.resize(n);                    // truncate in place; no copy
+    output_text = clean ? std::move(full) : utf8_sanitize(std::move(full));
     if (generated_eog || result != 0) {
       // Flush: never retain bytes across a finished conversation.
-      output_text += utf8_sanitize(tail);
+      output_text += utf8_sanitize(std::move(tail));
       utf8_carry_clear(session_key);
     } else {
       utf8_carry_set(session_key, tail);
@@ -225,7 +231,7 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   } else {
     // A query call cannot carry: state changes are discarded when the message
     // ends. Sanitize instead, accepting the loss.
-    output_text = utf8_sanitize(output_text);
+    output_text = utf8_sanitize(std::move(output_text));
   }
   const std::string conversation_text = utf8_sanitize(conversation_ss.str());
   const std::string prompt_remaining_text = utf8_sanitize(prompt_remaining);

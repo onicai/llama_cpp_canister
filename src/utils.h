@@ -48,11 +48,20 @@ void send_output_record_result_error_to_wire(IC_API &ic_api,
 // split generated output: send the prefix, carry the remainder (0-3 bytes) into
 // the next call so no bytes are lost. Invalid bytes in the middle are stepped
 // over rather than treated as a boundary, so this always makes progress.
-size_t utf8_valid_prefix_len(const std::string &s);
+//
+// `clean` (when non-null) is set to false if an invalid byte was seen, i.e. if
+// utf8_sanitize() would actually change the prefix. It is only ever set to
+// false, so initialize it to true. This lets a caller learn the split point AND
+// whether sanitizing is needed from ONE pass over the string.
+size_t utf8_valid_prefix_len(const std::string &s, bool *clean = nullptr);
 
 // Lossy: every invalid or truncated sequence becomes U+FFFD. For informational
 // fields that are rebuilt each call and so cannot be carried.
-std::string utf8_sanitize(const std::string &s);
+//
+// Takes its argument BY VALUE and hands it straight back (moved, not copied)
+// when it is already valid - which it is on essentially every call. Pass a
+// temporary, or std::move() an lvalue you are done with, to avoid a copy.
+std::string utf8_sanitize(std::string s);
 
 // Per-session carry of a split codepoint's trailing bytes, keyed on the
 // principal-qualified prompt-cache path. It lives here rather than in run.cpp so

@@ -98,7 +98,7 @@ void send_output_record_result_error_to_wire(IC_API &ic_api,
 // common_unicode_cpt_to_utf8(), which throws (and a throw traps here).
 static const char *const UTF8_REPLACEMENT = "\xEF\xBF\xBD";
 
-size_t utf8_valid_prefix_len(const std::string &s) {
+size_t utf8_valid_prefix_len(const std::string &s, bool *clean) {
   size_t i = 0;
   while (i < s.size()) {
     const utf8_parse_result r = common_parse_utf8_codepoint(s, i);
@@ -111,6 +111,9 @@ size_t utf8_valid_prefix_len(const std::string &s) {
       // A genuinely bad byte, not a chunk boundary. Step over it so we never
       // stall carrying a byte that will never complete; utf8_sanitize() replaces
       // it before the prefix goes on the wire.
+      if (clean != nullptr) {
+        *clean = false;
+      }
       i += 1;
       continue;
     }
@@ -119,7 +122,15 @@ size_t utf8_valid_prefix_len(const std::string &s) {
   return i;
 }
 
-std::string utf8_sanitize(const std::string &s) {
+std::string utf8_sanitize(std::string s) {
+  // Fast path: one scan, and if there is nothing to replace hand the string
+  // back untouched. Model output is valid UTF-8 on all but the rare split, so
+  // this skips building a second buffer on essentially every call.
+  bool clean = true;
+  if (utf8_valid_prefix_len(s, &clean) == s.size() && clean) {
+    return s; // a by-value parameter is moved, not copied, on return
+  }
+
   std::string out;
   out.reserve(s.size());
   size_t i = 0;

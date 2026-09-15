@@ -99,6 +99,35 @@ void test_utf8(MockIC &mockIC) {
                                   utf8_sanitize("\xAA" + DHA), REPL + DHA);
 
   // -------------------------------------------------------------------------
+  // The `clean` out-param must flag exactly when sanitize would change bytes.
+  // An INCOMPLETE tail is NOT dirty: it is carried to the next call, not
+  // replaced, so it must not force the slow path.
+  {
+    bool c = true;
+    utf8_valid_prefix_len("hello", &c);
+    extra_failures +=
+        expect_eq_str("clean: ascii", c ? "clean" : "dirty", "clean");
+    c = true;
+    utf8_valid_prefix_len(DHA, &c);
+    extra_failures +=
+        expect_eq_str("clean: devanagari", c ? "clean" : "dirty", "clean");
+    c = true;
+    utf8_valid_prefix_len("ab\xE0\xA4", &c);
+    extra_failures += expect_eq_str("clean: truncated tail stays clean",
+                                    c ? "clean" : "dirty", "clean");
+    c = true;
+    utf8_valid_prefix_len("\xAA" + DHA, &c);
+    extra_failures += expect_eq_str("clean: orphan byte is dirty",
+                                    c ? "clean" : "dirty", "dirty");
+  }
+
+  // The fast path must be byte-identical to the slow path on valid input.
+  extra_failures += expect_eq_str("fastpath: ascii identity",
+                                  utf8_sanitize(std::string("hello")), "hello");
+  extra_failures += expect_eq_str("fastpath: devanagari identity",
+                                  utf8_sanitize(DHA + DHA), DHA + DHA);
+
+  // -------------------------------------------------------------------------
   // The property that matters: split + rejoin loses NOTHING.
   //
   // Simulates two successive run_update chunks whose boundary falls inside a
