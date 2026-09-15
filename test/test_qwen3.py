@@ -67,6 +67,17 @@ def _call(network: str, method: str, arg: str) -> str:
     return response
 
 
+def _assert_ok(response: str, context: str) -> None:
+    """The reply must be a decodable Candid Ok record.
+
+    NOT `assert "Ok" in response`: when the strict Candid decoder rejects a reply,
+    call_canister_api returns a multi-KB "Failed call to api ..." string that echoes
+    the whole command back - and that string itself contains "Ok", so the substring
+    check passes on exactly the failure it is meant to catch. Assert the shape.
+    """
+    assert response.startswith("(variant { Ok"), f"{context}: {response[:400]}"
+
+
 def _field(response: str, name: str) -> str:
     """Extract a `name = "..."` string field from a Candid response (handles escapes)."""
     match = re.search(rf'{name} = "((?:[^"\\]|\\.)*)"', response)
@@ -83,9 +94,9 @@ def _run_update(network: str, prompt: str, n: str) -> str:
 
 def _ingest(network: str, prompt: str) -> None:
     """Prefill the prompt (‑n 1) until prompt_remaining is empty."""
-    for _ in range(25):
+    for i in range(25):
         resp = _run_update(network, prompt, "1")
-        assert "Ok" in resp, resp
+        _assert_ok(resp, f"ingest call {i}")
         if 'prompt_remaining = ""' in resp:
             return
     raise AssertionError("prefill did not complete within 25 calls")
@@ -94,9 +105,9 @@ def _ingest(network: str, prompt: str) -> None:
 def _generate(network: str, max_calls: int = 25) -> str:
     """Generate (empty prompt) to EOG, returning the concatenated generated output."""
     out = ""
-    for _ in range(max_calls):
+    for i in range(max_calls):
         resp = _run_update(network, "", "512")
-        assert "Ok" in resp, resp
+        _assert_ok(resp, f"generate call {i}")
         out += _field(resp, "output")
         if "generated_eog = true" in resp:
             break
@@ -131,10 +142,13 @@ def test__ready(network: str) -> None:
 
 def test__generate_no_think(network: str) -> None:
     """enable_thinking=false must yield a coherent answer with NO <think> tokens."""
-    assert "Ok" in _call(
-        network,
+    _assert_ok(
+        _call(
+            network,
+            "new_chat",
+            f'(record {{ args = vec {{"--prompt-cache"; "prompt.cache"; {_CACHE}}} }})',
+        ),
         "new_chat",
-        f'(record {{ args = vec {{"--prompt-cache"; "prompt.cache"; {_CACHE}}} }})',
     )
     _ingest(network, PROMPT_INTRO)
     output = _generate(network)
@@ -146,10 +160,13 @@ def test__generate_no_think(network: str) -> None:
 
 def test__multi_turn_recall(network: str) -> None:
     """A follow-up turn must recall facts from the earlier turn (non-thinking)."""
-    assert "Ok" in _call(
-        network,
+    _assert_ok(
+        _call(
+            network,
+            "new_chat",
+            f'(record {{ args = vec {{"--prompt-cache"; "prompt.cache"; {_CACHE}}} }})',
+        ),
         "new_chat",
-        f'(record {{ args = vec {{"--prompt-cache"; "prompt.cache"; {_CACHE}}} }})',
     )
     _ingest(network, PROMPT_MULTITURN)
     answer = _generate(network)
