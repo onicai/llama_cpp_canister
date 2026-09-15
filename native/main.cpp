@@ -11,6 +11,7 @@
 #include "test_qwen2.h"
 #include "test_qwen3.h"
 #include "test_tiny_stories.h"
+#include "test_utf8.h"
 
 #include <iostream>
 
@@ -40,6 +41,7 @@ int main() {
   test_tiny_stories(mockIC);
   test_qwen2(mockIC);
   test_qwen3(mockIC);
+  test_utf8(mockIC);
 
   // returns 1 if any tests failed
   return mockIC.test_summary();

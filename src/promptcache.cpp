@@ -230,6 +230,8 @@ void remove_prompt_cache() {
       // Never leave the stamp behind: it would vouch for whatever bytes appear
       // at this path next (e.g. an uploaded cache from another build/model).
       prompt_cache_remove_stamp(path_session);
+      // Same reasoning for any half-codepoint we were holding for this session.
+      utf8_carry_clear(path_session);
       if (success) {
         msg = "Cache file " + path_session + " deleted successfully";
       } else {

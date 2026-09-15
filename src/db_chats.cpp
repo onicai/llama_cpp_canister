@@ -303,9 +303,13 @@ void get_chats() {
       // Extract the timestamp from the filename (assuming it's formatted as in db_chats_new)
       std::string timestamp = entry.path().filename().string();
 
-      // Add the data to the vectors
+      // Add the data to the vectors.
+      // Sanitize: chat files written by canisters before the UTF-8 chunking fix
+      // can hold a codepoint that was split at a max_tokens boundary. Candid
+      // `text` must be valid UTF-8, so serving those bytes raw would trap a
+      // strict caller (Motoko RTS) exactly as run_update used to. See utils.h.
       timestamps.emplace_back(timestamp);
-      chats.emplace_back(chat);
+      chats.emplace_back(utf8_sanitize(chat));
     }
   }
 

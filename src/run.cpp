@@ -84,6 +84,10 @@ void new_chat() {
   }
   path_session = canister_path_session;
 
+  // A new chat starts from a clean slate: drop any half-codepoint left over from
+  // a previous conversation on this session.
+  utf8_carry_clear(path_session);
+
   std::string msg;
   if (!path_session.empty()) {
 
@@ -180,15 +184,60 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
                      n_prompt_tokens_cached, n_prompt_tokens_decoded,
                      n_tokens_generated, n_prompt_tokens_remaining);
 
+  // ---------------------------------------------------------------------------
+  // Make every outgoing Candid `text` valid UTF-8 (see utils.h).
+  //
+  // `output` is CARRIED, not sanitized: callers concatenate the output of
+  // successive run_update calls, so a codepoint split across a chunk boundary
+  // must be DEFERRED to the next call, never dropped or replaced.
+  //
+  // `conversation` and `prompt_remaining` are rebuilt from the token vector on
+  // every call rather than accumulated, so there is nothing to carry - they are
+  // sanitized. That is lossy but safe: callers treat them as informational and
+  // re-send the FULL prompt until prompt_remaining is empty (see the README run
+  // loop), so a U+FFFD here is never fed back in as input.
+  std::string output_text = output_ss.str();
+  std::string session_key;
+  std::string session_key_err;
+  // The carry needs a per-session, per-principal key. get_canister_path_session()
+  // returns TRUE with an EMPTY string when no --prompt-cache was given, so the
+  // emptiness check is load-bearing: without it every principal calling without a
+  // prompt cache would share one carry entry, and one caller's trailing bytes
+  // could be prepended to another caller's output.
+  const bool have_session_key =
+      !is_query &&
+      get_canister_path_session(params.path_prompt_cache, principal_id,
+                                session_key, session_key_err) &&
+      !session_key.empty();
+  if (have_session_key) {
+    std::string full = utf8_carry_get(session_key) + output_text;
+    const size_t n = utf8_valid_prefix_len(full);
+    output_text = utf8_sanitize(full.substr(0, n));
+    std::string tail = full.substr(n);
+    if (generated_eog || result != 0) {
+      // Flush: never retain bytes across a finished conversation.
+      output_text += utf8_sanitize(tail);
+      utf8_carry_clear(session_key);
+    } else {
+      utf8_carry_set(session_key, tail);
+    }
+  } else {
+    // A query call cannot carry: state changes are discarded when the message
+    // ends. Sanitize instead, accepting the loss.
+    output_text = utf8_sanitize(output_text);
+  }
+  const std::string conversation_text = utf8_sanitize(conversation_ss.str());
+  const std::string prompt_remaining_text = utf8_sanitize(prompt_remaining);
+
   // Exit if there was an error
   if (result != 0) {
     CandidTypeRecord r_out;
     r_out.append("status_code",
                  CandidTypeNat16{Http::StatusCode::InternalServerError}); // 500
-    r_out.append("conversation", CandidTypeText{conversation_ss.str()});
-    r_out.append("output", CandidTypeText{output_ss.str()});
-    r_out.append("error", CandidTypeText{icpp_error_msg});
-    r_out.append("prompt_remaining", CandidTypeText{prompt_remaining});
+    r_out.append("conversation", CandidTypeText{conversation_text});
+    r_out.append("output", CandidTypeText{output_text});
+    r_out.append("error", CandidTypeText{utf8_sanitize(icpp_error_msg)});
+    r_out.append("prompt_remaining", CandidTypeText{prompt_remaining_text});
     r_out.append("generated_eog", CandidTypeBool{generated_eog});
     ic_api.to_wire(CandidTypeVariant{"Err", r_out});
     return;
@@ -196,7 +245,7 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
 
   // Append output to latest chat file for this prinicipal
   if (is_db_chats_active() &&
-      !db_chats_save_conversation(conversation_ss.str(), principal_id,
+      !db_chats_save_conversation(conversation_text, principal_id,
                                   icpp_error_msg)) {
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, icpp_error_msg);
@@ -206,10 +255,10 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   // Return output over the wire
   CandidTypeRecord r_out;
   r_out.append("status_code", CandidTypeNat16{Http::StatusCode::OK}); // 200
-  r_out.append("conversation", CandidTypeText{conversation_ss.str()});
-  r_out.append("output", CandidTypeText{output_ss.str()});
+  r_out.append("conversation", CandidTypeText{conversation_text});
+  r_out.append("output", CandidTypeText{output_text});
   r_out.append("error", CandidTypeText{""});
-  r_out.append("prompt_remaining", CandidTypeText{prompt_remaining});
+  r_out.append("prompt_remaining", CandidTypeText{prompt_remaining_text});
   r_out.append("generated_eog", CandidTypeBool{generated_eog});
   // Exact token accounting for this call (opt nat64). Only this success record
   // carries them; every other OutputRecordResult builder (errors, new_chat,

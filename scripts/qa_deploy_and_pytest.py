@@ -117,6 +117,11 @@ def main() -> int:
                 "test_paths": shared
                 + [
                     "test/test_tiny_stories.py",
+                    # UTF-8 chunk-boundary regression: a Devanagari prompt split
+                    # at a byte-token boundary must still decode as Candid text.
+                    # Cheap enough to run here; the Qwen3 Hindi counterpart
+                    # (test_qwen3_hindi.py) is local-only, like the rest of Qwen.
+                    "test/test_tiny_stories_utf8.py",
                     # after a model is loaded; exact token-accounting reconciliation.
                     "test/test_token_counts.py",
                     # small-max_tokens multi-call ingestion regression (f16 KV).

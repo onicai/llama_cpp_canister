@@ -10,6 +10,12 @@
 #include "http.h"
 #include "ic_api.h"
 
+// NOTE the path: a bare #include "unicode.h" resolves to the TOKENIZER's header,
+// because cpp_include_dirs lists .../fork/src before .../fork/common.
+#include "common/unicode.h"
+
+#include <map>
+
 bool open_ifstream(const std::string &filename,
                    const std::ios_base::openmode &mode,
                    std::ifstream &if_stream, std::string &msg) {
@@ -86,4 +92,70 @@ void send_output_record_result_error_to_wire(IC_API &ic_api,
   r_out.append("prompt_remaining", CandidTypeText{""});
   r_out.append("generated_eog", CandidTypeBool{false});
   ic_api.to_wire(CandidTypeVariant{"Err", r_out});
+}
+
+// U+FFFD REPLACEMENT CHARACTER, written out as bytes. Deliberately not built via
+// common_unicode_cpt_to_utf8(), which throws (and a throw traps here).
+static const char *const UTF8_REPLACEMENT = "\xEF\xBF\xBD";
+
+size_t utf8_valid_prefix_len(const std::string &s) {
+  size_t i = 0;
+  while (i < s.size()) {
+    const utf8_parse_result r = common_parse_utf8_codepoint(s, i);
+    if (r.status == utf8_parse_result::INCOMPLETE) {
+      // Ran out of input mid-sequence. By definition this can only happen at the
+      // end, so `i` is the split point.
+      break;
+    }
+    if (r.status == utf8_parse_result::INVALID) {
+      // A genuinely bad byte, not a chunk boundary. Step over it so we never
+      // stall carrying a byte that will never complete; utf8_sanitize() replaces
+      // it before the prefix goes on the wire.
+      i += 1;
+      continue;
+    }
+    i += r.bytes_consumed;
+  }
+  return i;
+}
+
+std::string utf8_sanitize(const std::string &s) {
+  std::string out;
+  out.reserve(s.size());
+  size_t i = 0;
+  while (i < s.size()) {
+    const utf8_parse_result r = common_parse_utf8_codepoint(s, i);
+    if (r.status == utf8_parse_result::SUCCESS) {
+      out.append(s, i, r.bytes_consumed);
+      i += r.bytes_consumed;
+    } else if (r.status == utf8_parse_result::INVALID) {
+      out += UTF8_REPLACEMENT;
+      i += 1;
+    } else {
+      // INCOMPLETE: a truncated tail with nothing left to read.
+      out += UTF8_REPLACEMENT;
+      break;
+    }
+  }
+  return out;
+}
+
+// See utils.h for why this is exempt from reset_static_memory().
+static std::map<std::string, std::string> g_utf8_tail_carry;
+
+std::string utf8_carry_get(const std::string &session_key) {
+  auto it = g_utf8_tail_carry.find(session_key);
+  return it == g_utf8_tail_carry.end() ? std::string() : it->second;
+}
+
+void utf8_carry_set(const std::string &session_key, const std::string &tail) {
+  if (tail.empty()) {
+    g_utf8_tail_carry.erase(session_key);
+  } else {
+    g_utf8_tail_carry[session_key] = tail;
+  }
+}
+
+void utf8_carry_clear(const std::string &session_key) {
+  g_utf8_tail_carry.erase(session_key);
 }
