@@ -63,6 +63,16 @@ std::string utf8_sanitize(const std::string &s);
 // holds at most 3 bytes per session, is flushed on EOG, and is cleared by
 // new_chat / remove_prompt_cache. Losing it on upgrade costs at most 3 bytes of
 // one in-flight generation.
+// Per-session carry key, derived with pure string work - deliberately NOT via
+// get_canister_path_session(), which also stats the filesystem and may create
+// directories. That is a VFS round trip we do not need on every update call.
+// Mirrors its leading-'/' normalization so one cache file maps to one key
+// however the caller spells it. Empty when there is no --prompt-cache; an empty
+// key must never be used, or every principal would share one carry entry.
+// ALL call sites must use this, or a clear() will miss the entry a set() made.
+std::string utf8_session_key(const std::string &path_prompt_cache,
+                             const std::string &principal_id);
+
 std::string utf8_carry_get(const std::string &session_key);
 void utf8_carry_set(const std::string &session_key, const std::string &tail);
 void utf8_carry_clear(const std::string &session_key);

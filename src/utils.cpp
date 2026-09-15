@@ -140,6 +140,21 @@ std::string utf8_sanitize(const std::string &s) {
   return out;
 }
 
+std::string utf8_session_key(const std::string &path_prompt_cache,
+                             const std::string &principal_id) {
+  std::string p = path_prompt_cache;
+  const size_t pos = p.find_first_not_of('/');
+  if (pos == std::string::npos) {
+    p.clear(); // empty, or nothing but slashes
+  } else {
+    p.erase(0, pos);
+  }
+  if (p.empty()) {
+    return "";
+  }
+  return principal_id + "/" + p;
+}
+
 // See utils.h for why this is exempt from reset_static_memory().
 static std::map<std::string, std::string> g_utf8_tail_carry;
 

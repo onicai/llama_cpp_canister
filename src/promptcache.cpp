@@ -231,7 +231,9 @@ void remove_prompt_cache() {
       // at this path next (e.g. an uploaded cache from another build/model).
       prompt_cache_remove_stamp(path_session);
       // Same reasoning for any half-codepoint we were holding for this session.
-      utf8_carry_clear(path_session);
+      // Key it exactly as run() does; path_session is the CANONICAL path here.
+      utf8_carry_clear(
+          utf8_session_key(params.path_prompt_cache, principal_id));
       if (success) {
         msg = "Cache file " + path_session + " deleted successfully";
       } else {

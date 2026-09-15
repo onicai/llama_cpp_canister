@@ -85,8 +85,9 @@ void new_chat() {
   path_session = canister_path_session;
 
   // A new chat starts from a clean slate: drop any half-codepoint left over from
-  // a previous conversation on this session.
-  utf8_carry_clear(path_session);
+  // a previous conversation on this session. Key it exactly as run() does -
+  // path_session here is the CANONICAL path, which is a different string.
+  utf8_carry_clear(utf8_session_key(params.path_prompt_cache, principal_id));
 
   std::string msg;
   if (!path_session.empty()) {
@@ -197,18 +198,18 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   // re-send the FULL prompt until prompt_remaining is empty (see the README run
   // loop), so a U+FFFD here is never fed back in as input.
   std::string output_text = output_ss.str();
-  std::string session_key;
-  std::string session_key_err;
-  // The carry needs a per-session, per-principal key. get_canister_path_session()
-  // returns TRUE with an EMPTY string when no --prompt-cache was given, so the
-  // emptiness check is load-bearing: without it every principal calling without a
-  // prompt cache would share one carry entry, and one caller's trailing bytes
-  // could be prepended to another caller's output.
-  const bool have_session_key =
-      !is_query &&
-      get_canister_path_session(params.path_prompt_cache, principal_id,
-                                session_key, session_key_err) &&
-      !session_key.empty();
+  // The carry needs a per-session, per-principal key. Derive it with pure string
+  // work: get_canister_path_session() would do the same normalization, but it
+  // also stats the filesystem and may create directories - a VFS round trip, on
+  // every single update call, against a canister whose stable memory holds the
+  // whole prompt-cache tree. The key never needs the path to exist.
+  //
+  // An empty key is NOT usable: without the emptiness check every principal
+  // calling without a --prompt-cache would share one carry entry, and one
+  // caller's trailing bytes could be prepended to another caller's output.
+  const std::string session_key =
+      utf8_session_key(params.path_prompt_cache, principal_id);
+  const bool have_session_key = !is_query && !session_key.empty();
   if (have_session_key) {
     std::string full = utf8_carry_get(session_key) + output_text;
     const size_t n = utf8_valid_prefix_len(full);
