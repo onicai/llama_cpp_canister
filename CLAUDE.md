@@ -211,6 +211,26 @@ llama_cpp_canister/
 └── icp.yaml               # icp-cli configuration
 ```
 
+## Upstream icpp-pro process
+
+This repo is part of the icpp-pro repo family; the multi-repo
+feature-development and release process lives in
+`../icpp-pro/README-feature-guide.md`.
+
+- **icpp-pro version pins** (bumped in lockstep at every icpp-pro release,
+  verified by `make -C ../icpp-pro check-sibling-pins`):
+  - `requirements.txt` — `icpp-pro==X.Y.Z` (hard pin: icpp-pro decides the
+    wasm bytes, so a bump changes the wasm hash)
+  - `docker/docker-compose.yml` — the `icpp: &icpp "X.Y.Z"` anchor AND the
+    `name: &base_name "llama-cpp-canister-build:icpp-X.Y.Z"` literal
+  - `scripts/requirements.txt` — black/pylint/mypy at icpp-pro's versions
+- **Role in icpp-pro's tiered sibling verification**: `make test-llm-native`
+  is the cheap leg of `make -C ../icpp-pro siblings-verify-api`; wasm-affecting
+  icpp-pro changes additionally run
+  `make docker-build-wasm test-llm-wasm-prebuilt` (the release tier).
+- An icpp-pro version bump needs a new WASM-HASHES.md row and this repo's own
+  release process (`.claude/skills/llama_cpp_canister-release`).
+
 ## Workflow for Adding Security Fixes
 
 1. **Add constants** to `src/utils.h` if needed
