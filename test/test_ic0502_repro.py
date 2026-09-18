@@ -13,6 +13,13 @@ Semantics:
 - RED on a pre-fix wasm  = SUCCESS for the repro handover (a local trap).
 - GREEN on a fixed wasm  = the regression gate (2N clean cycles for the soak).
 
+This is wired into scripts/qa_deploy_and_pytest.py as a `local_only` iteration
+(uploads Qwen2.5-0.5B, deploys, runs this file), so `make test-llm-wasm` runs it
+but the hosted GitHub runner skips it (the full-ctx Qwen replay times out there).
+It is a MANDATORY pre-upgrade gate -- see README-contributors-guide.md, bug
+class 3. The tiny/gemma QA iterations never reproduced this bug; it needs the
+fleet model + realistic churn + many reuse cycles.
+
 Setup (once, outside pytest — see TMP-HANDOVER-IC0502-funnAI-test-harness.md):
   icp network start -d
   icp deploy -e local -y --identity llama-cpp-testing

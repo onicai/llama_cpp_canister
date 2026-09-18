@@ -66,6 +66,12 @@ def skip_build_wasm() -> bool:
     return os.environ.get(SKIP_BUILD_WASM_ENV_VAR, "").strip() not in ("", "0")
 
 
+def running_in_ci() -> bool:
+    """True under GitHub Actions. Used to skip `local_only` model iterations
+    (the large fleet-faithful models that time out the hosted runner)."""
+    return os.environ.get("GITHUB_ACTIONS", "").strip().lower() == "true"
+
+
 def main() -> int:
     """Start local network; Deploy canister; Upload LLM model; Pytest"""
     identity = get_identity()
@@ -150,6 +156,30 @@ def main() -> int:
                 },
                 "test_paths": ["test/test_small_maxtokens.py"],
             },
+            # funnAI prd regression (IC0502 heap-out-of-bounds, README-0003-...-
+            # IC0502.md). The fleet's own model (Qwen2.5-0.5B q8_0, loaded exactly
+            # as prd does: no ctx flags -> full 32768) replayed through the real
+            # Judge/ShareService/Challenger controller sequence with the real prd
+            # prompts. This is the ONLY test that reproduced the threadpool
+            # use-after-free: it needs the fleet model + realistic allocation
+            # churn + many reuse cycles, which the tiny/gemma iterations above do
+            # not provide, so they never caught it. MUST be re-run before shipping
+            # any llama.cpp upgrade (see README-contributors-guide.md).
+            #
+            # local_only: the full-ctx Qwen replay is too slow for the hosted
+            # GitHub runner (the Qwen models time out there). It runs on
+            # `make test-llm-wasm` locally. IC0502_REPRO_CYCLES sets the soak
+            # length (default 5, enough to catch this exact bug -- it trapped in
+            # cycle 0; raise to >=50 for a pre-release soak).
+            {
+                "filename": "models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf",  # pylint: disable=line-too-long
+                "canister_filename": "models/model.gguf",
+                "wasm_memory_limit": 4026531840,  # 3.75 GiB
+                "topup": 90000000000000,  # 675 MB upload + 32768-ctx load
+                "local_only": True,
+                "env": {},
+                "test_paths": ["test/test_ic0502_repro.py"],
+            },
             # The Qwen models time out in the Github action; run them locally by
             # uncommenting (schema: filename, canister_filename, wasm_memory_limit,
             # env, test_paths). Qwen3-0.6B multi-turn is exercised by test_qwen3.py.
@@ -168,6 +198,10 @@ def main() -> int:
             test_paths = test["test_paths"]
             env_prefix = "".join(f"{k}={v} " for k, v in test.get("env", {}).items())
 
+            if test.get("local_only") and running_in_ci():
+                typer.echo(f"--\nSkipping {filename} (local_only, and running in CI)")
+                continue
+
             typer.echo("--\nStop the local network")
             icp_network_stop()
 
@@ -184,9 +218,13 @@ def main() -> int:
 
             # Top up cycles so loading a larger model can grow wasm memory
             # (otherwise load_model traps with IC0532 insufficient-cycles).
-            typer.echo("--\nTop up cycles")
+            # Local cycles come from a faucet, so a larger amount is free; bigger
+            # models (upload + wasm-memory growth at a large ctx) need more --
+            # override per entry with "topup". Default covers tiny + gemma.
+            topup = test.get("topup", 20000000000000)
+            typer.echo(f"--\nTop up cycles ({topup})")
             run_shell_cmd(
-                "icp canister top-up llama_cpp --amount 20000000000000 -e local"
+                f"icp canister top-up llama_cpp --amount {topup} -e local"
                 f"{identity_arg}",
                 cwd=ROOT_PATH,
             )

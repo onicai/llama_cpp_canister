@@ -143,12 +143,12 @@ Canister log records are FRAGMENTS of lines and must be reassembled in `index` o
 readable. Logs survive a rejected message (you see how far execution got, which is often the whole
 diagnosis), but the ring is small, so capture right after the call.
 
-## Two classes of bug that upstream does NOT have — re-check both on every upgrade
+## Three classes of bug that upstream does NOT have — re-check all three on every upgrade
 
 These are not llama.cpp bugs, so there is nothing to send upstream. They exist only because
-of two things this canister does that `llama-cli` never does. Both produced canister traps
-that were found and fixed in v0.16.2; new upstream code can reintroduce either at any time,
-so walk the checklists below on each upgrade.
+of things this canister does that `llama-cli` never does. Each produced canister traps that
+were found and fixed here (classes 1-2 in v0.16.2, class 3 in v0.17.0); new upstream code can
+reintroduce any of them at any time, so walk the checklists below on each upgrade.
 
 ### 1. Upstream's `try`/`catch` error handling is DEAD here — a throw is a trap
 
@@ -220,7 +220,64 @@ the right:
 Sampling settings, the prompt-cache path and the other per-call flags are genuinely per-call
 and must keep coming from `params`.
 
-### 3. The v0.16.2 fixes live in `main_.cpp` — RE-APPLY them after the re-port
+### 3. A per-call resource handed to the persisted context dangles after the call
+
+The `llama_context` (and the ggml backend inside it) is Orthogonally Persisted, but the
+things `main_.cpp` attaches to it each call — the **threadpool**, the **sampler**, the **log
+file**, and any **callback** — are created fresh and freed at end of call. If the context (or
+backend) keeps a pointer to one of them past the free, the NEXT call dereferences freed heap.
+Upstream cannot hit this: in `llama-cli` the process ends when the call ends, so "freed at end
+of call" and "context destroyed" are the same moment.
+
+Real example (fixed in v0.17.0, full write-up in `README-0003-305ba519-IC0502.md`): every
+call did `llama_attach_threadpool(ctx, ...)` then freed the pool at the end **without
+detaching**. The pointer survived in two persisted places — `ctx->threadpool` and the CPU
+backend's own `ggml_backend_cpu_context::threadpool` (latched in `graph_compute` via
+`ggml_backend_cpu_set_threadpool`). On the next call that setter called
+`ggml_threadpool_pause()` on the **freed** pool; the pool's pthread mutex sits at offset 0,
+right over dlmalloc's free-list links, so the pause corrupted the allocator and a **later,
+unrelated** `malloc`/`free` trapped `IC0502 heap out of bounds`. It was intermittent (only
+when the new pool landed at a different address) and sticky (the corruption lives in the
+persisted heap, so `stop`/`start` never cleared it — only a `--mode upgrade`/`reinstall`
+heap reset did). It shipped in v0.16.6 and hit the funnAI prd fleet for days.
+
+**On each upgrade:** find everything the per-call code registers into the persisted context or
+backend, and confirm each is torn down before its backing memory is freed.
+
+```bash
+# per-call things attached/registered into the persisted ctx or backend:
+grep -nE "llama_(attach|detach)_threadpool|set_threadpool|set_abort_callback|cb_eval|common_sampler_(init|free)|common_log_set_file" src/main_.cpp
+# and, in the fork, who stores a raw pointer to such a per-call object:
+grep -rnE "threadpool|abort_callback|cb_eval_user_data" src/llama_cpp_onicai_fork/src/llama-context.h
+```
+
+The `CallTeardown` guard in `main_.cpp` is what frees the threadpool + sampler + log on every
+exit path (including early returns), and it detaches the threadpool first. If a re-port adds a
+NEW per-call registration into the context (a new callback, a new attach), it must be added to
+that guard's teardown, and any fork-side setter that pauses/touches the *old* pointer on
+replacement must be made safe under `__wasi__` (see the `ggml_backend_cpu_set_threadpool`
+ICPP-PATCH).
+
+**MANDATORY regression gate — CI does NOT cover this.** The tiny/gemma QA iterations never
+reproduced this bug: it needs the fleet's own model plus realistic allocation churn plus many
+reuse cycles to make a freed pool land at a fresh address. `test/test_ic0502_repro.py` does
+exactly that — it replays the real funnAI Judge/ShareService/Challenger controller sequence,
+with the actual prd prompts, against Qwen2.5-0.5B (the fleet model) loaded as prd loads it.
+It is wired into the QA driver as a `local_only` iteration, so **it runs on
+`make test-llm-wasm` but is skipped on the hosted GitHub runner** (the full-ctx Qwen replay
+times out there). Before shipping any llama.cpp upgrade, run it locally with a real soak:
+
+```bash
+# via the QA driver (uploads Qwen2.5-0.5B, deploys, runs the replay):
+make test-llm-wasm
+# or directly, with a longer soak, against an already-deployed canister:
+IC0502_REPRO_CYCLES=50 pytest -vv --network local --identity llama-cpp-testing test/test_ic0502_repro.py
+```
+
+A regression traps `IC0502 heap out of bounds` (the unfixed build trapped in cycle 0); a
+healthy build runs the full soak clean with `graphs reused` climbing (graph reuse stays on).
+
+### 4. The v0.16.2 fixes live in `main_.cpp` — RE-APPLY them after the re-port
 
 `src/main_.cpp` is a **port of upstream's** `tools/completion/completion.cpp`, re-done on
 every upgrade (see "C5 — the `main_.cpp` re-port" in `README-0003-305ba519.md`). It carries
