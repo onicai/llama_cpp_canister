@@ -66,7 +66,7 @@ import wasmtime
 
 
 def build_linker(
-    store: wasmtime.Store, module: wasmtime.Module, msg: dict
+    store: wasmtime.Store, module: wasmtime.Module, msg: dict[str, Any]
 ) -> Tuple[wasmtime.Linker, bytearray]:
     """Wire faithful ic0 host functions. Stable memory = a real bytearray.
 
@@ -226,8 +226,7 @@ def main() -> None:
             return binascii.unhexlify(hexfile.read().strip())
 
     calls = [
-        (m, load_arg(arg_files[i]) if arg_files else b"")
-        for i, m in enumerate(methods)
+        (m, load_arg(arg_files[i]) if arg_files else b"") for i, m in enumerate(methods)
     ]
 
     cfg = wasmtime.Config()
@@ -236,7 +235,7 @@ def main() -> None:
     cfg.wasm_backtrace_details = True  # type: ignore[attr-defined]
     store = wasmtime.Store(wasmtime.Engine(cfg))
     module = wasmtime.Module.from_file(store.engine, args.wasm)
-    msg: dict = {"arg": b"", "reply": bytearray()}
+    msg: dict[str, Any] = {"arg": b"", "reply": bytearray()}
     linker, stable = build_linker(store, module, msg)
 
     index = 0  # 0 = instantiation; 1.. = the corresponding --method call
@@ -249,9 +248,7 @@ def main() -> None:
             file=sys.stderr,
         )
         for index, (method, arg_bytes) in enumerate(calls, start=1):
-            print(
-                f"=== call {index}/{len(calls)}: {method!r} ===", file=sys.stderr
-            )
+            print(f"=== call {index}/{len(calls)}: {method!r} ===", file=sys.stderr)
             msg["arg"] = arg_bytes
             msg["reply"] = bytearray()
             export = inst.exports(store)[method]
@@ -265,7 +262,9 @@ def main() -> None:
             )
         print(f"=== OK ({len(calls)} call(s), no trap) ===")
     except Exception as exc:  # pylint: disable=broad-except
-        where = "instantiation" if index == 0 else f"call {index}: {calls[index - 1][0]!r}"
+        where = (
+            "instantiation" if index == 0 else f"call {index}: {calls[index - 1][0]!r}"
+        )
         print(f"=== TRAP during {where} ===")
         print(str(exc)[:3000])
         sys.exit(1)
