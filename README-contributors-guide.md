@@ -177,6 +177,15 @@ At b10076 the catch-and-return-error entry points are `llama_state_load_file`,
 **every** `run_update`. For any such API we call, validate the precondition BEFORE calling in
 (as `prompt_cache_discard_if_stale()` now does), rather than relying on the return value.
 
+**Keep the prompt-cache layout stamp exhaustive.** The precondition-check above is only as
+complete as `llama_context::state_layout_desc()` (fork `llama-context.cpp`), which lists the
+context-level fields that shape the session-file byte layout — currently `n_ctx`, `n_seq_max`,
+`flash_attn`, `kv_unified`, `type_k`, `type_v`. If an upgrade makes a NEW context flag affect
+`llama_state_*` / KV-cache serialization, add it to that descriptor, or a cache written under
+the old value passes the stamp check, loads, and traps again (the v3-stamp cache-layout trap,
+`README-0003-305ba519-IC0502.md`). Model-level factors are covered separately by the model-id
+stamp. There is a matching comment at the `state_layout_desc` definition.
+
 A useful corollary for diagnosis: a C++ throw surfaces as **`IC0503`** with an
 `UNCAUGHT C++ EXCEPTION [type]: message` payload, whereas a failed `GGML_ASSERT` or a real
 memory fault surfaces as **`IC0502`**. The error code alone tells you which class you are in.
