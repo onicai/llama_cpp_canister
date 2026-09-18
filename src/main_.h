@@ -4,9 +4,14 @@
 
 // Forward declaration for llama_model
 struct llama_model;
+struct llama_context;
 
 // Global model pointer (defined in main_.cpp)
 extern llama_model **g_model;
+
+// The context persisted in Orthogonal Persistence, or nullptr when no model
+// is loaded. Used by the prompt-cache stamp to record the context layout.
+llama_context *icpp_persisted_ctx();
 
 int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           std::string &icpp_error_msg, std::ostringstream &conversation_ss,

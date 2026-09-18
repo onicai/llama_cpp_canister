@@ -4,6 +4,7 @@
 #include "main_.h"
 #include "ic_api.h"
 #include "promptcache.h"
+#include "ready.h"
 #include "utils.h"
 // ICPP-PATCH-END
 
@@ -154,6 +155,44 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
   g_params = &params;
 
+  // ICPP-PATCH-START
+  // Per-call teardown that runs on EVERY exit from main_. The early returns
+  // below used to skip the inline teardown entirely, leaking the sampler and
+  // threadpools on every failed call and leaving the static g_* pointers
+  // dangling into this stack frame until the next call reassigned them.
+  // Fields are filled in as each resource is created.
+  common_sampler *smpl = nullptr; // declared here so the guard can hold it
+  struct CallTeardown {
+    common_sampler **smpl;
+    llama_context *ctx = nullptr;
+    decltype(ggml_threadpool_free) *free_fn = nullptr;
+    struct ggml_threadpool *tp = nullptr;
+    struct ggml_threadpool *tp_batch = nullptr;
+    ~CallTeardown() {
+      if (*smpl) {
+        common_sampler_free(*smpl);
+        *smpl = nullptr;
+      }
+      // Close the log file and reset pointers, so the next call starts fresh
+      common_log_set_file(common_log_main(), nullptr);
+      reset_static_memory();
+      if (ctx) {
+        // Detach BEFORE freeing (also clears the copy latched into the
+        // persisted CPU backend), so no dangling threadpool pointer survives
+        // in persisted state. Root cause of the IC0502 "heap out of bounds"
+        // traps: the next call's first compute would pause the freed pool --
+        // writes into freed heap over dlmalloc's free-list links.
+        // See README-0003-305ba519-IC0502.md.
+        llama_detach_threadpool(ctx);
+      }
+      if (free_fn) {
+        free_fn(tp);
+        free_fn(tp_batch);
+      }
+    }
+  } teardown{&smpl};
+  // ICPP-PATCH-END
+
   if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMPLETION,
                            print_usage)) {
     // ICPP-PATCH-START
@@ -237,7 +276,6 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   // ICPP-PATCH: model & context live in static memory, to preserve across calls
   llama_model *&model = g_model_persistent;
   llama_context *&ctx = g_ctx_persistent;
-  common_sampler *smpl = nullptr;
 
   // ICPP-PATCH-START
   // Don't give error if embd_inp = session_tokens. All is OK to just keep going
@@ -262,7 +300,21 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   // Load the model & context only once and keep them alive in Orthogonal
   // Persisted memory. Ownership stays with the static g_llama_init, so that
   // icpp_free_model() can release model + context together.
-  if (model == nullptr) {
+  // Key the reuse decision on BOTH pointers: common_init_from_params can
+  // return a loaded model with a NULL context (e.g. bad context params), and
+  // keying on the model alone would then skip this load branch forever --
+  // every later call fails at the ctx null-check with no way to recover.
+  if (model == nullptr || ctx == nullptr) {
+    if (model != nullptr || ctx != nullptr) {
+      // Half-initialized persisted state from a failed earlier load: free it
+      // BEFORE the new load, so two models never coexist in the heap.
+      // icpp_free_model() also frees the backend (the guard above already
+      // ran this call), so re-init it for the load below.
+      icpp_free_model();
+      llama_backend_init();
+      llama_numa_init(params.numa);
+      g_backend_initialized = true;
+    }
     g_llama_init = common_init_from_params(params);
 
     if (!g_llama_init) {
@@ -298,6 +350,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   }
 
   // ICPP-PATCH-START
+  teardown.ctx = ctx;
+
   // Return if we are asked to ONLY load the model
   if (load_model_only) {
     return 0;
@@ -338,6 +392,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     LOG_ERR("%s: failed to get threadpool function pointers\n", __func__);
     return 1;
   }
+  // ICPP-PATCH: hand the free fn to the teardown guard
+  teardown.free_fn = ggml_threadpool_free_fn;
 
   struct ggml_threadpool_params tpp_batch =
       ggml_threadpool_params_from_cpu_params(params.cpuparams_batch);
@@ -357,6 +413,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
               tpp_batch.n_threads);
       return 1;
     }
+    teardown.tp_batch = threadpool_batch; // ICPP-PATCH
 
     // Start the non-batch threadpool in the paused state
     tpp.paused = true;
@@ -368,6 +425,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
             tpp.n_threads);
     return 1;
   }
+  teardown.tp = threadpool; // ICPP-PATCH
 
   llama_attach_threadpool(ctx, threadpool, threadpool_batch);
 
@@ -1120,6 +1178,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         need_to_save_session = false;
         llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(),
                               session_tokens.size());
+        // ICPP-PATCH: re-stamp so the sidecar's layout line matches the bytes
+        // just written (a re-load_model with different context flags must
+        // discard, not trap; see prompt_cache_discard_if_stale).
+        prompt_cache_write_format_stamp(path_session);
 
         LOG_DBG("saved session to %s\n", path_session.c_str());
       }
@@ -1458,31 +1520,21 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(),
                           session_tokens.size());
     // ICPP-PATCH: (re)stamp the sidecar so it always describes the file we
-    // just wrote, with the model that wrote it. Without this, a cache the
-    // load above discarded would be re-created unstamped and discarded again
-    // on every subsequent call -- a permanent cold start.
+    // just wrote -- format, model AND context layout. Without this, a cache
+    // the load above discarded would be re-created unstamped and discarded
+    // again on every call (a permanent cold start), and a re-load_model with
+    // different context flags would trap instead of cold-starting.
     prompt_cache_write_format_stamp(path_session);
   }
 
   LOG("\n\n");
   common_perf_print(ctx, smpl);
 
-  common_sampler_free(smpl);
-
-  // ICPP-PATCH-START
-  // Close log file and reset pointers, so next call will start fresh, with or without logging
-  common_log_set_file(common_log_main(), nullptr);
-
-  // Reset all static memory we do not want to carry over to the next update call
-  reset_static_memory();
-  // ICPP-PATCH-END
-
-  // ICPP-PATCH: do NOT call llama_backend_free() here. The persisted model
-  //             references quantization tables owned by the backend.
-  //             The backend is freed in icpp_free_model().
-
-  ggml_threadpool_free_fn(threadpool);
-  ggml_threadpool_free_fn(threadpool_batch);
+  // ICPP-PATCH: the sampler, log file, static pointers and threadpools are
+  // released by the CallTeardown guard declared at the top of main_, on this
+  // and every early-return path. Do NOT call llama_backend_free() here: the
+  // persisted model references quantization tables owned by the backend
+  // (freed in icpp_free_model()).
 
   // Exact token accounting for this call (put on the wire by run.cpp). Uses the
   // robust, consume-based definitions: `n_consumed` counts prompt tokens actually
@@ -1504,6 +1556,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 // ICPP-PATCH-START:
 // functions added for running on IC
 
+llama_context *icpp_persisted_ctx() { return g_ctx_persistent; }
+
 // Function to be called by the canister to free the model which is persisted in Orthogonal Persisted memory
 void icpp_free_model() {
   // The static common_init_result owns both the model and the context, so
@@ -1523,6 +1577,10 @@ void icpp_free_model() {
   // and allow a subsequent call to main_() to initialize it again.
   llama_backend_free();
   g_backend_initialized = false;
+
+  // No model in memory means not ready: without this, ready() keeps reporting
+  // 200 after a failed re-load and the fleet keeps routing inference here.
+  ready_for_inference = false;
 }
 
 void reset_static_memory() {

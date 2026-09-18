@@ -38,10 +38,16 @@ static void print_usage(int argc, char **argv) {
 // --- prompt-cache format versioning -----------------------------------------
 // See promptcache.h for why llama.cpp's own magic+version check is insufficient.
 
-// Bump this whenever a llama.cpp upgrade changes the session serialization.
+// Bump this whenever a llama.cpp upgrade changes the session serialization,
+// or when the stamp file itself gains fields (old stamps then read as stale
+// and their caches are discarded -- a one-time cold start, never a trap).
 //   1 = llama.cpp b4531 (6152129d) and earlier -- never actually stamped
 //   2 = llama.cpp b10076 (305ba519), llama_memory_* refactor
-static const char *PROMPT_CACHE_FORMAT = "llama_cpp_canister-prompt-cache-v2";
+//   3 = same serialization as 2; stamp gains a context-layout line (line 3),
+//       so a re-load_model with different context flags (ctx-size, cache
+//       types, ...) discards the now-unloadable cache instead of trapping in
+//       llama_state_load_file, whose catch never runs on WASI
+static const char *PROMPT_CACHE_FORMAT = "llama_cpp_canister-prompt-cache-v3";
 
 static std::string
 prompt_cache_stamp_path(const std::string &canister_path_session) {
@@ -58,6 +64,21 @@ std::string prompt_cache_model_id() {
   // snprintf semantics: the return value is the length the description WOULD
   // have, so read the (always NUL-terminated) buffer instead of trusting it.
   llama_model_desc(*g_model, buf, sizeof(buf));
+  return std::string(buf);
+}
+
+std::string prompt_cache_layout_id() {
+  // Identity of the loaded context's session-file layout (ctx size, seq
+  // count, flash-attn, kv-unified, KV cache types). Empty when no model is
+  // loaded yet. A cache written under a different layout makes
+  // llama_state_load_file THROW -- a trap on WASI -- so it must be discarded
+  // instead of loaded.
+  llama_context *ctx = icpp_persisted_ctx();
+  if (ctx == nullptr) return "";
+
+  char buf[128];
+  buf[0] = '\0';
+  llama_state_layout_desc(ctx, buf, sizeof(buf));
   return std::string(buf);
 }
 
@@ -81,7 +102,20 @@ bool prompt_cache_format_is_current(const std::string &canister_path_session) {
   // No model loaded => nothing to compare against; do not discard on that basis.
   if (current_model.empty()) return true;
 
-  return stamped_model == current_model;
+  if (stamped_model != current_model) return false;
+
+  // Third line: the context layout the cache was written under. A re-load
+  // with different context flags (e.g. --ctx-size) changes the session-file
+  // byte layout, so llama_state_load_file would throw -- a trap on WASI. An
+  // absent third line (an older v2 stamp) already failed the format check
+  // above, so reaching here means the line is present.
+  std::string stamped_layout;
+  if (!std::getline(f, stamped_layout)) return false;
+  const std::string current_layout = prompt_cache_layout_id();
+  // No model loaded => nothing to compare against; do not discard on that basis.
+  if (!current_layout.empty() && stamped_layout != current_layout) return false;
+
+  return true;
 }
 
 void prompt_cache_remove_stamp(const std::string &canister_path_session) {
@@ -118,6 +152,7 @@ void prompt_cache_write_format_stamp(const std::string &canister_path_session) {
   if (f.is_open()) {
     f << PROMPT_CACHE_FORMAT << std::endl;
     f << prompt_cache_model_id() << std::endl;
+    f << prompt_cache_layout_id() << std::endl;
   }
 }
 

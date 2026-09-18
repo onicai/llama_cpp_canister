@@ -1,6 +1,7 @@
 #pragma once
 
 #include "wasm_symbol.h"
+#include <cstdint>
 #include <string>
 
 bool get_canister_path_session(const std::string &path_session,
@@ -33,6 +34,10 @@ bool get_canister_path_session(const std::string &path_session,
 // Description of the currently loaded model, e.g. "qwen3 1.7B Q4_K_M".
 // Empty string when no model is loaded.
 std::string prompt_cache_model_id();
+
+// Description of the loaded context's session-file layout (ctx size, cache
+// types, ...). Empty string when no model is loaded.
+std::string prompt_cache_layout_id();
 
 bool prompt_cache_format_is_current(const std::string &canister_path_session);
 void prompt_cache_write_format_stamp(const std::string &canister_path_session);

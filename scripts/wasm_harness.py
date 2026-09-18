@@ -37,6 +37,19 @@ didc encode '(record { args = vec {"--model"; "models/tiny.gguf";} })' > /tmp/lo
 python -m scripts.wasm_harness build/llama_cpp_before_opt.wasm \
     --method 'canister_update load_model' --arg-hex-file /tmp/load.hex
 
+# MULTI-CALL sessions: --method/--arg-hex-file are repeatable and are zipped
+# into (method, arg) pairs, all run against ONE instantiation. The wasm heap
+# and the stable bytearray persist across the calls, so this reproduces the
+# IC's Orthogonal Persistence: a llama_context created by call 1 is the SAME
+# object reused by calls 2..N (the cross-call bug surface of
+# README-0003-305ba519-IC0502.md). Pass '-' as an --arg-hex-file for an empty
+# arg. Each call's reply bytes (captured from msg_reply_data_append) are
+# printed; a trap reports the 1-based call index plus the named backtrace.
+python -m scripts.wasm_harness build/llama_cpp_before_opt.wasm \
+    --method 'canister_update load_model'  --arg-hex-file /tmp/load.hex \
+    --method 'canister_update run_update'  --arg-hex-file /tmp/run.hex \
+    --method 'canister_update run_update'  --arg-hex-file /tmp/run.hex
+
 Note: methods that read a model file will fault on "file not found" unless you
 first upload one into the harness vFS (call file_upload_chunk the same way, with
 a candid blob arg). getenv-class faults surface at arg-parse, BEFORE any file
@@ -53,9 +66,15 @@ import wasmtime
 
 
 def build_linker(
-    store: wasmtime.Store, module: wasmtime.Module, arg_bytes: bytes
+    store: wasmtime.Store, module: wasmtime.Module, msg: dict
 ) -> Tuple[wasmtime.Linker, bytearray]:
-    """Wire faithful ic0 host functions. Stable memory = a real bytearray."""
+    """Wire faithful ic0 host functions. Stable memory = a real bytearray.
+
+    `msg` is the mutable per-call message context, updated by the caller
+    between calls on the same instance: msg["arg"] holds the current call's
+    candid arg bytes, msg["reply"] accumulates this call's reply bytes
+    (captured from msg_reply_data_append; clear it before each call).
+    """
     linker = wasmtime.Linker(store.engine)
     stable = bytearray()
 
@@ -107,18 +126,20 @@ def build_linker(
         "stable_read": lambda c, dst, off, sz: write_mem(
             c, dst, bytes(stable[off : off + sz])
         ),
-        # --- message context (realistic-ish values) ---
+        # --- message context (realistic-ish values; msg is per-call mutable) ---
         "time": lambda c: 1753000000000000000,
-        "msg_arg_data_size": lambda c: len(arg_bytes),
+        "msg_arg_data_size": lambda c: len(msg["arg"]),
         "msg_arg_data_copy": lambda c, dst, off, sz: write_mem(
-            c, dst, arg_bytes[off : off + sz]
+            c, dst, msg["arg"][off : off + sz]
         ),
         "msg_caller_size": lambda c: len(caller_principal),
         "msg_caller_copy": lambda c, dst, off, sz: write_mem(
             c, dst, caller_principal[off : off + sz]
         ),
         "is_controller": lambda c, src, sz: 1,  # force admin/controller auth to pass
-        "msg_reply_data_append": lambda c, src, sz: None,
+        "msg_reply_data_append": lambda c, src, sz: msg["reply"].extend(
+            read_mem(c, src, sz)
+        ),
         "msg_reply": lambda c: None,
         # --- diagnostics ---
         "debug_print": debug_print,
@@ -176,19 +197,38 @@ def main() -> None:
     )
     parser.add_argument(
         "--method",
-        help="exported method to call, e.g. "
-        "'canister_update load_model' (default: just instantiate)",
+        action="append",
+        help="exported method to call, e.g. 'canister_update load_model'. "
+        "Repeatable: all calls run against ONE instantiation, so the wasm "
+        "heap (and any persisted llama_context) survives between them "
+        "(default: just instantiate)",
     )
     parser.add_argument(
         "--arg-hex-file",
-        help="file with the hex candid arg (from `didc encode ...`)",
+        action="append",
+        help="file with the hex candid arg (from `didc encode ...`), one per "
+        "--method in order; '-' = empty arg",
     )
     args = parser.parse_args()
 
-    arg_bytes = b""
-    if args.arg_hex_file:
-        with open(args.arg_hex_file, encoding="utf-8") as hexfile:
-            arg_bytes = binascii.unhexlify(hexfile.read().strip())
+    methods = args.method or []
+    arg_files = args.arg_hex_file or []
+    if len(arg_files) not in (0, len(methods)):
+        parser.error(
+            f"{len(methods)} --method but {len(arg_files)} --arg-hex-file; "
+            "pass one per method (use '-' for an empty arg) or none at all"
+        )
+
+    def load_arg(path: str) -> bytes:
+        if path == "-":
+            return b""
+        with open(path, encoding="utf-8") as hexfile:
+            return binascii.unhexlify(hexfile.read().strip())
+
+    calls = [
+        (m, load_arg(arg_files[i]) if arg_files else b"")
+        for i, m in enumerate(methods)
+    ]
 
     cfg = wasmtime.Config()
     # wasmtime's type stubs omit this attribute, but it works at runtime and
@@ -196,8 +236,10 @@ def main() -> None:
     cfg.wasm_backtrace_details = True  # type: ignore[attr-defined]
     store = wasmtime.Store(wasmtime.Engine(cfg))
     module = wasmtime.Module.from_file(store.engine, args.wasm)
-    linker, stable = build_linker(store, module, arg_bytes)
+    msg: dict = {"arg": b"", "reply": bytearray()}
+    linker, stable = build_linker(store, module, msg)
 
+    index = 0  # 0 = instantiation; 1.. = the corresponding --method call
     try:
         # Instantiation runs the wasm start section = the C++ ctors (post-wasi2ic).
         inst = linker.instantiate(store, module)
@@ -206,16 +248,25 @@ def main() -> None:
             f"=== instantiated OK (ctors ran clean); stable pages: {pages} ===",
             file=sys.stderr,
         )
-        if args.method:
-            print(f"=== calling {args.method!r} ===", file=sys.stderr)
-            export = inst.exports(store)[args.method]
+        for index, (method, arg_bytes) in enumerate(calls, start=1):
+            print(
+                f"=== call {index}/{len(calls)}: {method!r} ===", file=sys.stderr
+            )
+            msg["arg"] = arg_bytes
+            msg["reply"] = bytearray()
+            export = inst.exports(store)[method]
             assert isinstance(export, wasmtime.Func)
             export(store)
-            print("=== method returned OK (no trap) ===")
-        else:
-            print("=== OK (no method requested) ===")
+            reply = bytes(msg["reply"])
+            print(
+                f"=== call {index} returned OK; reply {len(reply)} bytes: "
+                f"{reply.decode('utf-8', 'replace')[:500]!r} ===",
+                file=sys.stderr,
+            )
+        print(f"=== OK ({len(calls)} call(s), no trap) ===")
     except Exception as exc:  # pylint: disable=broad-except
-        print("=== TRAP ===")
+        where = "instantiation" if index == 0 else f"call {index}: {calls[index - 1][0]!r}"
+        print(f"=== TRAP during {where} ===")
         print(str(exc)[:3000])
         sys.exit(1)
 
