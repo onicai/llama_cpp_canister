@@ -10,10 +10,9 @@ x-versions:
   # icpp-pro transitively pins the whole native toolchain: wasi-sdk 25.0,
   # rust 1.93.0, wasi2ic c0f5063e, ic-wasi-polyfill b3ef0051.
   icpp: &icpp "6.0.0"
-  binaryen_py: &binaryen_py "0.0.2"
-  # Must equal binaryen/libbinaryen/version.txt inside the wheel above; the base
-  # image asserts it.
-  binaryen: &binaryen "116"
+  # The version's major component IS the bundled Binaryen version, asserted
+  # at import inside the wheel.
+  icpp_binaryen: &icpp_binaryen "116.0.0"
 
 x-base-image:
   # Naming convention: {repo}-build:icpp-{version}  (lowercase for Docker).
@@ -28,8 +27,7 @@ services:
       dockerfile: Dockerfile.base
       args:
         ICPP_VERSION: *icpp
-        BINARYEN_PY_VERSION: *binaryen_py
-        BINARYEN_VERSION: *binaryen
+        ICPP_BINARYEN_VERSION: *icpp_binaryen
     image: *base_name
 
   wasm:

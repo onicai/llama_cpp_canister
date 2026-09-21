@@ -125,10 +125,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     Notes:
 
     - This path needs a local toolchain (`icpp install-wasi-sdk`,
-      `icpp install-rust`) and currently only works on a `Mac`: `binaryen.py`
-      ships a *static* `libbinaryen.a` for Linux and then `dlopen()`s it, so
-      `icpp build-wasm` fails at the `post_wasm_function` step there. The Docker
-      image works around it by re-linking that archive into a shared object.
+      `icpp install-rust`). It works on macOS and on Linux x86_64.
     - Its output will not have the same hash as a release, because the absolute
       source paths differ (they are baked in via `GGML_ABORT`/`__FILE__`). Use
       the Docker build whenever the hash matters.

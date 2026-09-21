@@ -67,16 +67,20 @@ Verify the icp-cli version (`icp --version`); this flow was validated on 1.2.0.
 
 ## 3. Create conda environment + install deps
 
+(If `conda` is not on your PATH, source the hook with the full path to your
+conda installation instead of the `conda info --base` form below.)
+
 ```bash
-source /Users/arjaan/miniconda3/etc/profile.d/conda.sh
+source "$(conda info --base)/etc/profile.d/conda.sh"
 conda create -y -n llama_cpp_canister_release_test python=3.11
 conda activate llama_cpp_canister_release_test
 cd /tmp/llama_cpp_release_test/<TAG>
 pip install -r requirements.txt
 ```
 
-(On Python 3.11 you get `binaryen.py 0.0.2`; that is expected and works — see the
-`python-3.11-binaryen-globals` project memory.)
+(On Python 3.11 you get `icpp-binaryen 116.0.0`; that is expected and works. It
+bundles Binaryen 116 as a real shared library for both macOS and Linux x86_64,
+so this step no longer needs a Mac.)
 
 ## 4. Deploy + configure the Qwen3 canister
 
@@ -175,7 +179,7 @@ Ask the user if they want to remove the test directory and conda environment. If
 
 ```bash
 rm -rf /tmp/llama_cpp_release_test
-source /Users/arjaan/miniconda3/etc/profile.d/conda.sh
+source "$(conda info --base)/etc/profile.d/conda.sh"
 conda env remove -y -n llama_cpp_canister_release_test
 ```
 

@@ -21,5 +21,6 @@ icp-py-core==2.3.1
 # resolving the frozendict/isinstance(response, dict) breakage that previously
 # required a cbor2<6 pin. See https://github.com/eliezhao/icp-py-core/issues/14.
 # PINNED for the same reason: icpp.toml runs it as post_wasm_function
-# (scripts/optimize_wasm.py), so it rewrites the wasm after linking.
-binaryen.py==0.0.2
+# (scripts/optimize_wasm.py), so it rewrites the wasm after linking. The
+# version's major component IS the bundled Binaryen version (116).
+icpp-binaryen==116.0.0

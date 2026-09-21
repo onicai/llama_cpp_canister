@@ -42,8 +42,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Pinning these buys no reproducibility that matters, because none of them emit
 # a single byte of the wasm:
 #   curl / ca-certificates / git : fetch pinned tarballs and pinned commits
-#   build-essential              : provides g++ for the libbinaryen relink below
-#                                  and cc for cargo's build scripts.
+#   build-essential              : provides cc for cargo's build scripts
+#                                  (icpp install-rust).
 #   clang                        : icpp-pro's requires_native_compiler() decorator
 #                                  refuses to run build-wasm unless shutil.which()
 #                                  finds clang AND clang++. It is a presence check
@@ -70,42 +70,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   wasi2ic          c0f5063e734f8365f1946baf2845d8322cc9bfec
 #   ic-wasi-polyfill b3ef005140e7eebf7d0b5471ccc3a6d4cbec4ee5
 ARG ICPP_VERSION
-ARG BINARYEN_PY_VERSION
+ARG ICPP_BINARYEN_VERSION
 RUN pip install --no-cache-dir \
         icpp-pro==${ICPP_VERSION} \
-        binaryen.py==${BINARYEN_PY_VERSION}
+        icpp-binaryen==${ICPP_BINARYEN_VERSION}
 
 # ---------------------------------------------------------------------------
-# Make binaryen.py importable on Linux.
-#
-# THIS is why README.md used to say "the build of the wasm must be done on a
-# Mac". binaryen.py ships a prebuilt native library per platform and dlopen()s
-# it, but for Linux the wheel contains a STATIC archive:
-#
-#   binaryen/lib.py:  libbinaryen/x86_64-linux/libbinaryen.a
-#                     -> ffi.dlopen(...) -> OSError: invalid ELF header
-#
-# (macOS gets a real libbinaryen.dylib, which is why it only ever worked there.)
-# icpp.toml runs `post_wasm_function = "scripts.optimize_wasm.main"`, which does
-# `from binaryen import ffi, lib`, so without this every Linux `icpp build-wasm`
-# dies at the post-wasm optimize step.
-#
-# Re-link the shipped archive into a shared object. This keeps the SAME Binaryen
-# object code the wheel was built from -- the closest possible match to the
-# macOS .dylib -- instead of compiling a different Binaryen from source. The
-# bundled version is asserted below so a future binaryen.py cannot change the
-# optimizer underneath us without failing the build loudly.
-ARG BINARYEN_VERSION
-RUN set -eux; \
-    BDIR="$(python -c "import importlib.util,os;print(os.path.dirname(importlib.util.find_spec('binaryen').origin))")"; \
-    test "$(cat "$BDIR/libbinaryen/version.txt")" = "${BINARYEN_VERSION}"; \
-    cd "$BDIR/libbinaryen/x86_64-linux"; \
-    g++ -shared -o libbinaryen.so \
-        -Wl,--whole-archive libbinaryen.a -Wl,--no-whole-archive \
-        -lstdc++ -lm; \
-    rm -f libbinaryen.a; \
-    sed -i 's#libbinaryen\.a#libbinaryen.so#' "$BDIR/lib.py"; \
-    python -c "from binaryen import ffi, lib; print('binaryen import OK')"
+# Sanity-check the optimizer wheel. icpp.toml runs
+# `post_wasm_function = "scripts.optimize_wasm.main"`, which calls
+# icpp_binaryen.fix_globals_limit(); the Linux wheel ships a real
+# libbinaryen.so (manylinux_2_35, fine on this image's bookworm/glibc 2.36), so
+# no relinking is needed. The import itself is the version assertion: the wheel
+# raises ImportError unless the Binaryen it bundles matches the major component
+# of its own version -- and ICPP_BINARYEN_VERSION pins that version -- so the
+# optimizer cannot change underneath us without failing the build loudly.
+RUN python -c "from icpp_binaryen import BINARYEN_VERSION; print('icpp-binaryen OK, Binaryen', BINARYEN_VERSION)"
 
 # ---------------------------------------------------------------------------
 # wasi-sdk 25.0 -> ~/.icpp/wasi-sdk/wasi-sdk-25.0  (the clang that builds the wasm)
@@ -125,6 +104,6 @@ RUN echo "python       : $(python --version)" \
  && echo "wasi target  : $($HOME/.icpp/wasi-sdk/wasi-sdk-25.0/bin/clang -dumpmachine)" \
  && echo "rustc        : $(rustc --version)" \
  && echo "wasi2ic      : $(command -v wasi2ic)" \
- && echo "binaryen     : $(cat $(python -c "import importlib.util,os;print(os.path.dirname(importlib.util.find_spec('binaryen').origin))")/libbinaryen/version.txt)"
+ && echo "icpp-binaryen: $(python -c "from icpp_binaryen import __version__, BINARYEN_VERSION; print(__version__, '(Binaryen', str(BINARYEN_VERSION) + ')')")"
 
 CMD ["/bin/bash"]
