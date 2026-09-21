@@ -12,7 +12,7 @@ x-versions:
   icpp: &icpp "6.0.0"
   # The version's major component IS the bundled Binaryen version, asserted
   # at import inside the wheel.
-  icpp_binaryen: &icpp_binaryen "116.0.0"
+  icpp_binaryen: &icpp_binaryen "116.0.1"
 
 x-base-image:
   # Naming convention: {repo}-build:icpp-{version}  (lowercase for Docker).

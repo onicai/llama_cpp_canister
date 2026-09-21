@@ -23,4 +23,4 @@ icp-py-core==2.3.1
 # PINNED for the same reason: icpp.toml runs it as post_wasm_function
 # (scripts/optimize_wasm.py), so it rewrites the wasm after linking. The
 # version's major component IS the bundled Binaryen version (116).
-icpp-binaryen==116.0.0
+icpp-binaryen==116.0.1
