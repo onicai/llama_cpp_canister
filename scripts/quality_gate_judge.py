@@ -73,7 +73,7 @@ ROOT = Path(__file__).parent.parent
 # The funnAI repo is cloned as a sibling of this one; override with JUDGE_JSON
 # when it lives elsewhere.
 JUDGE_JSON = Path(
-    os.environ.get("JUDGE_JSON", ROOT.parent / "funnAI/PoAIW/scripts/3-judge.json")
+    os.environ.get("JUDGE_JSON") or ROOT.parent / "funnAI/PoAIW/scripts/3-judge.json"
 )
 STARTS_WITH = ["What", "Who", "Where", "When", "Why", "How", "Which", "Can", "Is", "Do"]
 TOPICS = [

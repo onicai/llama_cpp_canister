@@ -79,8 +79,9 @@ pip install -r requirements.txt
 ```
 
 (On Python 3.11 you get `icpp-binaryen 116.0.0`; that is expected and works. It
-bundles Binaryen 116 as a real shared library for both macOS and Linux x86_64,
-so this step no longer needs a Mac.)
+bundles Binaryen 116 as a real shared library for macOS and for Linux x86_64
+with glibc 2.35 or newer -- it publishes a `manylinux_2_35_x86_64` wheel and no
+sdist -- so this step no longer needs a Mac.)
 
 ## 4. Deploy + configure the Qwen3 canister
 
