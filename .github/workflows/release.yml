@@ -30,10 +30,20 @@ jobs:
         run: |
           set -euo pipefail
           rc=0
+          # --branch main and --status completed are both load-bearing. Without
+          # them this reads the newest run on ANY branch: an in-flight PR run
+          # returns an empty conclusion (reported as <no runs>) and blocks the
+          # release, and a finished PR run would satisfy the gate with CI that
+          # never ran on main.
+          #
+          # Deliberately NOT matched against github.sha: version.txt is in
+          # neither workflow's path filter, so the release's own version-bump
+          # commit triggers no CI and an exact-sha check would never pass.
           for wf in cicd-linux.yml cicd-mac.yml; do
             latest_run=$(gh run list --repo ${{ github.repository }} \
-              --workflow="$wf" --limit 1 --json conclusion --jq '.[0].conclusion')
-            echo "$wf: ${latest_run:-<no runs>}"
+              --workflow="$wf" --branch main --status completed --limit 1 \
+              --json conclusion --jq '.[0].conclusion')
+            echo "$wf (latest completed run on main): ${latest_run:-<no runs>}"
             if [ "$latest_run" != "success" ]; then
               echo "  ERROR: the latest $wf run was not successful."
               rc=1
