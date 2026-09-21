@@ -54,10 +54,6 @@ def icp_network_stop() -> None:
 # what icp.yaml installs (every canister is declared `pre-built`). Rebuilding here
 # would silently replace it with a host build, so the QA would be testing
 # different bytes than the ones that ship.
-#
-# It is also the only way to run this on Linux at all: binaryen.py ships a static
-# libbinaryen.a there and dlopen()s it, so a host `icpp build-wasm` fails in
-# icpp.toml's post_wasm_function. The Docker image works around that.
 SKIP_BUILD_WASM_ENV_VAR = "SKIP_BUILD_WASM"
 
 

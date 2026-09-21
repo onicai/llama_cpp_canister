@@ -196,8 +196,8 @@ test-llm-wasm: icp-test-identities
 #     make docker-build-wasm test-llm-wasm-prebuilt
 #
 # This is what cicd-linux does. `make test-llm-wasm` rebuilds on the host, so it
-# tests DIFFERENT BYTES than the release - and cannot run on Linux at all, where
-# binaryen.py's static libbinaryen.a breaks icpp.toml's post_wasm_function.
+# tests DIFFERENT BYTES than the release: the absolute source paths baked in via
+# GGML_ABORT/__FILE__ differ from the container's.
 .PHONY: test-llm-wasm-prebuilt
 test-llm-wasm-prebuilt: icp-test-identities
 	SKIP_BUILD_WASM=1 python -m scripts.qa_deploy_and_pytest
