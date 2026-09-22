@@ -89,8 +89,9 @@ do NOT skip to an icp deploy:
 
 2. **Faithful wasmtime harness** (`scripts/wasm_harness.py`) — BEFORE deploying. The IC
    gives no wasm backtrace for a trap; this does.
-   - Run the **pre-optimize** wasm `build/llama_cpp_before_opt.wasm` so backtraces show
-     function NAMES (binaryen's `optimize()` strips the name section from the deployed wasm).
+   - Run the **pre-optimize** wasm `build/llama_cpp_before_opt_internal.wasm` so backtraces
+     show function NAMES (binaryen's `optimize()` strips the name section from the deployed
+     wasm). icpp-pro 6.2.0+ writes that backup as part of its built-in globals-limit fix.
    - Just instantiating runs the C++ ctors → catches static-init faults. Pass `--method` (and
      a `didc encode`d arg) to reach faults deeper inside `load_model`/`run_update`.
    - Then run the optimized `build/llama_cpp.wasm` too, to confirm `optimize()` did not change

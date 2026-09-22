@@ -10,10 +10,12 @@ Key ideas (see README-0003-305ba519.md "Debugging technique"):
   * Stable memory is backed by a real Python bytearray, NOT no-op zeros, so the
     ic-wasi-polyfill runs its real BTreeMap / stable-fs init and behaves as on
     the IC.
-  * Run the PRE-optimize wasm (build/llama_cpp_before_opt.wasm) to get NAMED
+  * Run the PRE-optimize wasm (build/llama_cpp_before_opt_internal.wasm) to get NAMED
     functions in the backtrace -- binaryen's optimize() strips the wasm name
     section, so the deployed build/llama_cpp.wasm shows only <wasm function N>.
-    wasmtime does not care that before_opt still exports globals the IC rejects.
+    wasmtime does not care that it still exports globals the IC rejects.
+    (icpp-pro 6.2.0+ writes this backup itself, as part of its built-in
+    globals-limit fix -- hence the _internal suffix.)
   * Instantiating runs the start section (the C++ ctors) -- that catches
     static-init faults. To catch faults deeper in a canister method, pass
     --method and (for admin-gated methods) rely on is_controller being forced
@@ -30,11 +32,11 @@ Encode a candid arg with:  didc encode '(record { ... })'   (hex output)
 Examples
 --------
 # Just instantiate (runs ctors); named backtrace on any static-init trap:
-python -m scripts.wasm_harness build/llama_cpp_before_opt.wasm
+python -m scripts.wasm_harness build/llama_cpp_before_opt_internal.wasm
 
 # Call load_model (needs the small candid arg; admin auth is forced to pass):
 didc encode '(record { args = vec {"--model"; "models/tiny.gguf";} })' > /tmp/load.hex
-python -m scripts.wasm_harness build/llama_cpp_before_opt.wasm \
+python -m scripts.wasm_harness build/llama_cpp_before_opt_internal.wasm \
     --method 'canister_update load_model' --arg-hex-file /tmp/load.hex
 
 # MULTI-CALL sessions: --method/--arg-hex-file are repeatable and are zipped
@@ -45,7 +47,7 @@ python -m scripts.wasm_harness build/llama_cpp_before_opt.wasm \
 # README-0003-305ba519-IC0502.md). Pass '-' as an --arg-hex-file for an empty
 # arg. Each call's reply bytes (captured from msg_reply_data_append) are
 # printed; a trap reports the 1-based call index plus the named backtrace.
-python -m scripts.wasm_harness build/llama_cpp_before_opt.wasm \
+python -m scripts.wasm_harness build/llama_cpp_before_opt_internal.wasm \
     --method 'canister_update load_model'  --arg-hex-file /tmp/load.hex \
     --method 'canister_update run_update'  --arg-hex-file /tmp/run.hex \
     --method 'canister_update run_update'  --arg-hex-file /tmp/run.hex
@@ -193,7 +195,7 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
-        "wasm", help="path to the wasm (use *_before_opt.wasm for NAMES)"
+        "wasm", help="path to the wasm (use *_before_opt_internal.wasm for NAMES)"
     )
     parser.add_argument(
         "--method",
