@@ -223,7 +223,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
     ```bash
     python -m scripts.upload \
-      -e local \
+      --network local \
       --canister llama_cpp \
       --canister-filename models/model.gguf \
       --filetype gguf \
@@ -529,7 +529,7 @@ Afterwards, you can download the `main.log` file from the canister with:
 
 ```bash
 python -m scripts.download \
-  -e local \
+  --network local \
   --canister llama_cpp \
   --local-filename main.log main.log
 ```
@@ -673,7 +673,7 @@ icp canister call llama_cpp -e local download_prompt_cache_chunk '(record {
 # Using a small chunksize goes faster !
 #
 python -m scripts.download \
-    -e local \
+    --network local \
     --canister llama_cpp \
     --filetype promptcache \
     --chunksize 2000000 \
@@ -739,7 +739,7 @@ icp canister call llama_cpp -e local uploaded_prompt_cache_details '(record {
 # --
 # You can wrap the upload call in a loop, as in scripts/upload.py
 python -m scripts.upload \
-    -e local \
+    --network local \
     --canister llama_cpp \
     --canister-filename prompt.cache \
     --filetype promptcache \

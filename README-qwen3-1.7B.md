@@ -60,7 +60,7 @@ Upload it to the canister as `models/model.gguf`:
 
 ```bash
 python -m scripts.upload \
-  -e local \
+  --network local \
   --canister llama_cpp \
   --canister-filename models/model.gguf \
   --filetype gguf \

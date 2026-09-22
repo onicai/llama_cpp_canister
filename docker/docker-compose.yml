@@ -9,7 +9,7 @@
 x-versions:
   # icpp-pro transitively pins the whole native toolchain: wasi-sdk 25.0,
   # rust 1.93.0, wasi2ic c0f5063e, ic-wasi-polyfill b3ef0051.
-  icpp: &icpp "6.0.0"
+  icpp: &icpp "6.2.0"
   # The version's major component IS the bundled Binaryen version, asserted
   # at import inside the wheel.
   icpp_binaryen: &icpp_binaryen "116.0.1"
@@ -18,7 +18,7 @@ x-base-image:
   # Naming convention: {repo}-build:icpp-{version}  (lowercase for Docker).
   # An anchor cannot be interpolated into a string in compose, so the version
   # appears literally here and must be bumped together with *icpp.
-  name: &base_name "llama-cpp-canister-build:icpp-6.0.0"
+  name: &base_name "llama-cpp-canister-build:icpp-6.2.0"
 
 services:
   base:

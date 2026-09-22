@@ -76,9 +76,9 @@ RUN pip install --no-cache-dir \
         icpp-binaryen==${ICPP_BINARYEN_VERSION}
 
 # ---------------------------------------------------------------------------
-# Sanity-check the optimizer wheel. icpp.toml runs
-# `post_wasm_function = "scripts.optimize_wasm.main"`, which calls
-# icpp_binaryen.fix_globals_limit(); the Linux wheel ships a real
+# Sanity-check the optimizer wheel. Since icpp-pro 6.2.0, `icpp build-wasm`
+# calls icpp_binaryen.fix_globals_limit() itself as a built-in post-link step
+# (this repo no longer has its own hook); the Linux wheel ships a real
 # libbinaryen.so (manylinux_2_35, fine on this image's bookworm/glibc 2.36), so
 # no relinking is needed. The import itself is the version assertion: the wheel
 # raises ImportError unless the Binaryen it bundles matches the major component

@@ -185,8 +185,6 @@ c_compile_flags = [
     "-D_WASI_EMULATED_PROCESS_CLOCKS",
 ]
 
-post_wasm_function = "scripts.optimize_wasm.main"
-
 [build-native]
 cpp_paths = [
     # Use this to build native debug executable for testing canister code
