@@ -16,6 +16,18 @@ on:
       - ".github/trigger.txt"
       - ".github/workflows/cicd-mac.yml"
 
+# Supersede in-flight runs for the same branch: a new push to a PR cancels the
+# previous run instead of letting it hold a runner for work that is already
+# obsolete. macos-15-intel in particular is scarce and shared across this
+# account's repos.
+#
+# The guard matters: runs on main are NEVER cancelled, so merge-commit CI and
+# the evidence behind a release stay intact. release.yml deliberately has no
+# concurrency block at all.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 # The native MockIC tests, and ONLY those. They carry ~59 exact-hex token
 # assertions that depend on the host libm's last-ULP behaviour, so they are
 # pinned to x86_64 macOS (macos-15-intel) to match the baselines they were
