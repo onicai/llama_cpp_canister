@@ -169,3 +169,12 @@ README-max-tokens-todo.md
 # Scratch / task-todo notes for AI agents & humans. Deliberately local-only:
 # they capture in-flight plans and findings, not repo state.
 TMP-*
+
+# Cross-agent handoff documents. Local-only: one Claude Code session writes a
+# task here for the session that owns another repo, which reports back in the
+# same file. In-flight coordination, never repo state.
+_handoff/
+
+# The IC identity to deploy this repo to mainnet as. Per developer, per
+# machine - which is exactly why it is not committed.
+.icp-identity
