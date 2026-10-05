@@ -19,7 +19,9 @@ x-base-image:
   # Naming convention: {repo}-build:icpp-{version}  (lowercase for Docker).
   # An anchor cannot be interpolated into a string in compose, so the version
   # appears literally here and must be bumped together with *icpp.
-  name: &base_name "llama-cpp-canister-build:icpp-6.0.0"
+  # "-locked": this branch pins the Python packages and Rust crate versions too
+  # (see Dockerfile.base), so it must not reuse an unpinned icpp-6.0.0 image.
+  name: &base_name "llama-cpp-canister-build:icpp-6.0.0-locked"
 
 services:
   base:

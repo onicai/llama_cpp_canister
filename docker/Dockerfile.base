@@ -69,11 +69,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   rust 1.93.0                                    icpp/version_rust.py
 #   wasi2ic          c0f5063e734f8365f1946baf2845d8322cc9bfec
 #   ic-wasi-polyfill b3ef005140e7eebf7d0b5471ccc3a6d4cbec4ee5
+#
+# icpp-pro 6.0.0 requires icpp-candid>=6.0.0, a range, and icpp-candid's C++
+# sources are compiled into the wasm. A fresh resolve now picks icpp-candid 6.2.0
+# and changes the hash, so install the exact set the release CI installed.
 ARG ICPP_VERSION
 ARG BINARYEN_PY_VERSION
-RUN pip install --no-cache-dir \
-        icpp-pro==${ICPP_VERSION} \
-        binaryen.py==${BINARYEN_PY_VERSION}
+COPY requirements-base.txt /tmp/requirements-base.txt
+RUN pip install --no-cache-dir --no-deps -r /tmp/requirements-base.txt \
+ && pip show icpp-pro | grep -qx "Version: ${ICPP_VERSION}" \
+ && pip show binaryen.py | grep -qx "Version: ${BINARYEN_PY_VERSION}"
 
 # ---------------------------------------------------------------------------
 # Make binaryen.py importable on Linux.
@@ -115,6 +120,29 @@ RUN icpp install-wasi-sdk
 RUN icpp install-rust
 
 ENV PATH="/root/.icpp/rust/1.93.0/bin:${PATH}"
+
+# Rebuild ic-wasi-polyfill (linked into the wasm) and wasi2ic from locked crate
+# versions. `icpp install-rust` pins both by git commit but builds them without a
+# lockfile (`cargo build`, and `cargo install` without --locked), so every
+# crates.io dependency resolves to the newest version at image-build time.
+#
+# docker/locks/ holds the resolution as of 2026-09-18T02:55:10Z, the moment the
+# v0.17.0 release CI ran `icpp install-rust`. scripts/time_lock.py re-derives them:
+#   cargo generate-lockfile && python scripts/time_lock.py 2026-09-18T02:55:10Z .
+COPY locks/ /tmp/locks/
+RUN set -eux; \
+    export RUSTUP_HOME=/root/.icpp/rust/1.93.0 CARGO_HOME=/root/.icpp/rust/1.93.0 \
+           CARGO_TARGET_DIR=/root/.icpp/rust/1.93.0/target; \
+    cd /root/.icpp/rust/1.93.0/ic-wasi-polyfill; \
+    cp /tmp/locks/ic-wasi-polyfill.Cargo.lock Cargo.lock; \
+    rm -rf "$CARGO_TARGET_DIR/wasm32-wasip1"; \
+    cargo build --locked --release --target wasm32-wasip1; \
+    cd /root/.icpp/rust/1.93.0/wasi2ic; \
+    cp /tmp/locks/wasi2ic.Cargo.lock Cargo.lock; \
+    rm -rf "$CARGO_TARGET_DIR/release"; \
+    cargo install --locked --force --path .; \
+    git checkout -q Cargo.lock; \
+    sha256sum "$CARGO_TARGET_DIR/wasm32-wasip1/release/libic_wasi_polyfill.a" /root/.icpp/rust/1.93.0/bin/wasi2ic
 
 # Print versions for verification. `clang --version` and `clang -dumpmachine`
 # matter more than they look: scripts/build-info-cpp.sh embeds both strings into
