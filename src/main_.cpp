@@ -2,6 +2,7 @@
 // Internet Computer SmartContract version of: tools/completion/completion.cpp
 // See: https://github.com/onicai/llama_cpp_onicai_fork/tree/master/tools/completion/README.md
 #include "main_.h"
+#include "decision.h"
 #include "ic_api.h"
 #include "promptcache.h"
 #include "ready.h"
@@ -364,7 +365,6 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   // CallTeardown comment above), so the per-call threadpool block is gone.
   // set_process_priority is a no-op on WASI (fork common.cpp ICPP-PATCH).
   // ICPP-PATCH-END
-
 
   const int n_ctx_train = llama_model_n_ctx_train(model);
   const int n_ctx = llama_n_ctx(ctx);
@@ -1501,6 +1501,7 @@ void icpp_free_model() {
   // resetting it frees them together. (Upstream no longer allows releasing the
   // model out of it, so we must not call llama_model_free ourselves.)
   g_llama_init.reset();
+  decision_reset(); // ICPP-PATCH: its setup points into the freed model
 
   g_model_persistent = nullptr;
   g_ctx_persistent = nullptr;

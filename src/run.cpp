@@ -2,6 +2,7 @@
 #include "auth.h"
 #include "common.h"
 #include "db_chats.h"
+#include "decision.h"
 #include "http.h"
 #include "main_.h"
 #include "max_tokens.h"
@@ -32,6 +33,15 @@ static void print_usage(int argc, char **argv) {
   // do nothing function
 }
 
+// A decision model has no text generation: it is served by run_decision.
+static bool reject_if_decision_model(IC_API &ic_api) {
+  if (!decision_model_loaded()) return false;
+  send_output_record_result_error_to_wire(
+      ic_api, Http::StatusCode::BadRequest,
+      "The loaded model is a decision model: use run_decision.");
+  return true;
+}
+
 void new_chat() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   std::string error_msg;
@@ -39,6 +49,7 @@ void new_chat() {
     send_access_denied_output_record(ic_api);
     return;
   }
+  if (reject_if_decision_model(ic_api)) return;
 
   CandidTypePrincipal caller = ic_api.get_caller();
   std::string principal_id = caller.get_text();
@@ -142,6 +153,7 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
     send_access_denied_output_record(ic_api);
     return;
   }
+  if (reject_if_decision_model(ic_api)) return;
 
   CandidTypePrincipal caller = ic_api.get_caller();
   std::string principal_id = caller.get_text();

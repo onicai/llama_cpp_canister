@@ -1,15 +1,13 @@
 # Decision models (System One) on llama_cpp_canister
 
-> **Status: research and planning. Not yet available in a release.**
-> Running decision models needs the llama.cpp upgrade (upgrade 0004) and a new
-> `run_decision` endpoint. This document describes the technology, what
-> upstream llama.cpp ships, which models fit in a canister, and the design.
-> The "Running on the IC" section gets filled in with measured results as the
-> work lands.
+> **Status: implemented on branch `feature/decision-models`** (llama.cpp b11476,
+> `run_decision` endpoint), verified on a local replica with Julia-1 and Laya; not yet in
+> a release. This document describes the technology, what upstream llama.cpp ships, the
+> canister design, and the measured results.
 >
-> Step-by-step model guides (written once verified on-chain):
-> - [README-decision-model-julia-1.md](README-decision-model-julia-1.md): Julia-1, 144M, 50+ languages
-> - [README-decision-model-Laya.md](README-decision-model-Laya.md): Laya, 421M, English
+> Step-by-step model guides:
+> - [README-decision-model-julia-1.md](README-decision-model-julia-1.md): Julia-1, 144M, 50+ languages, ~210 tokens per question
+> - [README-decision-model-Laya.md](README-decision-model-Laya.md): Laya, 421M, English, 33 tokens per question
 
 ## What a decision model is
 
@@ -168,8 +166,8 @@ be chosen per model.
 
 | Model   | Fit          | Why                                                                                  |
 |---------|--------------|--------------------------------------------------------------------------------------|
-| Julia-1 | yes, primary | 168 MB; small encoder, cheap single forward pass                                     |
-| Laya    | yes          | 449 MB; larger encoder, so a lower max state size per call                           |
+| Julia-1 | yes, primary | 168 MB; ~170-180 M instructions per token: ~210 tokens per question per call         |
+| Laya    | yes, compact | 449 MB; ~1.2 B instructions per token: 33 tokens per question per call               |
 | Kev-4B  | no           | 3.0 GB gguf: over the ~2 GiB a single message can read from stable memory (`IC0524`) |
 | lev     | no           | same as Kev-4B                                                                       |
 | OpenJev | no           | 19 GB                                                                                |
@@ -190,8 +188,12 @@ next call continues from there.
 An encoder cannot do that. Attention is bidirectional and there is no KV cache:
 the whole sequence of a question goes through `llama_decode` in one batch, so a
 question must fit within **one update call's instruction limit** (40 B
-instructions). This sets the maximum state size per question, and it will be
-measured for Julia-1 and Laya before the endpoint is finalized.
+instructions). This sets the maximum size of a question (instructions + options +
+state): measured ~210 tokens for Julia-1 and 33 tokens for Laya.
+
+A request with several questions is still fine: `run_decision` answers as many as fit in
+one call and returns the rest as `pending` (see below). Splitting ONE long question across
+calls is a follow-up project (`_handoff/2026-10-07-decision-models-multi-call-ingestion.md`).
 
 The batch and micro-batch size (`--batch-size`, `--ubatch-size`) must be at
 least the length of the longest question's sequence.
@@ -207,7 +209,12 @@ brings the module from 1046 defined globals to 1. Since icpp-pro 6.2.0 that
 step is built into `icpp build-wasm`.
 
 So the canister compiles the Jinja engine and renders the `systemone`
-template exactly like `llama-server` does.
+template exactly like `llama-server` does (verified: the same token counts).
+
+One canister-specific detail: the template is parsed with `jinja::lexer` +
+`jinja::parse_from_tokens`, NOT with `common_chat_template`. That constructor runs a
+capability analysis that executes the template with dummy chat inputs and relies on
+catching the resulting exception, and in a canister every C++ throw traps.
 
 One related rule stays: `params.use_jinja` remains `false` on the text
 generation path. Upstream computes
@@ -217,50 +224,70 @@ calls the Jinja runtime directly and does not use that flag.
 
 ## Design for the canister
 
-- **Load** with the existing `load_model`. The GGUF metadata switches the
-  context to embedding mode; no extra flags are needed.
-- **Ask** with a new update endpoint `run_decision`, with a typed Candid
-  interface. Access rules are the same as `run_update`.
+- **Load** with the existing `load_model`. The GGUF metadata switches the context to
+  embedding mode; no extra flags are needed. On a decision model, `run_update`,
+  `run_query` and `new_chat` return `Err` ("use run_decision").
+- **Ask** with the update endpoint `run_decision`. Access rules are the same as
+  `run_update`.
+- **Interface: flat typed Candid.** icpp-pro decodes a `vec record` as a record of flat
+  vectors (no nested `vec record`, no `vec opt`, only unit variants inside a `vec`), so
+  questions, options, answers and probabilities are flat tables linked by question id:
 
 ```candid
-type DecisionState = variant { Text : text; Json : text };
-type DecisionQuestion = record {
-  id : text;
-  instructions : text;
-  kind : variant {
-    choice : vec record { key : text; description : opt text };
-    score  : vec text;
-    noul   : record { yes : opt text; no : opt text };
-  };
+type DecisionKind = variant { choice; score; noul };
+type DecisionInputRecord = record {
+  state : variant { Text : text; Json : text };
+  questions : vec record { id : text; kind : DecisionKind; instructions : text };
+  options : vec record { question_id : text; key : text; description : text };
 };
-type DecisionProb = record { key : text; probability : float64 };
-type DecisionAnswer = record {
-  id : text;
-  answer : variant {
-    choice : record { choice : text; confidence : float64; probabilities : vec DecisionProb };
-    score  : record { score : float64; confidence : float64; probabilities : vec DecisionProb };
-    noul   : record { yes : float64 };
-  };
+type DecisionOutputRecord = record {
+  answers : vec record { id : text; kind : DecisionKind; choice : text;
+                         score : float64; yes : float64; confidence : float64 };
+  probabilities : vec record { question_id : text; key : text; probability : float64 };
+  input_tokens : nat64;
+  pending : vec text;
 };
-type DecisionResult = variant {
-  Ok  : record { answers : vec DecisionAnswer; input_tokens : nat64 };
-  Err : ApiError;
-};
-run_decision : (record { state : DecisionState; questions : vec DecisionQuestion }) -> (DecisionResult);
+type DecisionResult = variant { Err : ApiError; Ok : DecisionOutputRecord };
+run_decision : (DecisionInputRecord) -> (DecisionResult);
 ```
 
-- **Implementation:** `src/decision.cpp` is a port of upstream
-  `server-decision.cpp`, keeping its structure and function names so future
-  llama.cpp upgrades can diff against it. Scope is the `laya` type: no images,
-  no shared-prefix batching.
-- **Calling the wrong endpoint** gives a clear error: `run_update` on a
-  decision model, or `run_decision` on a chat model.
+  - `choice`: one option row per option (key + optional description).
+  - `score`: one row per level, in order (2 to 10 levels); `score` is the expected level
+    index.
+  - `noul`: optional rows with key `true` / `false` (descriptions); the answer is `yes`,
+    the probability of yes.
+- **Resume across calls**, like `run_update` ingesting a long prompt: each call answers
+  the pending questions that fit in `max_tokens_update` tokens (`set_max_tokens`), in
+  request order, and returns the answers so far plus the `pending` ids. Re-send the same
+  request until `pending` is empty. The answers so far are kept in a per-principal file
+  in `.canister_cache/<principal>/sessions/`, keyed by the request AND the loaded model,
+  so the cache cleanup timer covers them and another model never reuses them.
+- **Implementation:** `src/decision.cpp` ports the laya path of upstream
+  `tools/server/server-decision.cpp` (b11476), keeping its function names so future
+  llama.cpp upgrades can diff against it. Every input check returns an error instead of
+  throwing (a throw traps the canister). Left out: images, the other decision types, and
+  shared-prefix batching.
+- **Logging:** one line per answered question in the canister log, e.g.
+  `llama_cpp: run_decision - intent (choice, 87 tokens) -> refund (p=0.98, confidence=0.98)`.
 
 ## Running on the IC
 
-_To be filled in with measured results: instructions per question, max state
-size per call, cycles per call, heap after load, and the probabilities compared
-with native `llama-server` on the same llama.cpp commit._
+Measured on a local replica (same 40 B instruction limit per update call as mainnet):
+
+| Measure                 | Julia-1                                                                   | Laya                      |
+|-------------------------|---------------------------------------------------------------------------|---------------------------|
+| gguf (Q8_0)             | 168 MB                                                                    | 449 MB                    |
+| heap after `load_model` | 316 MB                                                                    | 686 MB                    |
+| instructions per token  | ~170-180 M                                                                | ~1.2 B                    |
+| max tokens per question | ~210                                                                      | 33                        |
+| `max_tokens_update`     | 200                                                                       | 32                        |
+| example question        | 87 tokens, ~14.9 B cycles                                                 | 29 tokens, ~34.5 B cycles |
+| vs llama-server (CPU)   | clear decisions agree; close calls can differ (Q8_0 rounding sensitivity) | within 0.011              |
+
+Port correctness was verified natively: the canister code with Laya matches llama-server
+on the same commit to 0.006 on every probability of the PR #29818 request, with the same
+414 tokens. Julia-1's larger differences come from the model's sensitivity to kernel
+rounding: llama-server itself answers some of its questions differently on CPU and Metal.
 
 ## Sources
 

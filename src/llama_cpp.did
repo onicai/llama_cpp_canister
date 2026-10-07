@@ -321,6 +321,33 @@ type MemoryStatusRecordResult = variant {
 };
 
 // -----------------------------------------------------
+// Decision models (System One): see README-decision-models.md
+// Flat tables (icpp-pro decodes a vec record as a record of vecs), linked by
+// question id. Rows keep the request order.
+type DecisionKind = variant { choice; score; noul };
+type DecisionInputRecord = record {
+  state : variant { Text : text; Json : text };  // Json is parsed, so the template sees structure
+  questions : vec record { id : text; kind : DecisionKind; instructions : text };
+  // choice: one row per option; score: one row per level, in order (2..10);
+  // noul: optional rows with key "true" / "false". description "" = none
+  options : vec record { question_id : text; key : text; description : text };
+};
+type DecisionOutputRecord = record {
+  // every question answered so far: this call and earlier calls of the same request
+  // choice: choice + confidence; score: score (expected level index) + confidence;
+  // noul: yes (probability of yes). Unused fields are "" / 0.0
+  answers : vec record { id : text; kind : DecisionKind; choice : text;
+                         score : float64; yes : float64; confidence : float64 };
+  probabilities : vec record { question_id : text; key : text; probability : float64 };
+  input_tokens : nat64;   // tokens evaluated in THIS call
+  pending : vec text;     // question ids not answered yet: re-send the same request
+};
+type DecisionResult = variant {
+  Err : ApiError;
+  Ok : DecisionOutputRecord
+};
+
+// -----------------------------------------------------
 // The endpoint services of our canister
 service : {
   // canister
@@ -341,6 +368,7 @@ service : {
   new_chat : (InputRecord) -> (OutputRecordResult);
   run_query : (InputRecord) -> (OutputRecordResult) query;
   run_update : (InputRecord) -> (OutputRecordResult);
+  run_decision : (DecisionInputRecord) -> (DecisionResult);
 
   // Prompt cache endpoints
   remove_prompt_cache : (InputRecord) -> (OutputRecordResult);
