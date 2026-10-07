@@ -14,6 +14,9 @@
 # here and may be dirty or on a different commit. This exclusion is what makes
 # the build reproducible by someone who only has this repo.
 src/llama_cpp_onicai_fork/
+# Reference copies of the previous fork, kept during a llama.cpp upgrade
+# (README-contributors-guide.md).
+src/llama_cpp_onicai_fork_*/
 
 # Model weights: uploaded to the canister at runtime, never compiled in.
 models/

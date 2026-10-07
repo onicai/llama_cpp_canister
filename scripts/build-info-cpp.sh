@@ -20,7 +20,8 @@ build_commit="unknown"
 build_compiler="unknown"
 build_target="unknown"
 
-# BUILD_NUMBER / BUILD_COMMIT may be supplied by the caller. The reproducible
+# BUILD_NUMBER / BUILD_COMMIT may be supplied by the caller (BUILD_COMMIT is
+# read by scripts/fork-commit.sh). The reproducible
 # Docker build does exactly that (scripts/build_wasm_docker.sh), because these
 # two values are compiled INTO the wasm and cannot be derived from a shallow
 # clone: `rev-list --count` reports 1 there, and `rev-parse --short` picks its
@@ -34,13 +35,7 @@ else
     build_number="$BUILD_NUMBER"
 fi
 
-if [ -z "${BUILD_COMMIT:-}" ]; then
-    if out=$(git -C "$FORK_DIR" rev-parse --short HEAD 2>/dev/null); then
-        build_commit=$(printf '%s' "$out" | tr -d '\n')
-    fi
-else
-    build_commit="$BUILD_COMMIT"
-fi
+build_commit=$(sh "$(dirname "$0")/fork-commit.sh")
 
 if out=$($CC --version 2>/dev/null | head -1); then
     build_compiler=$out
@@ -76,7 +71,8 @@ const char * llama_build_info(void) {
     return "b${build_number} (${build_commit}) with ${build_compiler} for ${build_target}";
 }
 
-void llama_print_build_info(void) {
-    fprintf(stderr, "%s\n", llama_build_info());
+void llama_print_build_info(const char * llama_version, FILE * stream) {
+    fprintf(stream, "version: %s (build %d, commit %s)\n", llama_version, llama_build_number(), llama_commit());
+    fprintf(stream, "built with %s for %s\n", llama_compiler(), llama_build_target());
 }
 EOF

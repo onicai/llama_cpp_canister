@@ -70,6 +70,7 @@ all-tests: all-static test-llm-wasm test-llm-native
 
 .PHONY: build-info-cpp-wasm
 build-info-cpp-wasm:
+	sh scripts/version-headers.sh
 	@echo "--"
 	@echo "Creating src/llama_cpp_onicai_fork/common/build-info.cpp for build-wasm"
 	sh scripts/build-info-cpp.sh $(ICPP_COMPILER_ROOT)/bin/clang > src/llama_cpp_onicai_fork/common/build-info.cpp
@@ -79,6 +80,7 @@ build-info-cpp-wasm:
 
 .PHONY: build-info-cpp-native
 build-info-cpp-native:
+	sh scripts/version-headers.sh
 	@echo "--"
 	@echo "Creating src/llama_cpp_onicai_fork/common/build-info.cpp for build-native"
 	sh scripts/build-info-cpp.sh clang > src/llama_cpp_onicai_fork/common/build-info.cpp

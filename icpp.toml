@@ -1,4 +1,4 @@
-# llama_cpp_canister build manifest — llama.cpp b10076 (305ba519)
+# llama_cpp_canister build manifest — llama.cpp b11476 (988190680)
 #
 # Strategy (upgrade 0003): wasi-shims/ supply no-op <thread>/<mutex>/<future>/
 # <condition_variable>, and -fexceptions + src/wasi-exception-stubs.cpp let
@@ -33,10 +33,13 @@ cpp_paths = [
     "src/llama_cpp_onicai_fork/src/llama-io.cpp",
     "src/llama_cpp_onicai_fork/src/llama-kv-cache.cpp",
     "src/llama_cpp_onicai_fork/src/llama-kv-cache-dsa.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-kv-cache-dsa-iswa.cpp",
     "src/llama_cpp_onicai_fork/src/llama-kv-cache-dsv4.cpp",
     "src/llama_cpp_onicai_fork/src/llama-kv-cache-iswa.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-kv-cache-msa.cpp",
     "src/llama_cpp_onicai_fork/src/llama-memory.cpp",
     "src/llama_cpp_onicai_fork/src/llama-memory-hybrid.cpp",
+    "src/llama_cpp_onicai_fork/src/llama-memory-hybrid-idx.cpp",
     "src/llama_cpp_onicai_fork/src/llama-memory-hybrid-iswa.cpp",
     "src/llama_cpp_onicai_fork/src/llama-memory-recurrent.cpp",
     "src/llama_cpp_onicai_fork/src/llama-mmap.cpp",
@@ -52,11 +55,27 @@ cpp_paths = [
     # error, not at link time. Prune only if the WASM globals budget forces it.
     "src/llama_cpp_onicai_fork/src/models/*.cpp",
 
-    # --- common (minimal set for inference) ---
-    # Excluded for the ICP globals limit (<1000): chat*.cpp, jinja/*,
-    # speculative.cpp, ngram-*.cpp, debug.cpp, llguidance.cpp,
-    # json-schema-to-grammar.cpp (no grammar/JSON-schema surface in our .did),
-    # imatrix-loader.cpp.
+    # --- common ---
+    # chat*.cpp, jinja/* and json*.cpp are compiled in: decision models render
+    # their prompt with the "systemone" Jinja template stored in the GGUF. They
+    # used to be excluded "for the ICP globals limit (<1000)", but the post-link
+    # globals fix (built into icpp-pro since 6.2.0) brings the module to 1
+    # defined global regardless (README-0003-305ba519.md, C3). The generation
+    # path still runs with params.use_jinja = false (src/main_.cpp).
+    # speculative.cpp + ngram-*.cpp are compiled in too: the canister runs no
+    # draft model, but common_init_from_params calls
+    # common_base_params_to_speculative() while fitting params (-fit is on).
+    # Still excluded (unused): debug.cpp, llguidance.cpp, imatrix-loader.cpp,
+    # subproc.cpp (spawns processes).
+    "src/llama_cpp_onicai_fork/common/chat*.cpp",
+    "src/llama_cpp_onicai_fork/common/parsers/*.cpp",
+    "src/llama_cpp_onicai_fork/common/jinja/*.cpp",
+    "src/llama_cpp_onicai_fork/common/json.cpp",
+    "src/llama_cpp_onicai_fork/common/json-schema.cpp",
+    "src/llama_cpp_onicai_fork/common/json-schema-to-grammar.cpp",
+    "src/llama_cpp_onicai_fork/common/trie.cpp",
+    "src/llama_cpp_onicai_fork/common/speculative.cpp",
+    "src/llama_cpp_onicai_fork/common/ngram-*.cpp",
     # NOTE: peg-parser.cpp is REQUIRED, not excluded -- arg.cpp pulls in
     # preset.h, and preset.cpp's parse_ini_from_file needs common_peg_parser.
     # The wasm build hides this (LTO dead-strips the path); the native build
@@ -96,6 +115,8 @@ cpp_paths = [
     "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/vec.cpp",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/traits.cpp",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/repack.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/tiled/tiled.cpp",
+    "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/tiled/tiled-kernel.cpp",
 
     # --- canister wrapper + WASI stubs (glob also picks up src/wasi-*.cpp) ---
     "src/*.cpp",
