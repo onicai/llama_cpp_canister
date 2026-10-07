@@ -1,9 +1,9 @@
 # Decision models (System One) on llama_cpp_canister
 
-> **Status: implemented on branch `feature/decision-models`** (llama.cpp b11476,
-> `run_decision` endpoint), verified on a local replica with Julia-1 and Laya; not yet in
-> a release. This document describes the technology, what upstream llama.cpp ships, the
-> canister design, and the measured results.
+> **Status: available since llama_cpp_canister v0.20.0** (llama.cpp b11476, `run_decision`
+> endpoint), verified on a local replica with Julia-1 and Laya. This document describes
+> the technology, what upstream llama.cpp ships, the canister design, and the measured
+> results.
 >
 > Step-by-step model guides:
 > - [README-decision-model-julia-1.md](README-decision-model-julia-1.md): Julia-1, 144M, 50+ languages, ~210 tokens per question
