@@ -2,7 +2,6 @@
 
 #include "model.h"
 #include "auth.h"
-#include "decision.h"
 #include "http.h"
 #include "main_.h"
 #include "max_tokens.h"
@@ -82,9 +81,6 @@ void load_model() {
         ic_api, Http::StatusCode::InternalServerError, icpp_error_msg);
     return;
   }
-
-  // A decision model is served by run_decision; set it up from the GGUF metadata
-  decision_init(llama_get_model(icpp_persisted_ctx()));
 
   // If we get this far, everything is Ok and ready to be used
   ready_for_inference = true;

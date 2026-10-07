@@ -178,6 +178,8 @@ void test_decision(MockIC &mockIC) {
       "4449444c026c01dd9ad28304016d71010009072d2d6d6f64656c486d6f64656c732f67676d6c2d6f72672f74696e796c6179612d666f722d74657374696e672d676775662f74696e796c6179612d666f722d74657374696e672d51385f302e676775660b2d2d6e6f2d7761726d7570022d630432303438022d620432303438032d75620432303438";
   const std::string LOAD_JULIA_1 =
       "4449444c026c01dd9ad28304016d71010009072d2d6d6f64656c2e6d6f64656c732f67676d6c2d6f72672f4a756c69612d312d474755462f4a756c69612d312d51385f302e676775660b2d2d6e6f2d7761726d7570022d630432303438022d620432303438032d75620432303438";
+  const std::string RUN_UPDATE_LOAD_TINYLAYA =
+      "4449444c026c01dd9ad28304016d7101000f072d2d6d6f64656c486d6f64656c732f67676d6c2d6f72672f74696e796c6179612d666f722d74657374696e672d676775662f74696e796c6179612d666f722d74657374696e672d51385f302e676775660b2d2d6e6f2d7761726d7570022d630432303438022d620432303438032d756204323034380e2d2d70726f6d70742d63616368650e6465636973696f6e2e6361636865022d70026869022d6e0131";
   const std::string LOAD_STORIES =
       "4449444c026c01dd9ad28304016d71010003072d2d6d6f64656c1d6d6f64656c732f73746f726965733236304b746f6b3531322e676775660b2d2d6e6f2d7761726d7570";
   const std::string MAX_TOKENS_0 =
@@ -231,6 +233,28 @@ void test_decision(MockIC &mockIC) {
       "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7a"
       "db92a2c90d71cdd9e6b30e7e6b01c5fed20100010100000037546865206c6f61646564206d6f64656c2069732061206465636973696f6e206d6f64656c3a207573652072756e5f6465636973696f6e2e90010000",
       silent_on_trap, controller);
+
+  // --- a decision model loaded by run_update itself (--model in its args):
+  //     no generation, and run_decision serves it afterwards
+  mockIC.run_test("test_decision: load stories260K again", load_model,
+                  LOAD_STORIES, "", silent_on_trap, controller);
+  {
+    std::string out;
+    mockIC.run_test("test_decision: run_update --model tinylaya", run_update,
+                    RUN_UPDATE_LOAD_TINYLAYA, "", silent_on_trap, controller,
+                    &out);
+    const std::string expected_hex_text =
+        "72756e5f6465636973696f6e"; // "run_decision" in the error message
+    check(out.find(expected_hex_text) != std::string::npos,
+          "run_update --model <decision model>: expected the 'use "
+          "run_decision' error");
+    const DecisionReply r =
+        call(mockIC, "after run_update --model", INTENT_ONLY, controller);
+    check(r.label == "Ok" && r.pending.empty(),
+          "after run_update --model: run_decision did not serve the decision "
+          "model: " +
+              r.err_text);
+  }
 
   // --- the whole request in one call (no budget)
   mockIC.run_test("test_decision: no budget", set_max_tokens, MAX_TOKENS_0, "",

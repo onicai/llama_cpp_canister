@@ -316,6 +316,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
     model = g_llama_init->model();
     ctx = g_llama_init->context();
+
+    // ICPP-PATCH: set up (or clear) the decision model state for EVERY load
+    // path: load_model, and run_update/run_query with --model.
+    if (model) decision_init(model);
   } else {
     LOG_INF("%s: reusing the model & context loaded in a previous call\n",
             __func__);
@@ -338,6 +342,16 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     // ICPP-PATCH-END
     return 1;
   }
+
+  // ICPP-PATCH-START
+  // A decision model has no text generation: it is served by run_decision.
+  // run.cpp rejects this up front when one is already loaded; this catches a
+  // decision model loaded by this very call (--model in run_update args).
+  if (!load_model_only && decision_model_loaded()) {
+    icpp_error_msg = "The loaded model is a decision model: use run_decision.";
+    return 1;
+  }
+  // ICPP-PATCH-END
 
   // ICPP-PATCH-START
 
