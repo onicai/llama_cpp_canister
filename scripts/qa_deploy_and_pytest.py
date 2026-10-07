@@ -167,6 +167,24 @@ def main() -> int:
             # `make test-llm-wasm` locally. IC0502_REPRO_CYCLES sets the soak
             # length (default 5, enough to catch this exact bug -- it trapped in
             # cycle 0; raise to >=50 for a pre-release soak).
+            # Decision models (System One, run_decision): Julia-1 and Laya, see
+            # README-decision-models.md. DECISION_MODEL selects the per-model
+            # budget and reference answers in test/test_decision.py.
+            {
+                "filename": "models/ggml-org/Julia-1-GGUF/Julia-1-Q8_0.gguf",
+                "canister_filename": "models/model.gguf",
+                "wasm_memory_limit": 4026531840,  # 3.75 GiB
+                "env": {"DECISION_MODEL": "julia-1"},
+                "test_paths": ["test/test_decision.py"],
+            },
+            {
+                "filename": "models/ggml-org/Laya-GGUF/Laya-Q8_0.gguf",
+                "canister_filename": "models/model.gguf",
+                "wasm_memory_limit": 4026531840,  # 3.75 GiB
+                "topup": 50000000000000,  # 449 MB upload
+                "env": {"DECISION_MODEL": "laya"},
+                "test_paths": ["test/test_decision.py"],
+            },
             {
                 "filename": "models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf",  # pylint: disable=line-too-long
                 "canister_filename": "models/model.gguf",

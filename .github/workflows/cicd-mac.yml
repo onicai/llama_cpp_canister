@@ -143,6 +143,13 @@ jobs:
           mkdir -p ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF
           wget -nv -O ./models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf?download=true
 
+      - name: Download decision models (native test_decision)
+        if: matrix.job == 'native (x86_64 exact-token)'
+        run: |
+          mkdir -p ./models/ggml-org/tinylaya-for-testing-gguf ./models/ggml-org/Julia-1-GGUF
+          wget -nv -O ./models/ggml-org/tinylaya-for-testing-gguf/tinylaya-for-testing-Q8_0.gguf https://huggingface.co/ggml-org/tinylaya-for-testing-gguf/resolve/main/tinylaya-for-testing-Q8_0.gguf?download=true
+          wget -nv -O ./models/ggml-org/Julia-1-GGUF/Julia-1-Q8_0.gguf https://huggingface.co/ggml-org/Julia-1-GGUF/resolve/main/Julia-1-Q8_0.gguf?download=true
+
       - name: test-llm-native
         if: matrix.job == 'native (x86_64 exact-token)'
         shell: bash -l {0}

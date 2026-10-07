@@ -6,6 +6,7 @@
 #include "test_cache_cleanup.h"
 #include "test_canister_functions.h"
 #include "test_cycle_balance.h"
+#include "test_decision.h"
 #include "test_files.h"
 #include "test_memory_status.h"
 #include "test_qwen2.h"
@@ -38,6 +39,7 @@ int main() {
   test_cycle_balance(mockIC);
   test_memory_status(mockIC);
   test_files(mockIC);
+  test_decision(mockIC);
   test_tiny_stories(mockIC);
   test_qwen2(mockIC);
   test_qwen3(mockIC);

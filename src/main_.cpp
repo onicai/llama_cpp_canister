@@ -2,6 +2,7 @@
 // Internet Computer SmartContract version of: tools/completion/completion.cpp
 // See: https://github.com/onicai/llama_cpp_onicai_fork/tree/master/tools/completion/README.md
 #include "main_.h"
+#include "decision.h"
 #include "ic_api.h"
 #include "promptcache.h"
 #include "ready.h"
@@ -157,17 +158,19 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
   // ICPP-PATCH-START
   // Per-call teardown that runs on EVERY exit from main_. The early returns
-  // below used to skip the inline teardown entirely, leaking the sampler and
-  // threadpools on every failed call and leaving the static g_* pointers
-  // dangling into this stack frame until the next call reassigned them.
-  // Fields are filled in as each resource is created.
+  // below used to skip the inline teardown entirely, leaking the sampler on
+  // every failed call and leaving the static g_* pointers dangling into this
+  // stack frame until the next call reassigned them.
+  //
+  // No threadpool here: since llama.cpp #27026, common_init_from_params creates the
+  // threadpool at load_model and attaches it to the context, and
+  // common_init_result owns it (freed after the context). It lives exactly as
+  // long as the persisted context, so nothing per-call can dangle. The old
+  // per-call create/attach/detach/free was the root cause of the IC0502
+  // "heap out of bounds" traps; see README-0003-305ba519-IC0502.md.
   common_sampler *smpl = nullptr; // declared here so the guard can hold it
   struct CallTeardown {
     common_sampler **smpl;
-    llama_context *ctx = nullptr;
-    decltype(ggml_threadpool_free) *free_fn = nullptr;
-    struct ggml_threadpool *tp = nullptr;
-    struct ggml_threadpool *tp_batch = nullptr;
     ~CallTeardown() {
       if (*smpl) {
         common_sampler_free(*smpl);
@@ -176,19 +179,6 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       // Close the log file and reset pointers, so the next call starts fresh
       common_log_set_file(common_log_main(), nullptr);
       reset_static_memory();
-      if (ctx) {
-        // Detach BEFORE freeing (also clears the copy latched into the
-        // persisted CPU backend), so no dangling threadpool pointer survives
-        // in persisted state. Root cause of the IC0502 "heap out of bounds"
-        // traps: the next call's first compute would pause the freed pool --
-        // writes into freed heap over dlmalloc's free-list links.
-        // See README-0003-305ba519-IC0502.md.
-        llama_detach_threadpool(ctx);
-      }
-      if (free_fn) {
-        free_fn(tp);
-        free_fn(tp_batch);
-      }
     }
   } teardown{&smpl};
   // ICPP-PATCH-END
@@ -326,6 +316,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
     model = g_llama_init->model();
     ctx = g_llama_init->context();
+
+    // ICPP-PATCH: set up (or clear) the decision model state for EVERY load
+    // path: load_model, and run_update/run_query with --model.
+    if (model) decision_init(model);
   } else {
     LOG_INF("%s: reusing the model & context loaded in a previous call\n",
             __func__);
@@ -350,7 +344,16 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   }
 
   // ICPP-PATCH-START
-  teardown.ctx = ctx;
+  // A decision model has no text generation: it is served by run_decision.
+  // run.cpp rejects this up front when one is already loaded; this catches a
+  // decision model loaded by this very call (--model in run_update args).
+  if (!load_model_only && decision_model_loaded()) {
+    icpp_error_msg = "The loaded model is a decision model: use run_decision.";
+    return 1;
+  }
+  // ICPP-PATCH-END
+
+  // ICPP-PATCH-START
 
   // Return if we are asked to ONLY load the model
   if (load_model_only) {
@@ -371,63 +374,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   auto chat_templates = common_chat_templates_init(model, params.chat_template);
 #endif
 
-  LOG_INF("%s: llama threadpool init, n_threads = %d\n", __func__,
-          (int)params.cpuparams.n_threads);
-
-  auto *cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-  if (!cpu_dev) {
-    LOG_ERR("%s: no CPU backend found\n", __func__);
-    return 1;
-  }
-  auto *reg = ggml_backend_dev_backend_reg(cpu_dev);
-  auto *ggml_threadpool_new_fn =
-      (decltype(ggml_threadpool_new) *)ggml_backend_reg_get_proc_address(
-          reg, "ggml_threadpool_new");
-  auto *ggml_threadpool_free_fn =
-      (decltype(ggml_threadpool_free) *)ggml_backend_reg_get_proc_address(
-          reg, "ggml_threadpool_free");
-
-  // Validate function pointers before use
-  if (!ggml_threadpool_new_fn || !ggml_threadpool_free_fn) {
-    LOG_ERR("%s: failed to get threadpool function pointers\n", __func__);
-    return 1;
-  }
-  // ICPP-PATCH: hand the free fn to the teardown guard
-  teardown.free_fn = ggml_threadpool_free_fn;
-
-  struct ggml_threadpool_params tpp_batch =
-      ggml_threadpool_params_from_cpu_params(params.cpuparams_batch);
-  struct ggml_threadpool_params tpp =
-      ggml_threadpool_params_from_cpu_params(params.cpuparams);
-
   // ICPP-PATCH-START
-  // This is not supported in a canister
-  // set_process_priority(params.cpuparams.priority);
+  // Upstream moved threadpool creation into common_init_from_params (see the
+  // CallTeardown comment above), so the per-call threadpool block is gone.
+  // set_process_priority is a no-op on WASI (fork common.cpp ICPP-PATCH).
   // ICPP-PATCH-END
-
-  struct ggml_threadpool *threadpool_batch = NULL;
-  if (!ggml_threadpool_params_match(&tpp, &tpp_batch)) {
-    threadpool_batch = ggml_threadpool_new_fn(&tpp_batch);
-    if (!threadpool_batch) {
-      LOG_ERR("%s: batch threadpool create failed : n_threads %d\n", __func__,
-              tpp_batch.n_threads);
-      return 1;
-    }
-    teardown.tp_batch = threadpool_batch; // ICPP-PATCH
-
-    // Start the non-batch threadpool in the paused state
-    tpp.paused = true;
-  }
-
-  struct ggml_threadpool *threadpool = ggml_threadpool_new_fn(&tpp);
-  if (!threadpool) {
-    LOG_ERR("%s: threadpool create failed : n_threads %d\n", __func__,
-            tpp.n_threads);
-    return 1;
-  }
-  teardown.tp = threadpool; // ICPP-PATCH
-
-  llama_attach_threadpool(ctx, threadpool, threadpool_batch);
 
   const int n_ctx_train = llama_model_n_ctx_train(model);
   const int n_ctx = llama_n_ctx(ctx);
@@ -1530,7 +1481,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   LOG("\n\n");
   common_perf_print(ctx, smpl);
 
-  // ICPP-PATCH: the sampler, log file, static pointers and threadpools are
+  // ICPP-PATCH: the sampler, log file and static pointers are
   // released by the CallTeardown guard declared at the top of main_, on this
   // and every early-return path. Do NOT call llama_backend_free() here: the
   // persisted model references quantization tables owned by the backend
@@ -1564,6 +1515,7 @@ void icpp_free_model() {
   // resetting it frees them together. (Upstream no longer allows releasing the
   // model out of it, so we must not call llama_model_free ourselves.)
   g_llama_init.reset();
+  decision_reset(); // ICPP-PATCH: its setup points into the freed model
 
   g_model_persistent = nullptr;
   g_ctx_persistent = nullptr;

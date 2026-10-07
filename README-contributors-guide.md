@@ -36,6 +36,8 @@ Take following steps locally:
 
   | upgrade # | llama.cpp sha | llama.cpp release-tag |    date    |
   | --------- | ------------- | --------------------- | ---------- |
+  |    0004   |   988190680   |         b11476        | Oct  7 '26 |
+  |    0003   |    305ba519   |         b10076        | Jul 21 '26 |
   |    0002   |     615212    |         b4532         | Feb  2 '25 |
   |    0001   |     b841d0    |         -             | Oct 18 '24 |
   |    0000   |     5cdb37    |         -             | Jul 21 '24 |
