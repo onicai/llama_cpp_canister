@@ -49,7 +49,27 @@
 #include <string>
 #include <vector>
 
+// The IC's instruction counter, for the canister log. 0 in native builds.
+#ifdef __wasm__
+extern "C" uint64_t ic0_performance_counter(uint32_t counter_type)
+    __attribute__((import_module("ic0"), import_name("performance_counter")));
+static uint64_t instruction_counter() { return ic0_performance_counter(0); }
+#else
+static uint64_t instruction_counter() { return 0; }
+#endif
+
 namespace {
+
+void log_line(const std::string &msg) {
+  std::cout << "llama_cpp: run_decision - " << msg << std::endl;
+}
+
+std::string billions(uint64_t n) {
+  std::ostringstream oss;
+  oss.precision(2);
+  oss << std::fixed << n / 1e9 << " B";
+  return oss.str();
+}
 
 enum decision_question_type {
   DECISION_QUESTION_CHOICE, // the order is the column of the laya head output
@@ -195,6 +215,12 @@ void init(decision_context &d, const llama_model *model) {
     return;
   }
   d.n_options_max = 255;
+
+  std::cout << "llama_cpp: decision_init - decision model '"
+            << decision_meta_str(model, "general.name") << "', type "
+            << type_name << ", systemone template, " << d.temperatures.size()
+            << " softmax temperatures, max_head_tokens " << d.max_head_tokens
+            << std::endl;
 }
 
 //
@@ -467,8 +493,9 @@ std::string decode(llama_context *ctx, const std::vector<llama_token> &tokens,
     batch.pos[i] = i;
     batch.n_seq_id[i] = 1;
     batch.seq_id[i][0] = 0;
-    batch.logits[i] =
-        std::find(markers.begin(), markers.end(), (int32_t)i) != markers.end();
+    // every token is an output: llama.cpp requires that for an embeddings
+    // context anyway (it overrides a partial selection, with a warning)
+    batch.logits[i] = true;
   }
   batch.n_tokens = tokens.size();
   const int32_t rc = llama_decode(ctx, batch);
@@ -894,6 +921,15 @@ void run_decision() {
     return;
   }
   std::map<std::string, decision_answer> answers = load_answers(path);
+  log_line("request: " + std::to_string(questions.size()) + " question(s), " +
+           req.state_label + " state of " +
+           std::to_string(req.state_label == "Json" ? req.state_json.size()
+                                                    : req.state_text.size()) +
+           " bytes, token budget " +
+           (max_tokens_update ? std::to_string(max_tokens_update) : "none") +
+           (answers.empty() ? ""
+                            : ", " + std::to_string(answers.size()) +
+                                  " answered by earlier calls"));
 
   // --- prompts of the pending questions. All are checked BEFORE any forward
   //     pass (rendering + tokenizing costs ~1/1000 of a pass), so an invalid
@@ -948,17 +984,33 @@ void run_decision() {
       pending.push_back(t.q->id);
       continue;
     }
+    log_line(t.q->id + ": prompt from the model's systemone template, " +
+             std::to_string(n) + " tokens, " +
+             std::to_string(t.markers.size()) + " option markers");
     std::vector<float> scores;
+    const uint64_t i0 = instruction_counter();
     const std::string decode_error =
         decode(ctx, t.tokens, t.markers, t.q->type, scores);
+    const uint64_t i1 = instruction_counter();
     if (!decode_error.empty()) {
       send_error(ic_api, "questions." + t.q->id + ": " + decode_error);
       return;
     }
+    {
+      std::ostringstream oss;
+      oss.precision(2);
+      oss << std::fixed << t.q->id << ": one forward pass"
+          << (i1 > i0 ? ", " + billions(i1 - i0) + " instructions" : "")
+          << ", scores [";
+      for (size_t k = 0; k < scores.size(); k++) {
+        oss << (k ? ", " : "") << scores[k];
+      }
+      oss << "], softmax T=" << get_temperature(d, *t.q);
+      log_line(oss.str());
+    }
     answers[t.q->id] = format_answer(d, *t.q, scores);
     input_tokens += n;
-    std::cout << "llama_cpp: " << __func__ << " - "
-              << describe(answers[t.q->id], n) << std::endl;
+    log_line(describe(answers[t.q->id], n));
   }
 
   // --- keep the answers for the next call, or clean up when complete
@@ -970,14 +1022,16 @@ void run_decision() {
     return;
   }
 
-  std::cout << "llama_cpp: " << __func__ << " - " << input_tokens
-            << " tokens this call, " << answers.size() << "/"
-            << questions.size() << " questions answered"
-            << (pending.empty() ? "" : ", pending: ");
-  for (size_t i = 0; i < pending.size(); i++) {
-    std::cout << (i ? ", " : "") << pending[i];
+  {
+    std::string summary = std::to_string(input_tokens) + " tokens this call, " +
+                          std::to_string(answers.size()) + "/" +
+                          std::to_string(questions.size()) +
+                          " questions answered";
+    for (size_t i = 0; i < pending.size(); i++) {
+      summary += (i ? ", " : ", pending: ") + pending[i];
+    }
+    log_line(summary);
   }
-  std::cout << std::endl;
 
   send_result(ic_api, questions, answers, input_tokens, pending);
 }
