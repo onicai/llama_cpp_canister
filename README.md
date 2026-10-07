@@ -51,6 +51,21 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   > **Note:** icp-cli replaces the deprecated `dfx`. This project was built and
   > tested against **icp-cli 1.2.0**.
 
+- Create an icp identity to deploy, upload and test with, and make it your default:
+
+  ```bash
+  icp identity new llama-cpp-dev --storage plaintext   # once
+  icp identity default llama-cpp-dev
+  ```
+
+  All steps below run as your default identity, and they must all run as the
+  **same** one: the canister's controller is whoever deployed it, and most
+  endpoints are controller-only. It cannot be `anonymous` (the default on a fresh
+  icp-cli install): the upload script and pytest sign their calls locally by
+  exporting the key, and the anonymous identity has no key to export. For the
+  same reason it must not be password protected. A plaintext key is unencrypted
+  on disk, so use this identity for local development only.
+
 - Clone the repo and it's children:
 
   _(skip when using the [release](https://github.com/onicai/llama_cpp_canister/releases))_
@@ -148,9 +163,11 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
   - Deploy the wasm to a canister on the local network:
 
-    `icp.yaml` defines two canisters that share the same wasm: **`llama_cpp`** (the
-    default, serving **Qwen3-0.6B** — the steps below) and **`llama_cpp_qwen25`** (the
-    previous default, **Qwen2.5-0.5B** — see [README-qwen2.5.md](README-qwen2.5.md)).
+    `icp.yaml` defines three canisters that share the same wasm: **`llama_cpp`** (the
+    default, serving **Qwen3-0.6B** — the steps below), **`llama_cpp_qwen25`** (the
+    previous default, **Qwen2.5-0.5B** — see [README-qwen2.5.md](README-qwen2.5.md)),
+    and **`llama_cpp_qwen3_17b`** (the larger **Qwen3-1.7B** — see
+    [README-qwen3-1.7B.md](README-qwen3-1.7B.md)).
     Deploy just the one you need by naming it:
 
     ```bash
@@ -207,8 +224,8 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
     ```bash
     mkdir -p models/Qwen/Qwen3-0.6B-GGUF
-    wget -c \
-      -O models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf \
+    curl -L -C - \
+      -o models/Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf \
       https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf
     ```
 
@@ -305,7 +322,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     max_tokens_update = 20 : nat64
   })'
 
-  icp canister call llama_cpp -e local get_max_tokens
+  icp canister call llama_cpp -e local get_max_tokens '()'
   ```
 
   For Qwen3-0.6B the first-call ceiling is ~25–29 tokens; we use **20** to leave
@@ -316,7 +333,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   - Ensure the canister is ready for Inference, with the model loaded
 
     ```bash
-    icp canister call llama_cpp -e local ready
+    icp canister call llama_cpp -e local ready '()'
     ```
 
   - Chat with the LLM:
@@ -495,15 +512,15 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     This functionality is off by default. You can turn it on/off with:
 
     ```bash
-    icp canister call llama_cpp -e local chats_resume
-    icp canister call llama_cpp -e local chats_pause
+    icp canister call llama_cpp -e local chats_resume '()'
+    icp canister call llama_cpp -e local chats_pause '()'
     ```
 
     When on, up to 3 chats per principal are saved.
     The `get_chats` method retrieves them for the principal of the caller.
 
     ```
-    icp canister call llama_cpp -e local get_chats
+    icp canister call llama_cpp -e local get_chats '()'
     ```
 
 # log_pause & log_resume
@@ -513,10 +530,10 @@ turn the logging off and back on with these commands:
 
 ```bash
 # turn off logging
-icp canister call llama_cpp -e local log_pause
+icp canister call llama_cpp -e local log_pause '()'
 
 # turn on logging
-icp canister call llama_cpp -e local log_resume
+icp canister call llama_cpp -e local log_resume '()'
 ```
 
 # Logging to a file
@@ -766,10 +783,10 @@ icp canister call llama_cpp -e local set_access '(record {
 })'
 
 # Verify it worked
-icp canister call llama_cpp -e local get_access
+icp canister call llama_cpp -e local get_access '()'
 
 # A caller can check it's access rights with
-icp canister call llama_cpp -e local check_access
+icp canister call llama_cpp -e local check_access '()'
 ```
 
 # File Management
@@ -916,7 +933,7 @@ causes `heap out of bounds` (IC0502) traps during `load_model` / generation.
 Access: **non-anonymous** callers only (anonymous callers get an access-denied error).
 
 ```bash
-icp canister call llama_cpp -e local get_memory_status
+icp canister call llama_cpp -e local get_memory_status '()'
 # ->
 (
   variant {
