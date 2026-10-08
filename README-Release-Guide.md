@@ -8,7 +8,7 @@ How to create a new release of `llama_cpp_canister`.
   succeeded. The release workflow checks both automatically and will fail if
   either is red. They cover different ground: `cicd-linux` runs static analysis
   and the wasm QA against the Docker-built wasm (the bytes this release ships),
-  `cicd-mac` runs the native exact-token tests, which only build on x86_64 macOS.
+  `cicd-mac` runs the native exact-token tests on x86_64 macOS, the baseline CI enforces.
 - All changes intended for the release are merged into `main`.
 
 ## Steps

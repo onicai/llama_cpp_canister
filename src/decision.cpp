@@ -779,15 +779,12 @@ void send_error(IC_API &ic_api, const std::string &msg) {
       "Err", CandidTypeVariant{"Other", CandidTypeText{msg}}});
 }
 
-// icpp-pro writes the type table of a vec variant in the order the template
-// fields are appended, while Candid requires hash order: append in hash order
-// (noul, score, choice) or decoders read the wrong labels. Reported in
-// icpp-pro/_handoff/2026-10-07-build-exit-code-and-vec-variant-order.md.
-CandidTypeVariant kind_template_hash_order() {
+// The DecisionKind labels, in .did order.
+CandidTypeVariant kind_template() {
   CandidTypeVariant v;
-  v.append("noul", CandidTypeNull{});
-  v.append("score", CandidTypeNull{});
   v.append("choice", CandidTypeNull{});
+  v.append("score", CandidTypeNull{});
+  v.append("noul", CandidTypeNull{});
   return v;
 }
 
@@ -821,8 +818,7 @@ void send_result(IC_API &ic_api,
 
   CandidTypeRecord r_answers;
   r_answers.append("id", CandidTypeVecText{a_ids});
-  r_answers.append("kind",
-                   CandidTypeVecVariant{kind_template_hash_order(), a_kinds});
+  r_answers.append("kind", CandidTypeVecVariant{kind_template(), a_kinds});
   r_answers.append("choice", CandidTypeVecText{a_choice});
   r_answers.append("score", CandidTypeVecFloat64{a_score});
   r_answers.append("yes", CandidTypeVecFloat64{a_yes});

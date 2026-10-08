@@ -49,7 +49,7 @@ If any check fails, report the issue and abort.
 Both CI workflows must be green. They cover different ground and neither covers
 the other: `cicd-linux` runs static analysis plus the wasm QA against the
 Docker-built wasm (the bytes the release ships); `cicd-mac` runs the native
-exact-token tests, which only build on x86_64 macOS.
+exact-token tests on x86_64 macOS, the baseline CI enforces.
 
 ```bash
 for wf in cicd-linux.yml cicd-mac.yml; do
