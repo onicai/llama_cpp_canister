@@ -176,16 +176,28 @@ help:
 	@echo "  docker-verify-wasm - docker-build, then compare against a deployed canister's module hash"
 	@echo "  docker-shell       - interactive shell in the build image"
 	@echo "  all-tests          - all-static + wasm + native tests (needs a Mac)"
-	@echo "  test-llm-native    - native MockIC unit tests (needs x86_64)"
+	@echo "  test-llm-native    - native MockIC unit tests (x86_64 or arm64)"
 	@echo "  test-llm-wasm      - rebuild on the host, deploy to a local network, run pytest"
 	@echo "  test-llm-wasm-prebuilt - same, but test the wasm already in build/ (the shipped one)"
 	@echo "  all-static         - clang-format + black + pylint + mypy"
 	@echo "  summary            - print the detected toolchain paths"
 	@echo "  help               - show this message"
 
+# icpp.toml's [build-native] compiles ggml-cpu/arch/x86/ (what CI runs). On an
+# arm64 host, build from a generated copy that selects ggml-cpu/arch/arm/.
+NATIVE_ARCH := $(shell uname -m)
+ifneq ($(filter arm64 aarch64,$(NATIVE_ARCH)),)
+NATIVE_CONFIG := icpp-native-arm.toml
+else
+NATIVE_CONFIG := icpp.toml
+endif
+
 .PHONY: test-llm-native
 test-llm-native:
-	icpp build-native
+ifneq ($(NATIVE_CONFIG),icpp.toml)
+	sed 's#ggml-cpu/arch/x86/#ggml-cpu/arch/arm/#g' icpp.toml > $(NATIVE_CONFIG)
+endif
+	icpp build-native --config $(NATIVE_CONFIG)
 	./build-native/mockic.exe
 
 .PHONY: test-llm-wasm

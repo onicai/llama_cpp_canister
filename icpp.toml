@@ -215,7 +215,8 @@ cpp_paths = [
     # which compiles to nothing on the host, so the native build needs the
     # host architecture's files or ggml-cpu.c's type_traits_cpu table has
     # undefined vec_dot entries (mxfp4, nvfp4, q1_0, tq1_0, tq2_0, ...).
-    # NOTE: this is x86_64-specific. On an arm64 host, switch to arch/arm/.
+    # NOTE: x86_64 files. On an arm64 host, `make test-llm-native` builds from
+    # a generated copy of this file that selects arch/arm/ instead.
     "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/arch/x86/repack.cpp",
     "src/llama_cpp_onicai_fork/ggml/src/ggml-cpu/arch/x86/cpu-feats.cpp",
 ]

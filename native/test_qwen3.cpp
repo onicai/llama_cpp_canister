@@ -96,9 +96,11 @@ void test_qwen3(MockIC &mockIC) {
   // n_kv/batch bound, a botched fork re-vendor) still passes every other test,
   // because every other Qwen generation assertion is a no-trap check only.
   //
-  // Exact tokens are architecture-dependent, which is why the native job is
-  // pinned to x86_64 in .github/workflows/cicd-mac.yml. Re-baseline these two
-  // hexes (never hand-edit them) after any intentional llama.cpp upgrade.
+  // Exact tokens are architecture-dependent: the generate call has one baseline
+  // per host architecture. x86_64 is the one CI enforces (the native job is
+  // pinned to x86_64 in .github/workflows/cicd-mac.yml); arm64 lets
+  // `make test-llm-native` pass on Apple Silicon. Re-baseline these hexes
+  // (never hand-edit them) after any intentional llama.cpp upgrade.
 
   // ---------------------------------------------------------------------------
   // run_update: ingest the non-thinking prompt (assistant turn ends with an
@@ -136,7 +138,20 @@ void test_qwen3(MockIC &mockIC) {
       "2d6b0471385f300e2d2d63616368652d747970652d760471385f300a2d2d73616d706c6572730b"
       "74656d7065726174757265062d2d74656d7003302e30032d7370022d7000022d6e023230";
   // THE exact-token assertion: 12 greedy tokens through the real decode path
-  // (q8_0 KV, ctx 16384). output="\ninspired by the example given\ninspired by the"
+  // (q8_0 KV, ctx 16384).
+#if defined(__aarch64__) || defined(__arm64__)
+  // output="\ninspired by the example given\nthe example given is"
+  candid_out =
+      "4449444c036c0b84d28e1701819e846471db92ea8f0501838fe5800671c897a7990771bbb1bbe2"
+      "0801fde19a880c019aa1b2f90c7adb92a2c90d71cdd9e6b30e7efba3dbe30e016e786b01bc8a01"
+      "00010200010c00000000000000330a696e73706972656420627920746865206578616d706c6520"
+      "676976656e0a746865206578616d706c6520676976656e206973010c00000000000000653c7c69"
+      "6d5f73746172747c3e757365720a476976652061206f6e652073656e74656e636520696e74726f"
+      "20746f204c4c4d730a696e73706972656420627920746865206578616d706c6520676976656e0a"
+      "746865206578616d706c6520676976656e20697300010000000000000000010c00000000000000"
+      "c8000000010000000000000000";
+#else
+  // output="\ninspired by the example given\ninspired by the"
   candid_out =
       "4449444c036c0b84d28e1701819e846471db92ea8f0501838fe5800671c897a7990771bbb1bbe2"
       "0801fde19a880c019aa1b2f90c7adb92a2c90d71cdd9e6b30e7efba3dbe30e016e786b01bc8a01"
@@ -146,6 +161,7 @@ void test_qwen3(MockIC &mockIC) {
       "4c4d730a696e73706972656420627920746865206578616d706c6520676976656e0a696e737069"
       "7265642062792074686500010000000000000000010c00000000000000c8000000010000000000"
       "000000";
+#endif
   mockIC.run_test(test_name, run_update, candid_in, candid_out, silent_on_trap,
                   my_principal);
 }
