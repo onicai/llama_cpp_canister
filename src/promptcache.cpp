@@ -38,16 +38,29 @@ static void print_usage(int argc, char **argv) {
 // --- prompt-cache format versioning -----------------------------------------
 // See promptcache.h for why llama.cpp's own magic+version check is insufficient.
 
-// Bump this whenever a llama.cpp upgrade changes the session serialization,
-// or when the stamp file itself gains fields (old stamps then read as stale
-// and their caches are discarded -- a one-time cold start, never a trap).
+// Bump the vN below whenever the session layout changes in a way that
+// LLAMA_SESSION_VERSION does not capture, or when the stamp file itself gains
+// fields (old stamps then read as stale and their caches are discarded -- a
+// one-time cold start, never a trap). llama.cpp's own session version bumps
+// are picked up automatically (since v4).
 //   1 = llama.cpp b4531 (6152129d) and earlier -- never actually stamped
 //   2 = llama.cpp b10076 (305ba519), llama_memory_* refactor
 //   3 = same serialization as 2; stamp gains a context-layout line (line 3),
 //       so a re-load_model with different context flags (ctx-size, cache
 //       types, ...) discards the now-unloadable cache instead of trapping in
 //       llama_state_load_file, whose catch never runs on WASI
-static const char *PROMPT_CACHE_FORMAT = "llama_cpp_canister-prompt-cache-v3";
+//   4 = llama.cpp b11476 (988190680): LLAMA_SESSION_VERSION 9 -> 11. The stamp
+//       was NOT bumped in v0.20.0, so a cache written by v0.19.1 passed the
+//       check, llama_state_load_file rejected it (version mismatch), and every
+//       run_update on it failed with "failed to load session file" until the
+//       cleanup timer removed it. From v4 on, the format line also carries
+//       llama.cpp's own LLAMA_SESSION_VERSION and LLAMA_STATE_SEQ_VERSION, so an
+//       upstream serialization bump invalidates old caches automatically.
+std::string prompt_cache_format() {
+  return std::string("llama_cpp_canister-prompt-cache-v4 session=") +
+         std::to_string(LLAMA_SESSION_VERSION) +
+         " seq=" + std::to_string(LLAMA_STATE_SEQ_VERSION);
+}
 
 static std::string
 prompt_cache_stamp_path(const std::string &canister_path_session) {
@@ -90,7 +103,7 @@ bool prompt_cache_format_is_current(const std::string &canister_path_session) {
 
   std::string stamp;
   std::getline(f, stamp);
-  if (stamp != PROMPT_CACHE_FORMAT) return false;
+  if (stamp != prompt_cache_format()) return false;
 
   // Second line: the model the cache was written with. A cache is only valid
   // for the model that produced it -- see prompt_cache_discard_if_stale.
@@ -150,7 +163,7 @@ void prompt_cache_write_format_stamp(const std::string &canister_path_session) {
   std::ofstream f(prompt_cache_stamp_path(canister_path_session),
                   std::ios::trunc);
   if (f.is_open()) {
-    f << PROMPT_CACHE_FORMAT << std::endl;
+    f << prompt_cache_format() << std::endl;
     f << prompt_cache_model_id() << std::endl;
     f << prompt_cache_layout_id() << std::endl;
   }

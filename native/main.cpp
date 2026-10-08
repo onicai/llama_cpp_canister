@@ -9,6 +9,7 @@
 #include "test_decision.h"
 #include "test_files.h"
 #include "test_memory_status.h"
+#include "test_prompt_cache_format.h"
 #include "test_qwen2.h"
 #include "test_qwen3.h"
 #include "test_tiny_stories.h"
@@ -41,6 +42,7 @@ int main() {
   test_files(mockIC);
   test_decision(mockIC);
   test_tiny_stories(mockIC);
+  test_prompt_cache_format(mockIC);
   test_qwen2(mockIC);
   test_qwen3(mockIC);
   test_utf8(mockIC);
