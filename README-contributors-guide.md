@@ -180,6 +180,16 @@ At b10076 the catch-and-return-error entry points are `llama_state_load_file`,
 **every** `run_update`. For any such API we call, validate the precondition BEFORE calling in
 (as `prompt_cache_discard_if_stale()` now does), rather than relying on the return value.
 
+**Session format: automatic since v0.20.1.** The prompt-cache stamp's format line
+carries llama.cpp's `LLAMA_SESSION_VERSION` and `LLAMA_STATE_SEQ_VERSION`
+(`prompt_cache_format()` in `src/promptcache.cpp`), so an upstream serialization bump
+discards old caches (a one-time cold start) without a manual step. Upgrade 0004 shows why:
+the manual `PROMPT_CACHE_FORMAT` bump was missed, and every v0.19.1 cache failed to load
+under v0.20.0. Still bump the `vN` there for any session-layout change that
+`LLAMA_SESSION_VERSION` does not capture. Then verify the real upgrade path on a replica:
+write a cache with the OLD release, upgrade the canister to the new build, and `run_update`
+on that cache must succeed (cold start), not error.
+
 **Keep the prompt-cache layout stamp exhaustive.** The precondition-check above is only as
 complete as `llama_context::state_layout_desc()` (fork `llama-context.cpp`), which lists the
 context-level fields that shape the session-file byte layout — currently `n_ctx`, `n_seq_max`,

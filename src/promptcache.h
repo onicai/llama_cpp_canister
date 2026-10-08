@@ -28,8 +28,13 @@ bool get_canister_path_session(const std::string &path_session,
 // So we stamp each cache with our own format generation AND the model it was
 // written with, in a sidecar file "<cache>.icppfmt" (line 1 = format,
 // line 2 = model description), and discard any cache that is unstamped or
-// mismatched. Bump PROMPT_CACHE_FORMAT whenever a llama.cpp upgrade changes
-// the session serialization.
+// mismatched. The format line includes llama.cpp's LLAMA_SESSION_VERSION, so
+// an upstream serialization change invalidates old caches automatically; bump
+// the vN in prompt_cache_format() for any other session-layout change.
+
+// The format line of a stamp (line 1): this build's prompt-cache format plus
+// llama.cpp's LLAMA_SESSION_VERSION and LLAMA_STATE_SEQ_VERSION.
+std::string prompt_cache_format();
 
 // Description of the currently loaded model, e.g. "qwen3 1.7B Q4_K_M".
 // Empty string when no model is loaded.
