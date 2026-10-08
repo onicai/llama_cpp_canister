@@ -109,8 +109,7 @@ jobs:
             echo "icpp_version=${ICPP_VERSION}"
             echo "date=$(date -u +%Y-%m-%d)"
           } >> "$GITHUB_OUTPUT"
-          # Surface it in the run summary too, so the release skill can copy the
-          # value into WASM-HASHES.md without re-deriving it.
+          # Surface it in the run summary too.
           {
             echo "## llama_cpp.wasm"
             echo ""

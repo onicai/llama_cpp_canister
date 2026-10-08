@@ -228,8 +228,8 @@ feature-development and release process lives in
   is the cheap leg of `make -C ../icpp-pro siblings-verify-api`; wasm-affecting
   icpp-pro changes additionally run
   `make docker-build-wasm test-llm-wasm-prebuilt` (the release tier).
-- An icpp-pro version bump needs a new WASM-HASHES.md row and this repo's own
-  release process (`.claude/skills/llama_cpp_canister-release`).
+- An icpp-pro version bump changes the wasm hash, so it goes through this repo's
+  own release process (`.claude/skills/llama_cpp_canister-release`).
 
 ## Workflow for Adding Security Fixes
 

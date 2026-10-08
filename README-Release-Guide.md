@@ -57,9 +57,7 @@ After the workflow completes:
    ```bash
    shasum -a 256 build/llama_cpp.wasm   # must equal the sha256 in the release title/body
    ```
-4. Record the rollout in `funnAI/WASM-HASHES.md` once the canisters have been
-   upgraded to this release — hash, plus the commit it was built from.
-5. Optionally deploy and run smoke tests. Since icpp-pro 6.0.0 pytest must be
+4. Optionally deploy and run smoke tests. Since icpp-pro 6.0.0 pytest must be
    told which icp identity to run as, and it has to be the identity that
    deployed the canister (most endpoints are controller-only):
    ```bash

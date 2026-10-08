@@ -4,8 +4,8 @@
 # directory. This repo produces ONE wasm, so docker/ and out/ live at the repo
 # root instead.
 #
-# Tool versions - update these when upgrading, and record a new row in
-# WASM-HASHES.md, because every one of them changes the wasm hash.
+# Tool versions - update these when upgrading. Every one of them changes the
+# wasm hash.
 x-versions:
   # icpp-pro transitively pins the whole native toolchain: wasi-sdk 25.0,
   # rust 1.93.0, wasi2ic c0f5063e, ic-wasi-polyfill b3ef0051.
