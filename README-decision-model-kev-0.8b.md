@@ -35,17 +35,17 @@ You re-send the same request until `pending` is empty, as for the other decision
 
 ## Headline results (local replica, llama_cpp_canister with llama.cpp b11476)
 
-| Measure                         | Value                                                                             |
-|---------------------------------|-----------------------------------------------------------------------------------|
-| gguf                            | Kev-0.8B-Q8_0.gguf, 812,406,304 bytes                                             |
-| heap after `load_model`         | 1.21 GB (`wasm_heap_bytes = 1_211_826_176`), `-c 4096`, f32 KV cache              |
-| instructions per state token    | ~1.4 B (1.60 B at 2,000 tokens): **24 state tokens stored per call**              |
-| instructions per question token | ~1.42 B: **~24 tokens per question**, without the state                           |
-| stored state                    | ~20 MB + ~24 KB per state token; ~1.5 B to save, ~1-2 B to load                   |
-| max state size                  | ~4,000 tokens: `-c 4096` holds the state plus one question (measured up to 2,000) |
-| one 16-token question           | ~22.8 B instructions on an 84-token state, ~26 B on a 2,000-token one             |
-| `max_tokens_update`             | 0: each call stops itself before the IC's instruction limit                       |
-| accuracy vs llama-server (CPU)  | within 0.013 on every probability                                                 |
+| Measure                         | Value                                                                               |
+|---------------------------------|-------------------------------------------------------------------------------------|
+| gguf                            | Kev-0.8B-Q8_0.gguf, 812,406,304 bytes                                               |
+| heap after `load_model`         | 1.21 GB (`wasm_heap_bytes = 1_211_826_176`), `-c 4096`, f32 KV cache                |
+| instructions per state token    | ~1.4 B (1.60 B at 2,000 tokens): **24 state tokens stored per call**                |
+| instructions per question token | ~1.42 B: **~22 tokens per question** without the state (~18 on a 2,000-token state) |
+| stored state                    | ~20 MB + ~24 KB per state token; ~1.5 B to save, ~1-2 B to load                     |
+| max state size                  | ~4,000 tokens: `-c 4096` holds the state plus one question (measured up to 2,000)   |
+| one 16-token question           | ~22.8 B instructions on an 84-token state, ~26 B on a 2,000-token one               |
+| `max_tokens_update`             | 0: each call stops itself before the IC's instruction limit                         |
+| accuracy vs llama-server (CPU)  | within 0.013 on every probability                                                   |
 
 ## Quality
 
@@ -197,7 +197,7 @@ To make it work:
 - **Good:** many requests about the same state, e.g. a moderation or triage policy asked
   in steps, or new questions as a conversation goes on.
 - **Good:** a state that grows by appending: each update only costs its new tokens.
-- **Not good:** one long question: instructions + options must fit in ~24 tokens (keep
+- **Not good:** one long question: instructions + options must fit in ~22 tokens (keep
   option keys short; descriptions add tokens). A question that cannot fit returns `Err`.
 - **Not good:** the most accurate answers on short inputs: use
   [Laya](README-decision-model-Laya.md) there.
