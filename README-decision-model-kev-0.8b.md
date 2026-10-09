@@ -73,7 +73,10 @@ shasum -a 256 models/ggml-org/Kev-0.8B-GGUF/Kev-0.8B-Q8_0.gguf
 
 ## Upload the gguf
 
-The model is 812 MB, so the canister needs the 3.75 GiB wasm memory limit:
+With the load args below, the heap stays at ~1.2 GB, also while states are stored and
+questions answered. That fits within a new canister's default `wasm_memory_limit` of
+3 GiB. We recommend raising it to 3.75 GiB anyway, as for the other models: it leaves
+headroom for a larger `--ctx-size` or `--ubatch-size`.
 
 ```bash
 icp canister settings update llama_cpp --wasm-memory-limit 4026531840 -e local
