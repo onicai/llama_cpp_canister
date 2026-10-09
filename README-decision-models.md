@@ -1,8 +1,9 @@
 # Decision models (System One) on llama_cpp_canister
 
 > **Status: available since llama_cpp_canister v0.20.0** (llama.cpp b11476, `run_decision`
-> endpoint), verified on a local replica with Julia-1 and Laya. **Kev-0.8B** (stored
-> state, any state size) since v0.21.0. This document describes the technology, what
+> endpoint), verified on a local replica with Julia-1 and Laya. **Kev-0.8B** (the state,
+> up to ~4,000 tokens, is stored over several calls; each question must still fit in one
+> call) since v0.21.0. This document describes the technology, what
 > upstream llama.cpp ships, the canister design, and the measured results.
 >
 > Step-by-step model guides:
@@ -300,16 +301,16 @@ run_decision : (DecisionInputRecord) -> (DecisionResult);
 
 Measured on a local replica (same 40 B instruction limit per update call as mainnet):
 
-| Measure                 | Julia-1                                                                   | Laya                      | Kev-0.8B                                     |
-|-------------------------|---------------------------------------------------------------------------|---------------------------|----------------------------------------------|
-| gguf (Q8_0)             | 168 MB                                                                    | 449 MB                    | 812 MB                                       |
-| heap after `load_model` | 316 MB                                                                    | 686 MB                    | 1.21 GB (`-c 4096`, f32 KV)                  |
-| instructions per token  | ~170-180 M                                                                | ~1.2 B                    | ~1.4 B (1.60 B at 2,000 state tokens)        |
-| max tokens per question | ~210                                                                      | 33                        | ~24, without the state                       |
-| max state size          | within the question                                                       | within the question       | ~5,000 tokens (estimate), 24 stored per call |
-| `max_tokens_update`     | 200                                                                       | 32                        | 0: each call stops itself before the limit   |
-| example question        | 87 tokens, ~14.9 B cycles                                                 | 29 tokens, ~34.5 B cycles | 16 tokens on a stored state, ~22.8 B cycles  |
-| vs llama-server (CPU)   | clear decisions agree; close calls can differ (Q8_0 rounding sensitivity) | within 0.011              | within 0.013                                 |
+| Measure                 | Julia-1                                                                   | Laya                      | Kev-0.8B                                      |
+|-------------------------|---------------------------------------------------------------------------|---------------------------|-----------------------------------------------|
+| gguf (Q8_0)             | 168 MB                                                                    | 449 MB                    | 812 MB                                        |
+| heap after `load_model` | 316 MB                                                                    | 686 MB                    | 1.21 GB (`-c 4096`, f32 KV)                   |
+| instructions per token  | ~170-180 M                                                                | ~1.2 B                    | ~1.4 B (1.60 B at 2,000 state tokens)         |
+| max tokens per question | ~210                                                                      | 33                        | ~24, without the state                        |
+| max state size          | within the question                                                       | within the question       | ~4,000 tokens (`-c 4096`), 24 stored per call |
+| `max_tokens_update`     | 200                                                                       | 32                        | 0: each call stops itself before the limit    |
+| example question        | 87 tokens, ~14.9 B cycles                                                 | 29 tokens, ~34.5 B cycles | 16 tokens on a stored state, ~22.8 B cycles   |
+| vs llama-server (CPU)   | clear decisions agree; close calls can differ (Q8_0 rounding sensitivity) | within 0.011              | within 0.013                                  |
 
 Port correctness was verified natively: the canister code with Laya matches llama-server
 on the same commit to 0.006 on every probability of the PR #29818 request, with the same

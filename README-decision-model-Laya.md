@@ -114,5 +114,6 @@ The three compact questions above, sent as one request, are answered in 3 update
   title, a one-sentence agent output. Best accuracy of the two on-chain decision models.
 - **Not good:** anything longer than ~33 tokens per question, including most real
   messages with context. For longer inputs, use [Julia-1](README-decision-model-julia-1.md)
-  (~210 tokens per question) or [Kev-0.8B](README-decision-model-kev-0.8b.md) (any state
-  size, stored once).
+  (~210 tokens per question) or [Kev-0.8B](README-decision-model-kev-0.8b.md): its state, up
+  to ~4,000 tokens, is stored over several calls, while each question (instructions +
+  options) must still fit in one call.

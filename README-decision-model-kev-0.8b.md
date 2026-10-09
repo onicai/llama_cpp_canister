@@ -35,17 +35,17 @@ You re-send the same request until `pending` is empty, as for the other decision
 
 ## Headline results (local replica, llama_cpp_canister with llama.cpp b11476)
 
-| Measure                         | Value                                                                                                   |
-|---------------------------------|---------------------------------------------------------------------------------------------------------|
-| gguf                            | Kev-0.8B-Q8_0.gguf, 812,406,304 bytes                                                                   |
-| heap after `load_model`         | 1.21 GB (`wasm_heap_bytes = 1_211_826_176`), `-c 4096`, f32 KV cache                                    |
-| instructions per state token    | ~1.4 B (1.60 B at 2,000 tokens): **24 state tokens stored per call**                                    |
-| instructions per question token | ~1.42 B: **~24 tokens per question**, without the state                                                 |
-| stored state                    | ~20 MB + ~24 KB per state token; ~1.5 B to save, ~1-2 B to load                                         |
-| max state size                  | ~5,000 tokens (estimate; measured up to 2,000): beyond that, loading and saving leave no room in a call |
-| one 16-token question           | ~22.8 B instructions on an 84-token state, ~26 B on a 2,000-token one                                   |
-| `max_tokens_update`             | 0: each call stops itself before the IC's instruction limit                                             |
-| accuracy vs llama-server (CPU)  | within 0.013 on every probability                                                                       |
+| Measure                         | Value                                                                             |
+|---------------------------------|-----------------------------------------------------------------------------------|
+| gguf                            | Kev-0.8B-Q8_0.gguf, 812,406,304 bytes                                             |
+| heap after `load_model`         | 1.21 GB (`wasm_heap_bytes = 1_211_826_176`), `-c 4096`, f32 KV cache              |
+| instructions per state token    | ~1.4 B (1.60 B at 2,000 tokens): **24 state tokens stored per call**              |
+| instructions per question token | ~1.42 B: **~24 tokens per question**, without the state                           |
+| stored state                    | ~20 MB + ~24 KB per state token; ~1.5 B to save, ~1-2 B to load                   |
+| max state size                  | ~4,000 tokens: `-c 4096` holds the state plus one question (measured up to 2,000) |
+| one 16-token question           | ~22.8 B instructions on an 84-token state, ~26 B on a 2,000-token one             |
+| `max_tokens_update`             | 0: each call stops itself before the IC's instruction limit                       |
+| accuracy vs llama-server (CPU)  | within 0.013 on every probability                                                 |
 
 ## Quality
 
@@ -101,9 +101,10 @@ icp canister call llama_cpp load_model '(record { args = vec {"--model"; "models
 
   The f32 cache makes the stored state bigger (~24 KB per token), which is cheaper than
   the attention it saves.
-- `-c 4096` sets the largest state plus question. It is required: the default is the
-  model's training context. Kev was trained on states up to 7,552 tokens, but at ~5,000
-  tokens loading and saving the stored state no longer leave room in one call.
+- `-c 4096` sets the largest state plus question: ~4,000 state tokens. It is required:
+  the default is the model's training context. Kev was trained on states up to 7,552
+  tokens, but a larger `-c` does not help: beyond ~5,000 tokens (estimated) loading and
+  saving the stored state no longer leave room in one call.
 - `-b 64 -ub 64` keeps the per-call buffers small. A question must fit in `-ub` tokens.
 - Do not pass `-np` / `--parallel`: the stored state needs one sequence.
 
@@ -185,7 +186,7 @@ To make it work:
   they do, the state is ingested from the start: correct, only slower.
 - **Send what grows, not a snapshot.** A chess game as its move list grows; a board
   position (FEN) changes in the middle, so nothing can be reused.
-- The state stays limited to ~5,000 tokens. For a log that keeps growing, start a new
+- The state stays limited to ~4,000 tokens (`-c 4096`). For a log that keeps growing, start a new
   state from a recent window now and then.
 
 ## What it's good (and not good) for
