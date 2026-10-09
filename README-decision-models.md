@@ -171,7 +171,7 @@ be chosen per model.
 |----------|-------------------|--------------------------------------------------------------------------------------------------------------|
 | Julia-1  | yes, primary      | 168 MB; ~170-180 M instructions per token: ~210 tokens per question per call                                 |
 | Laya     | yes, compact      | 449 MB; ~1.2 B instructions per token: 33 tokens per question per call                                       |
-| Kev-0.8B | yes, stored state | 812 MB; ~1.4 B instructions per token: the state is stored ~24 tokens per call, then ~24 tokens per question |
+| Kev-0.8B | yes, stored state | 812 MB; ~1.4 B instructions per token: the state is stored ~24 tokens per call, then ~22 tokens per question |
 | Kev-4B   | no                | 3.0 GB gguf: over the ~2 GiB a single message can read from stable memory (`IC0524`)                         |
 | lev      | no                | same as Kev-4B                                                                                               |
 | OpenJev  | no                | 19 GB                                                                                                        |
@@ -205,7 +205,7 @@ starts with the state, so the state is a prefix that does not depend on the ques
 exactly like `run_update` ingests a long prompt, and every question then decodes only its
 own tokens on top of the stored state. A later request about the same state skips the
 ingestion, and a grown state (new data appended) continues from the stored one. Only one question (instructions + options, without the state) must fit in one
-call: ~24 tokens on a short state. Each call measures its own cost and stops before the
+call: ~22 tokens on a short state (~18 on a 2,000-token state). Each call measures its own cost and stops before the
 instruction limit, so a long state never traps.
 
 The batch and micro-batch size (`--batch-size`, `--ubatch-size`) must be at
@@ -306,7 +306,7 @@ Measured on a local replica (same 40 B instruction limit per update call as main
 | gguf (Q8_0)             | 168 MB                                                                    | 449 MB                    | 812 MB                                        |
 | heap after `load_model` | 316 MB                                                                    | 686 MB                    | 1.21 GB (`-c 4096`, f32 KV)                   |
 | instructions per token  | ~170-180 M                                                                | ~1.2 B                    | ~1.4 B (1.60 B at 2,000 state tokens)         |
-| max tokens per question | ~210                                                                      | 33                        | ~24, without the state                        |
+| max tokens per question | ~210                                                                      | 33                        | ~22, without the state                        |
 | max state size          | within the question                                                       | within the question       | ~4,000 tokens (`-c 4096`), 24 stored per call |
 | `max_tokens_update`     | 200                                                                       | 32                        | 0: each call stops itself before the limit    |
 | example question        | 87 tokens, ~14.9 B cycles                                                 | 29 tokens, ~34.5 B cycles | 16 tokens on a stored state, ~22.8 B cycles   |
