@@ -341,6 +341,10 @@ type DecisionOutputRecord = record {
   probabilities : vec record { question_id : text; key : text; probability : float64 };
   input_tokens : nat64;   // tokens evaluated in THIS call
   pending : vec text;     // question ids not answered yet: re-send the same request
+  // kev models (e.g. Kev-0.8B) store the state per caller, ingesting it over calls:
+  // its size in tokens, and how many are not stored yet (0 = stored). null for laya
+  state_tokens : opt nat64;
+  state_tokens_remaining : opt nat64;
 };
 type DecisionResult = variant {
   Err : ApiError;

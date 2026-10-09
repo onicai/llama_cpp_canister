@@ -347,6 +347,21 @@ end-to-end checks that do catch them:
 #   expect Ok with n_prompt_tokens_cached = 0 (cold start), not a trap
 ```
 
+### 5. The kev LM-head patch lives in the fork's `src/models/qwen35.cpp`
+
+A kev decision model (Kev-0.8B) runs in embeddings mode, where every token is an output,
+and it only reads the embeddings. The fork skips the LM head in that case (`ICPP-PATCH`,
+`if (!(model.cls_out && cparams.embeddings))`), which makes each question token ~1/3
+cheaper: 1.42 B instead of 2.15 B instructions. It is a fork commit, so it survives a
+rebase of the `onicai` branch; re-check it when `qwen35.cpp` conflicts:
+
+```bash
+grep -n "ICPP-PATCH" src/llama_cpp_onicai_fork/src/models/qwen35.cpp   # expect 4 hits
+```
+
+A lost patch fails the Kev-0.8B QA iteration: its 20-token `team` question then needs
+~43 B instructions and traps with IC0522.
+
 ## Branch management
 
 We need to rethink this logic, but for now it is ok...

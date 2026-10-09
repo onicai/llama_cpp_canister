@@ -122,9 +122,10 @@ deterministic: the same request on the same wasm always gives the same probabili
 - **Good:** routing and intent detection, moderation (`noul`: "is this spam?"),
   urgency triage, checking an agent's output before it acts, in 50+ languages, on short
   inputs. Act on high-confidence answers.
-- **Not good:** inputs longer than ~200 tokens per question (not yet: see
-  `_handoff/2026-10-07-decision-models-multi-call-ingestion.md`), and fine distinctions
-  where the top two options are close.
+- **Not good:** inputs longer than ~200 tokens per question (for a long state, use
+  [Kev-0.8B](README-decision-model-kev-0.8b.md): it stores the state, up to ~4,000
+  tokens, over several calls, while each question's instructions and options must still
+  fit in one call), and fine distinctions where the top two options are close.
 - **State format matters.** For the PR's refund message, Julia-1 answers `refund` (0.98)
   when the state is the PR's JSON object, but `track` (0.57; llama-server CPU: 0.90) when
   the same sentence is sent as plain text. Test your state format against llama-server.

@@ -6,6 +6,7 @@ request and reference answers apply (see MODELS):
 
     DECISION_MODEL=julia-1   (default)  ggml-org/Julia-1-GGUF  Julia-1-Q8_0.gguf
     DECISION_MODEL=laya                 ggml-org/Laya-GGUF     Laya-Q8_0.gguf
+    DECISION_MODEL=kev-0.8b             ggml-org/Kev-0.8B-GGUF Kev-0.8B-Q8_0.gguf
 
 Requests and replies are encoded/decoded with icp-py-core (icp_candid), so the
 reply is checked structurally, and by an encoder independent of icpp-pro.
@@ -109,7 +110,38 @@ LAYA_QUESTIONS = {
     },
 }
 
-# Per model: the per-call token budget (max_tokens_update), the tolerance on
+# A state of 84 tokens for Kev-0.8B: it is ingested over several calls
+KEV_STATE = (
+    "Hi, I ordered a pair of running shoes (order 88213) ten days ago. The tracking "
+    "page has said 'label created' since the 3rd and nothing has moved. I need them "
+    "for a race on Saturday. Can you tell me where the parcel actually is, or should "
+    "I just cancel and buy somewhere else? Honestly a bit disappointed, this is my "
+    "third order with you."
+)
+# A new message appended to KEV_STATE: a grown state continues from the stored one
+KEV_STATE_UPDATE = "\nUpdate: the parcel arrived today, all good now."
+KEV_QUESTIONS = {
+    **{k: v for k, v in LAYA_QUESTIONS.items() if k != "frustration"},
+    "mood": {
+        "type": "score",
+        "instructions": "Mood?",
+        "criteria": ["calm", "annoyed", "angry"],
+    },
+    "team": {
+        "type": "choice",
+        "instructions": "Which team should handle this?",
+        "criteria": {
+            "billing": None,
+            "shipping": None,
+            "technical": None,
+            "sales": None,
+        },
+    },
+}
+
+LOAD_ARGS = '"--no-warmup"; "-c"; "2048"; "-b"; "2048"; "-ub"; "2048"'
+
+# Per model: the load_model args, the per-call token budget (max_tokens_update), the tolerance on
 # probabilities, and the llama-server (CPU) reference answers for the request.
 # Reference format: question id -> {option key -> probability}; noul -> {"true": p}
 MODELS: Dict[str, Dict[str, Any]] = {
@@ -118,6 +150,7 @@ MODELS: Dict[str, Dict[str, Any]] = {
     # "mildly annoyed", Metal "annoyed"). So no tolerance on its probabilities,
     # only the clear decisions (reference top probability >= CLEAR) must match.
     "julia-1": {
+        "load_args": LOAD_ARGS,
         "budget": 200,
         "tolerance": None,
         "state": PR_STATE,
@@ -149,6 +182,7 @@ MODELS: Dict[str, Dict[str, Any]] = {
     # Laya evaluates at most 33 tokens per update call (~1.2 B instructions per
     # token), so it gets a compact request: every question fits in 32 tokens.
     "laya": {
+        "load_args": LOAD_ARGS,
         "budget": 32,
         "tolerance": 0.05,
         "state": LAYA_STATE,
@@ -162,6 +196,34 @@ MODELS: Dict[str, Dict[str, Any]] = {
             },
             "urgent": {"true": 0.9064},
             "frustration": {"calm": 0.0092, "angry": 0.9908},
+        },
+    },
+    # Kev-0.8B is causal: the state is ingested once, over several calls, into a
+    # per-caller state file, and each question then costs only its own tokens
+    # (~1.45 B instructions per token with -fa off and an f32 KV cache). A budget
+    # of 24 (a multiple of the 8-token ingestion step) makes the test need
+    # several calls; the canister also stops each call before the IC limit.
+    "kev-0.8b": {
+        "load_args": '"--no-warmup"; "-c"; "4096"; "-b"; "64"; "-ub"; "64"; "-fa"; "off"; "--cache-type-k"; "f32"; "--cache-type-v"; "f32"',
+        "budget": 24,
+        "tolerance": 0.05,
+        "state": KEV_STATE,
+        "questions": KEV_QUESTIONS,
+        "reference": {
+            "intent": {
+                "refund": 0.04,
+                "cancel": 0.276,
+                "track": 0.2589,
+                "other": 0.4251,
+            },
+            "urgent": {"true": 0.5081},
+            "mood": {"calm": 0.1882, "annoyed": 0.5703, "angry": 0.2415},
+            "team": {
+                "billing": 0.0907,
+                "shipping": 0.6321,
+                "technical": 0.1158,
+                "sales": 0.1614,
+            },
         },
     },
 }
@@ -216,6 +278,8 @@ DecisionResult = Types.Variant(
                 ),
                 "input_tokens": Types.Nat64,
                 "pending": Types.Vec(Types.Text),
+                "state_tokens": Types.Opt(Types.Nat64),
+                "state_tokens_remaining": Types.Opt(Types.Nat64),
             }
         ),
         "Err": ApiError,
@@ -225,6 +289,10 @@ DecisionResult = Types.Variant(
 
 def model() -> Dict[str, Any]:
     return MODELS[os.environ.get("DECISION_MODEL", "julia-1")]
+
+
+def is_kev() -> bool:
+    return os.environ.get("DECISION_MODEL", "julia-1").startswith("kev")
 
 
 def flat(state: Any, questions: Dict[str, Any]) -> Dict[str, Any]:
@@ -318,7 +386,7 @@ def test__load_model(network: str) -> None:
     response = call(
         network,
         "load_model",
-        '(record { args = vec {"--model"; "models/model.gguf"; "--no-warmup"; "-c"; "2048"; "-b"; "2048"; "-ub"; "2048"} })',
+        f'(record {{ args = vec {{"--model"; "models/model.gguf"; {model()["load_args"]}}} }})',
     )
     assert "Model succesfully loaded into memory." in response
 
@@ -385,6 +453,16 @@ def test__decisions_match_llama_server(network: str) -> None:
     print(
         f"\n{len(replies)} calls, input_tokens per call: {[r['input_tokens'] for r in replies]}"
     )
+    remaining = [r["state_tokens_remaining"] for r in replies]
+    if is_kev():
+        # the state is ingested over several calls, then stored
+        print(f"state_tokens_remaining per call: {remaining}")
+        assert len(set(r["state_tokens"][0] for r in replies)) == 1
+        assert remaining[0][0] > 0 and remaining[-1] == [0], remaining
+        counts = [x[0] for x in remaining]
+        assert counts == sorted(counts, reverse=True), counts
+    else:
+        assert all(x == [] for x in remaining), remaining
 
     got = probabilities(final)
     for answer in final["answers"]:
@@ -411,6 +489,39 @@ def test__decisions_match_llama_server(network: str) -> None:
                 answer["choice"],
                 ref,
             )
+
+
+def test__kev_reuses_the_stored_state(network: str) -> None:
+    """A new request about the same state does not ingest it again."""
+    if not is_kev():
+        return
+    m = model()
+    set_budget(network, m["budget"])
+    request = flat(m["state"], {"intent": m["questions"]["intent"]})
+    r = decide(network, request)
+    assert "Ok" in r, r
+    ok = r["Ok"]
+    assert ok["state_tokens_remaining"] == [0], ok
+    assert ok["pending"] == [] and len(ok["answers"]) == 1, ok
+    # only the question's own tokens were evaluated
+    assert 0 < ok["input_tokens"] < ok["state_tokens"][0], ok
+
+
+def test__kev_grown_state_continues_from_the_stored_one(network: str) -> None:
+    """A state with new data appended ingests only the new tokens."""
+    if not is_kev():
+        return
+    m = model()
+    set_budget(network, m["budget"])
+    request = flat(m["state"] + KEV_STATE_UPDATE, {"intent": m["questions"]["intent"]})
+    replies = decide_all(network, request)
+    final = replies[-1]
+    assert [a["id"] for a in final["answers"]] == ["intent"], final
+    n_state = final["state_tokens"][0]
+    n_evaluated = sum(r["input_tokens"] for r in replies)
+    print(f"\ngrown state of {n_state} tokens, {n_evaluated} tokens evaluated")
+    # only the appended tokens and the question, not the whole state again
+    assert n_evaluated < n_state, (n_evaluated, n_state)
 
 
 def test__reset_budget(network: str) -> None:

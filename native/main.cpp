@@ -41,6 +41,7 @@ int main() {
   test_memory_status(mockIC);
   test_files(mockIC);
   test_decision(mockIC);
+  test_decision_kev(mockIC);
   test_tiny_stories(mockIC);
   test_prompt_cache_format(mockIC);
   test_qwen2(mockIC);

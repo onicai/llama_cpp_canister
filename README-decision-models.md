@@ -1,13 +1,15 @@
 # Decision models (System One) on llama_cpp_canister
 
 > **Status: available since llama_cpp_canister v0.20.0** (llama.cpp b11476, `run_decision`
-> endpoint), verified on a local replica with Julia-1 and Laya. This document describes
-> the technology, what upstream llama.cpp ships, the canister design, and the measured
-> results.
+> endpoint), verified on a local replica with Julia-1 and Laya. **Kev-0.8B** (the state,
+> up to ~4,000 tokens, is stored over several calls; each question must still fit in one
+> call) since v0.21.0. This document describes the technology, what
+> upstream llama.cpp ships, the canister design, and the measured results.
 >
 > Step-by-step model guides:
 > - [README-decision-model-julia-1.md](README-decision-model-julia-1.md): Julia-1, 144M, 50+ languages, ~210 tokens per question
 > - [README-decision-model-Laya.md](README-decision-model-Laya.md): Laya, 421M, English, 33 tokens per question
+> - [README-decision-model-kev-0.8b.md](README-decision-model-kev-0.8b.md): Kev-0.8B, 0.8B, English, the state is stored once and every question costs only its own tokens
 
 ## What a decision model is
 
@@ -140,15 +142,16 @@ the output at each `[MASK]` marker.
 
 ### The models
 
-All five are published as pre-converted GGUFs under `ggml-org`:
+All six are published as pre-converted GGUFs under `ggml-org`:
 
-| Model   | Size | Base             | Decision type | Languages              | Images | License      | GGUF                                  |
-|---------|------|------------------|---------------|------------------------|--------|--------------|---------------------------------------|
-| Julia-1 | 144M | mmBERT-small     | `laya`        | 50+                    | no     | Apache 2.0   | `ggml-org/Julia-1-GGUF`: Q8_0 168 MB  |
-| Laya    | 421M | ModernBERT-large | `laya`        | English                | no     | Apache 2.0   | `ggml-org/Laya-GGUF`: Q8_0 449 MB     |
-| Kev-4B  | 4B   | Qwen3.5-4B-Base  | `kev`         | English                | no     | Apache 2.0   | `ggml-org/Kev-4B-GGUF`: Q4_K_M 3.0 GB |
-| lev     | 4B   | Qwen3.5-4B       | `lev`         | English                | no     | Apache 2.0   | `ggml-org/lev-GGUF`: Q4_K_M 3.0 GB    |
-| OpenJev | 27B  | Qwen3.8-27B      | `openjev`     | en, de, fr, hi, zh, ja | yes    | CC BY-NC 4.0 | `ggml-org/OpenJev-GGUF`: Q4_K_M 19 GB |
+| Model    | Size | Base              | Decision type | Languages              | Images | License      | GGUF                                  |
+|----------|------|-------------------|---------------|------------------------|--------|--------------|---------------------------------------|
+| Julia-1  | 144M | mmBERT-small      | `laya`        | 50+                    | no     | Apache 2.0   | `ggml-org/Julia-1-GGUF`: Q8_0 168 MB  |
+| Laya     | 421M | ModernBERT-large  | `laya`        | English                | no     | Apache 2.0   | `ggml-org/Laya-GGUF`: Q8_0 449 MB     |
+| Kev-0.8B | 0.8B | Qwen3.5-0.8B-Base | `kev`         | English                | no     | Apache 2.0   | `ggml-org/Kev-0.8B-GGUF`: Q8_0 812 MB |
+| Kev-4B   | 4B   | Qwen3.5-4B-Base   | `kev`         | English                | no     | Apache 2.0   | `ggml-org/Kev-4B-GGUF`: Q4_K_M 3.0 GB |
+| lev      | 4B   | Qwen3.5-4B        | `lev`         | English                | no     | Apache 2.0   | `ggml-org/lev-GGUF`: Q4_K_M 3.0 GB    |
+| OpenJev  | 27B  | Qwen3.8-27B       | `openjev`     | en, de, fr, hi, zh, ja | yes    | CC BY-NC 4.0 | `ggml-org/OpenJev-GGUF`: Q4_K_M 19 GB |
 
 Upstream also publishes `ggml-org/tinylaya-for-testing-gguf` (97 MB), a slice
 of Laya used by its tests. It goes through the same `laya` code path, so we use
@@ -164,20 +167,22 @@ be chosen per model.
 
 ## Which models fit in a canister
 
-| Model   | Fit          | Why                                                                                  |
-|---------|--------------|--------------------------------------------------------------------------------------|
-| Julia-1 | yes, primary | 168 MB; ~170-180 M instructions per token: ~210 tokens per question per call         |
-| Laya    | yes, compact | 449 MB; ~1.2 B instructions per token: 33 tokens per question per call               |
-| Kev-4B  | no           | 3.0 GB gguf: over the ~2 GiB a single message can read from stable memory (`IC0524`) |
-| lev     | no           | same as Kev-4B                                                                       |
-| OpenJev | no           | 19 GB                                                                                |
+| Model    | Fit               | Why                                                                                                          |
+|----------|-------------------|--------------------------------------------------------------------------------------------------------------|
+| Julia-1  | yes, primary      | 168 MB; ~170-180 M instructions per token: ~210 tokens per question per call                                 |
+| Laya     | yes, compact      | 449 MB; ~1.2 B instructions per token: 33 tokens per question per call                                       |
+| Kev-0.8B | yes, stored state | 812 MB; ~1.4 B instructions per token: the state is stored ~24 tokens per call, then ~24 tokens per question |
+| Kev-4B   | no                | 3.0 GB gguf: over the ~2 GiB a single message can read from stable memory (`IC0524`)                         |
+| lev      | no                | same as Kev-4B                                                                                               |
+| OpenJev  | no                | 19 GB                                                                                                        |
 
 Kev-4B and lev would also be too slow even if they loaded: LFM2.5-2.6B already
 manages only 4 tokens per call ([README-LFM2.5-2.6B.md](README-LFM2.5-2.6B.md)),
 and a decision prompt is several hundred tokens.
 
 Julia-1 and Laya share the `laya` decision type, so one code path in the
-canister serves both.
+canister serves both. Kev-0.8B is the only `kev` model small enough; the other
+Kev models are 3 GB and up.
 
 ## The main constraint: one question, one call
 
@@ -192,8 +197,16 @@ instructions). This sets the maximum size of a question (instructions + options 
 state): measured ~210 tokens for Julia-1 and 33 tokens for Laya.
 
 A request with several questions is still fine: `run_decision` answers as many as fit in
-one call and returns the rest as `pending` (see below). Splitting ONE long question across
-calls is a follow-up project (`_handoff/2026-10-07-decision-models-multi-call-ingestion.md`).
+one call and returns the rest as `pending` (see below).
+
+**Kev-0.8B lifts this constraint for the state.** Kev is causal (Qwen3.5) and its prompt
+starts with the state, so the state is a prefix that does not depend on the question.
+`run_decision` ingests it over as many calls as needed into a per-caller session file,
+exactly like `run_update` ingests a long prompt, and every question then decodes only its
+own tokens on top of the stored state. A later request about the same state skips the
+ingestion, and a grown state (new data appended) continues from the stored one. Only one question (instructions + options, without the state) must fit in one
+call: ~24 tokens on a short state. Each call measures its own cost and stops before the
+instruction limit, so a long state never traps.
 
 The batch and micro-batch size (`--batch-size`, `--ubatch-size`) must be at
 least the length of the longest question's sequence.
@@ -246,6 +259,8 @@ type DecisionOutputRecord = record {
   probabilities : vec record { question_id : text; key : text; probability : float64 };
   input_tokens : nat64;
   pending : vec text;
+  state_tokens : opt nat64;            // kev only: the state's size in tokens
+  state_tokens_remaining : opt nat64;  // kev only: not stored yet (0 = stored)
 };
 type DecisionResult = variant { Err : ApiError; Ok : DecisionOutputRecord };
 run_decision : (DecisionInputRecord) -> (DecisionResult);
@@ -262,11 +277,23 @@ run_decision : (DecisionInputRecord) -> (DecisionResult);
   request until `pending` is empty. The answers so far are kept in a per-principal file
   in `.canister_cache/<principal>/sessions/`, keyed by the request AND the loaded model,
   so the cache cleanup timer covers them and another model never reuses them.
-- **Implementation:** `src/decision.cpp` ports the laya path of upstream
+- **Stored state (kev):** the state is ingested in chunks of up to `--batch-size` tokens,
+  within the same `max_tokens_update` budget, into
+  `.canister_cache/<principal>/sessions/decision-state-<hash>.session` (the hash covers the
+  model, the context layout and the state tokens). Each question re-loads that checkpoint
+  (~0.3 B instructions), because a recurrent memory cannot be rolled back, and the file is
+  never written by a question. A state that is not stored yet continues from the caller's
+  stored state with the longest token list it starts with (a grown state). Each call measures its own instructions and stops before
+  the IC limit, leaving the rest `pending`. A file is ~20 MB + ~24 KB per state token
+  (f32 KV cache, recommended with `-fa off`, which keeps the cost per token almost flat
+  as the state grows); the cache
+  cleanup timer removes it 6 h after it was stored, and a principal keeps at most 8.
+- **Implementation:** `src/decision.cpp` ports the laya and kev paths of upstream
   `tools/server/server-decision.cpp` (b11476), keeping its function names so future
   llama.cpp upgrades can diff against it. Every input check returns an error instead of
-  throwing (a throw traps the canister). Left out: images, the other decision types, and
-  shared-prefix batching.
+  throwing (a throw traps the canister). Left out: images and the other decision types.
+  One fork patch (`ICPP-PATCH` in `src/models/qwen35.cpp`): a kev model skips the LM head,
+  which it never reads, which makes each question token ~1/3 cheaper.
 - **Logging:** one line per answered question in the canister log, e.g.
   `llama_cpp: run_decision - intent (choice, 87 tokens) -> refund (p=0.98, confidence=0.98)`.
 
@@ -274,15 +301,16 @@ run_decision : (DecisionInputRecord) -> (DecisionResult);
 
 Measured on a local replica (same 40 B instruction limit per update call as mainnet):
 
-| Measure                 | Julia-1                                                                   | Laya                      |
-|-------------------------|---------------------------------------------------------------------------|---------------------------|
-| gguf (Q8_0)             | 168 MB                                                                    | 449 MB                    |
-| heap after `load_model` | 316 MB                                                                    | 686 MB                    |
-| instructions per token  | ~170-180 M                                                                | ~1.2 B                    |
-| max tokens per question | ~210                                                                      | 33                        |
-| `max_tokens_update`     | 200                                                                       | 32                        |
-| example question        | 87 tokens, ~14.9 B cycles                                                 | 29 tokens, ~34.5 B cycles |
-| vs llama-server (CPU)   | clear decisions agree; close calls can differ (Q8_0 rounding sensitivity) | within 0.011              |
+| Measure                 | Julia-1                                                                   | Laya                      | Kev-0.8B                                      |
+|-------------------------|---------------------------------------------------------------------------|---------------------------|-----------------------------------------------|
+| gguf (Q8_0)             | 168 MB                                                                    | 449 MB                    | 812 MB                                        |
+| heap after `load_model` | 316 MB                                                                    | 686 MB                    | 1.21 GB (`-c 4096`, f32 KV)                   |
+| instructions per token  | ~170-180 M                                                                | ~1.2 B                    | ~1.4 B (1.60 B at 2,000 state tokens)         |
+| max tokens per question | ~210                                                                      | 33                        | ~24, without the state                        |
+| max state size          | within the question                                                       | within the question       | ~4,000 tokens (`-c 4096`), 24 stored per call |
+| `max_tokens_update`     | 200                                                                       | 32                        | 0: each call stops itself before the limit    |
+| example question        | 87 tokens, ~14.9 B cycles                                                 | 29 tokens, ~34.5 B cycles | 16 tokens on a stored state, ~22.8 B cycles   |
+| vs llama-server (CPU)   | clear decisions agree; close calls can differ (Q8_0 rounding sensitivity) | within 0.011              | within 0.013                                  |
 
 Port correctness was verified natively: the canister code with Laya matches llama-server
 on the same commit to 0.006 on every probability of the PR #29818 request, with the same
@@ -295,6 +323,6 @@ rounding: llama-server itself answers some of its questions differently on CPU a
 - [HF blog: New in llama.cpp: Decision Models](https://huggingface.co/blog/ggml-org/decision-models-in-llamacpp)
 - [llama.cpp PR #29818](https://github.com/ggml-org/llama.cpp/pull/29818)
 - [llama.cpp server README](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)
-- [ggml-org/Julia-1-GGUF](https://huggingface.co/ggml-org/Julia-1-GGUF), [ggml-org/Laya-GGUF](https://huggingface.co/ggml-org/Laya-GGUF), [ggml-org/Kev-4B-GGUF](https://huggingface.co/ggml-org/Kev-4B-GGUF), [ggml-org/lev-GGUF](https://huggingface.co/ggml-org/lev-GGUF), [ggml-org/OpenJev-GGUF](https://huggingface.co/ggml-org/OpenJev-GGUF)
+- [ggml-org/Julia-1-GGUF](https://huggingface.co/ggml-org/Julia-1-GGUF), [ggml-org/Laya-GGUF](https://huggingface.co/ggml-org/Laya-GGUF), [ggml-org/Kev-0.8B-GGUF](https://huggingface.co/ggml-org/Kev-0.8B-GGUF), [ggml-org/Kev-4B-GGUF](https://huggingface.co/ggml-org/Kev-4B-GGUF), [ggml-org/lev-GGUF](https://huggingface.co/ggml-org/lev-GGUF), [ggml-org/OpenJev-GGUF](https://huggingface.co/ggml-org/OpenJev-GGUF)
 - [explainx.ai: llama.cpp Decision Models](https://explainx.ai/blog/llama-cpp-decision-model-support-2026)
 - [DEV Community: Run Local AI Decision Models with llama.cpp](https://dev.to/koolkamalkishor/run-local-ai-decision-models-with-llamacpp-for-fast-classification-2im3)

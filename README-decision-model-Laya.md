@@ -42,9 +42,8 @@ tokens. Laya's template spends tokens on structure, so write tight questions:
 - Score levels render as `level 0: calm`: about 4 tokens per level.
 - A `noul` without descriptions renders as "no, the statement does not hold" / "yes, the
   statement holds": give short descriptions instead.
-- Keep the state to the essential sentence. Longer states need multi-call ingestion,
-  which is not available yet: see
-  `_handoff/2026-10-07-decision-models-multi-call-ingestion.md`.
+- Keep the state to the essential sentence. For longer states, use
+  [Kev-0.8B](README-decision-model-kev-0.8b.md): it stores the state over several calls.
 
 ## Get the gguf
 
@@ -113,6 +112,8 @@ The three compact questions above, sent as one request, are answered in 3 update
 
 - **Good:** precise English decisions on very short inputs: a chat line, a command, a
   title, a one-sentence agent output. Best accuracy of the two on-chain decision models.
-- **Not good (yet):** anything longer than ~33 tokens per question, including most real
-  messages with context. That needs multi-call ingestion (follow-up project). For longer
-  inputs today, use [Julia-1](README-decision-model-julia-1.md) (~210 tokens per question).
+- **Not good:** anything longer than ~33 tokens per question, including most real
+  messages with context. For longer inputs, use [Julia-1](README-decision-model-julia-1.md)
+  (~210 tokens per question) or [Kev-0.8B](README-decision-model-kev-0.8b.md): its state, up
+  to ~4,000 tokens, is stored over several calls, while each question (instructions +
+  options) must still fit in one call.
