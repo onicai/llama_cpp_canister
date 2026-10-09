@@ -201,5 +201,11 @@ To make it work:
   option keys short; descriptions add tokens). A question that cannot fit returns `Err`.
 - **Not good:** the most accurate answers on short inputs: use
   [Laya](README-decision-model-Laya.md) there.
-- **Storage:** each stored state is ~20 MB per caller. It is removed 6 h after it was
-  stored (and ingested again on the next request), and a caller keeps at most 8.
+- **Storage:** each stored state is ~20 MB + ~24 KB per state token, per caller, and a
+  caller keeps at most 8 (the oldest is removed first).
+- **Optional, expiry by age:** stored states are prompt-cache files, so the
+  [prompt-cache cleanup timer](README.md#prompt-cache-cleanup-timer) can also remove
+  them. It is off by default; start it with `cache_cleanup_start_timer` (again after
+  every upgrade), and set its TTL with `set_cache_cleanup_config` (default 6 h). It then
+  deletes a state whose last ingestion is older than the TTL; answering questions does
+  not refresh that time. A removed state is ingested again on the next request about it.

@@ -276,7 +276,8 @@ run_decision : (DecisionInputRecord) -> (DecisionResult);
   request order, and returns the answers so far plus the `pending` ids. Re-send the same
   request until `pending` is empty. The answers so far are kept in a per-principal file
   in `.canister_cache/<principal>/sessions/`, keyed by the request AND the loaded model,
-  so the cache cleanup timer covers them and another model never reuses them.
+  so the optional prompt-cache cleanup timer covers them when it is started, and another
+  model never reuses them.
 - **Stored state (kev):** the state is ingested in chunks of up to `--batch-size` tokens,
   within the same `max_tokens_update` budget, into
   `.canister_cache/<principal>/sessions/decision-state-<hash>.session` (the hash covers the
@@ -286,8 +287,10 @@ run_decision : (DecisionInputRecord) -> (DecisionResult);
   stored state with the longest token list it starts with (a grown state). Each call measures its own instructions and stops before
   the IC limit, leaving the rest `pending`. A file is ~20 MB + ~24 KB per state token
   (f32 KV cache, recommended with `-fa off`, which keeps the cost per token almost flat
-  as the state grows); the cache
-  cleanup timer removes it 6 h after it was stored, and a principal keeps at most 8.
+  as the state grows). A principal keeps at most 8 stored states. Optionally, the
+  operator can start the prompt-cache cleanup timer (`cache_cleanup_start_timer`; off by
+  default) to also remove states whose last ingestion is older than its TTL (default
+  6 h, `set_cache_cleanup_config`).
 - **Implementation:** `src/decision.cpp` ports the laya and kev paths of upstream
   `tools/server/server-decision.cpp` (b11476), keeping its function names so future
   llama.cpp upgrades can diff against it. Every input check returns an error instead of
