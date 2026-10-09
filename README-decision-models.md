@@ -203,7 +203,7 @@ starts with the state, so the state is a prefix that does not depend on the ques
 `run_decision` ingests it over as many calls as needed into a per-caller session file,
 exactly like `run_update` ingests a long prompt, and every question then decodes only its
 own tokens on top of the stored state. A later request about the same state skips the
-ingestion. Only one question (instructions + options, without the state) must fit in one
+ingestion, and a grown state (new data appended) continues from the stored one. Only one question (instructions + options, without the state) must fit in one
 call: ~24 tokens on a short state. Each call measures its own cost and stops before the
 instruction limit, so a long state never traps.
 
@@ -281,7 +281,8 @@ run_decision : (DecisionInputRecord) -> (DecisionResult);
   `.canister_cache/<principal>/sessions/decision-state-<hash>.session` (the hash covers the
   model, the context layout and the state tokens). Each question re-loads that checkpoint
   (~0.3 B instructions), because a recurrent memory cannot be rolled back, and the file is
-  never written by a question. Each call measures its own instructions and stops before
+  never written by a question. A state that is not stored yet continues from the caller's
+  stored state with the longest token list it starts with (a grown state). Each call measures its own instructions and stops before
   the IC limit, leaving the rest `pending`. A file is ~20 MB + ~24 KB per state token
   (f32 KV cache, recommended with `-fa off`, which keeps the cost per token almost flat
   as the state grows); the cache

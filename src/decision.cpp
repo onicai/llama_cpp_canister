@@ -1218,6 +1218,56 @@ struct kev_guard {
   }
 };
 
+// The tokens of a stored state, read from the header of its session file
+// (magic, version, token count, tokens) without loading the state itself.
+bool read_stored_tokens(const std::string &path, size_t n_max,
+                        std::vector<llama_token> &tokens) {
+  std::ifstream in(path, std::ios::binary);
+  uint32_t magic = 0, version = 0, n_tokens = 0;
+  in.read(reinterpret_cast<char *>(&magic), sizeof(magic));
+  in.read(reinterpret_cast<char *>(&version), sizeof(version));
+  in.read(reinterpret_cast<char *>(&n_tokens), sizeof(n_tokens));
+  if (!in || magic != LLAMA_SESSION_MAGIC || version != LLAMA_SESSION_VERSION ||
+      n_tokens > n_max) {
+    return false;
+  }
+  tokens.resize(n_tokens);
+  in.read(reinterpret_cast<char *>(tokens.data()),
+          n_tokens * sizeof(llama_token));
+  return bool(in);
+}
+
+// A state that grows by appending (a log with a new day, a game's move list)
+// starts with a state stored earlier. Returns the principal's stored state
+// with the longest token list that is a prefix of `state`, other than `path`
+// itself, written by this build for the loaded model and context layout; ""
+// if there is none.
+std::string find_stored_prefix(const std::string &path,
+                               const std::vector<llama_token> &state) {
+  namespace fs = std::filesystem;
+  std::string best;
+  size_t n_best = 0;
+  std::error_code ec;
+  for (fs::directory_iterator it(fs::path(path).parent_path(), ec), end;
+       !ec && it != end; it.increment(ec)) {
+    const std::string candidate = it->path().string();
+    const std::string name = it->path().filename().string();
+    if (!string_starts_with(name, "decision-state-") ||
+        !string_ends_with(name, ".session") || it->path() == fs::path(path) ||
+        !prompt_cache_format_is_current(candidate)) {
+      continue;
+    }
+    std::vector<llama_token> tokens;
+    if (read_stored_tokens(candidate, state.size(), tokens) &&
+        tokens.size() > n_best &&
+        std::equal(tokens.begin(), tokens.end(), state.begin())) {
+      best = candidate;
+      n_best = tokens.size();
+    }
+  }
+  return best;
+}
+
 // kev: ingest the state prefix into a per-principal session file across calls
 // (the checkpoint), then answer questions from that checkpoint. The file is
 // only written while the state is ingested: a question changes the memory, and
@@ -1248,41 +1298,63 @@ std::string answer_kev(llama_context *ctx, const decision_context &d,
     log_line(stale_msg);
   }
   llama_memory_clear(mem, true);
+  // Loads a stored state into the memory; true if it holds the start of this
+  // state (then n_cached is its length)
   size_t n_cached = 0;
-  std::error_code ec_size;
-  if (std::filesystem::file_size(path, ec_size) > 0 && !ec_size) {
+  auto load = [&](const std::string &file) {
     std::vector<llama_token> stored(llama_n_ctx(ctx));
     size_t n_stored = 0;
     const uint64_t i0 = instruction_counter();
-    const bool ok = llama_state_load_file(ctx, path.c_str(), stored.data(),
-                                          stored.size(), &n_stored);
+    const bool ok =
+        llama_state_load_file(ctx, file.c_str(), stored.data(), stored.size(),
+                              &n_stored) &&
+        n_stored <= n_state &&
+        std::equal(stored.begin(), stored.begin() + n_stored, state.begin());
     const uint64_t i1 = instruction_counter();
-    if (ok && n_stored <= n_state &&
-        std::equal(stored.begin(), stored.begin() + n_stored, state.begin())) {
-      n_cached = n_stored;
-      log_line("state: loaded " + std::to_string(n_cached) + "/" +
-               std::to_string(n_state) + " tokens from " + path +
-               instructions_note(i0, i1, 0));
+    if (!ok) {
+      llama_memory_clear(mem, true);
+      return false;
+    }
+    n_cached = n_stored;
+    log_line("state: loaded " + std::to_string(n_cached) + "/" +
+             std::to_string(n_state) + " tokens from " + file +
+             instructions_note(i0, i1, 0));
+    return true;
+  };
+  std::string loaded; // the file the memory was loaded from, if any
+  std::error_code ec_size;
+  if (std::filesystem::file_size(path, ec_size) > 0 && !ec_size) {
+    if (load(path)) {
+      loaded = path;
     } else {
       std::error_code ec;
       std::filesystem::remove(path, ec);
       prompt_cache_remove_stamp(path);
-      llama_memory_clear(mem, true);
       log_line("state: discarded " + path +
                ", it does not hold this state; starting over");
+    }
+  }
+  const bool new_file = loaded.empty();
+  if (new_file) {
+    // a grown state continues from the stored state it starts with
+    const std::string prefix = find_stored_prefix(path, state);
+    if (!prefix.empty() && load(prefix)) {
+      loaded = prefix;
+      log_line("state: continues the stored state " + prefix);
     }
   }
 
   // --- ingest the rest of the state, in steps of KEV_STEP tokens, while the
   //     token budget and the instruction limit allow (the save included)
   std::error_code ec_bytes;
-  const uintmax_t stored_bytes = std::filesystem::file_size(path, ec_bytes);
+  const uintmax_t stored_bytes =
+      loaded.empty() ? 0 : std::filesystem::file_size(loaded, ec_bytes);
   const double save_cost =
       KEV_SAVE_PER_BYTE *
       std::max<double>(ec_bytes ? 0 : stored_bytes, 25.0 * 1024 * 1024);
   uint64_t used = 0;
   if (n_cached < n_state) {
-    if (n_cached == 0) {
+    if (new_file) {
       evict_old_states(path);
     }
     const size_t n_start = n_cached;

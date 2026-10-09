@@ -118,6 +118,8 @@ KEV_STATE = (
     "I just cancel and buy somewhere else? Honestly a bit disappointed, this is my "
     "third order with you."
 )
+# A new message appended to KEV_STATE: a grown state continues from the stored one
+KEV_STATE_UPDATE = "\nUpdate: the parcel arrived today, all good now."
 KEV_QUESTIONS = {
     **{k: v for k, v in LAYA_QUESTIONS.items() if k != "frustration"},
     "mood": {
@@ -503,6 +505,23 @@ def test__kev_reuses_the_stored_state(network: str) -> None:
     assert ok["pending"] == [] and len(ok["answers"]) == 1, ok
     # only the question's own tokens were evaluated
     assert 0 < ok["input_tokens"] < ok["state_tokens"][0], ok
+
+
+def test__kev_grown_state_continues_from_the_stored_one(network: str) -> None:
+    """A state with new data appended ingests only the new tokens."""
+    if not is_kev():
+        return
+    m = model()
+    set_budget(network, m["budget"])
+    request = flat(m["state"] + KEV_STATE_UPDATE, {"intent": m["questions"]["intent"]})
+    replies = decide_all(network, request)
+    final = replies[-1]
+    assert [a["id"] for a in final["answers"]] == ["intent"], final
+    n_state = final["state_tokens"][0]
+    n_evaluated = sum(r["input_tokens"] for r in replies)
+    print(f"\ngrown state of {n_state} tokens, {n_evaluated} tokens evaluated")
+    # only the appended tokens and the question, not the whole state again
+    assert n_evaluated < n_state, (n_evaluated, n_state)
 
 
 def test__reset_budget(network: str) -> None:

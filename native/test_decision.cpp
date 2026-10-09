@@ -574,6 +574,22 @@ void test_decision_kev(MockIC &mockIC) {
       "4449444c026c01dd9ad28304016d7101000b072d2d6d6f64656c306d6f64656c732f67676d6c"
       "2d6f72672f4b65762d302e38422d474755462f4b65762d302e38422d51385f302e676775660b"
       "2d2d6e6f2d7761726d7570022d630438313932022d62023332032d7562023332032d6e700132";
+  const std::string KEV_GROWN_STATE =
+      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
+      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
+      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001810348692c2049206f7264"
+      "6572656420612070616972206f662072756e6e696e672073686f657320286f72646572203838"
+      "323133292074656e20646179732061676f2e2054686520747261636b696e6720706167652068"
+      "6173207361696420276c6162656c2063726561746564272073696e6365207468652033726420"
+      "616e64206e6f7468696e6720686173206d6f7665642e2049206e656564207468656d20666f72"
+      "20612072616365206f6e2053617475726461792e2043616e20796f752074656c6c206d652077"
+      "68657265207468652070617263656c2061637475616c6c792069732c206f722073686f756c64"
+      "2049206a7573742063616e63656c20616e642062757920736f6d65776865726520656c73653f"
+      "20486f6e6573746c79206120626974206469736170706f696e7465642c207468697320697320"
+      "6d79207468697264206f72646572207769746820796f752e0a5570646174653a207468652070"
+      "617263656c206172726976656420746f6461792c20616c6c20676f6f64206e6f772e0106696e"
+      "74656e740207496e74656e743f0406726566756e640006696e74656e740663616e63656c0006"
+      "696e74656e7405747261636b0006696e74656e74056f746865720006696e74656e74";
   const std::string MAX_TOKENS_0 =
       "4449444c016c02deb5daad0478f3a29d8e0778010000000000000000000000000000000000";
 
@@ -719,6 +735,43 @@ void test_decision_kev(MockIC &mockIC) {
     check(r.label == "Ok" && r.state_tokens_remaining.value_or(0) > 0,
           "kev other layout: the state of another layout was used: " +
               r.err_text);
+  }
+
+  // --- a grown state (new data appended) continues from the stored state it
+  //     starts with: only the new tokens are ingested, and the answer is the
+  //     one of the grown state ingested from scratch (up to float noise: the
+  //     steps around the old end differ)
+  remove_stored_states(controller);
+  {
+    const std::vector<DecisionReply> first =
+        call_all(mockIC, "kev state to grow", KEV_INTENT_ONLY, controller);
+    check(first.back().label == "Ok" && first.back().pending.empty(),
+          "kev state to grow: not answered: " + first.back().err_text);
+    const std::vector<DecisionReply> grown =
+        call_all(mockIC, "kev grown state", KEV_GROWN_STATE, controller);
+    uint64_t n_evaluated = 0;
+    for (const auto &r : grown) {
+      n_evaluated += r.input_tokens;
+    }
+    const DecisionReply &g = grown.back();
+    check(g.label == "Ok" && g.pending.empty(),
+          "kev grown state: not answered: " + g.err_text);
+    check(g.state_tokens.value_or(0) > first.back().state_tokens.value_or(0) &&
+              n_evaluated < g.state_tokens.value_or(0),
+          "kev grown state: the whole state was ingested again (" +
+              std::to_string(n_evaluated) + " tokens evaluated)");
+    remove_stored_states(controller);
+    const std::vector<DecisionReply> scratch = call_all(
+        mockIC, "kev grown state from scratch", KEV_GROWN_STATE, controller);
+    const DecisionReply &f = scratch.back();
+    check(f.label == "Ok" && f.a_choice == g.a_choice &&
+              f.p_probability.size() == g.p_probability.size(),
+          "kev grown state: the answer differs from a from-scratch run");
+    for (size_t k = 0; k < f.p_probability.size() && k < g.p_probability.size();
+         k++) {
+      check(std::fabs(f.p_probability[k] - g.p_probability[k]) < 0.01,
+            "kev grown state: probability differs from a from-scratch run");
+    }
   }
 
   // --- a principal keeps at most 8 stored states

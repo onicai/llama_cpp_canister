@@ -28,6 +28,8 @@ the state, so the state is a prefix that does not depend on the question.
    its own tokens (instructions + options), never the state again.
 3. A **later request about the same state** (other questions) starts answering right
    away: the state is still stored.
+4. A **grown state** (the stored state with new data appended) continues from the
+   stored one: only the new tokens are ingested.
 
 You re-send the same request until `pending` is empty, as for the other decision models.
 
@@ -154,6 +156,38 @@ llama_cpp: run_decision - intent (choice, 16 tokens) -> other (p=0.43, confidenc
 A new request about the same state, e.g. only `intent`, is now answered in one call of 16
 tokens: the state is still stored.
 
+## Growing states: append, then ask again
+
+A state that grows as data arrives (a trading log with a new day, a game's move list after
+each move, a conversation with a new message) does not have to be ingested again. When a
+request's state is not stored yet, `run_decision` looks for the caller's stored state with
+the longest token list that the new state starts with, loads it, and ingests only the
+rest. The older state stays stored, so requests about it keep working.
+
+Verified natively (`test_decision_kev`): the 84-token state above, with
+`"\nUpdate: the parcel arrived today, all good now."` appended (96 tokens), is answered in
+one call: 12 new tokens + the 16-token question. The answer equals the one of the same
+state ingested from scratch, within 0.01.
+
+```
+llama_cpp: run_decision - state: loaded 84/96 tokens from .canister_cache/<principal>/sessions/decision-state-<hash>.session
+llama_cpp: run_decision - state: continues the stored state .canister_cache/<principal>/sessions/decision-state-<hash>.session
+llama_cpp: run_decision - state: tokens 84..88 of 96
+llama_cpp: run_decision - state: tokens 88..96 of 96
+```
+
+To make it work:
+
+- **Append, never rewrite.** The new state must start with exactly the old one: for a
+  `Text` state, the old text plus the new text; for a `Json` state, new keys or items
+  at the end (the key order is kept).
+- **Start the new data with a newline,** so the tokens at the old end do not change. If
+  they do, the state is ingested from the start: correct, only slower.
+- **Send what grows, not a snapshot.** A chess game as its move list grows; a board
+  position (FEN) changes in the middle, so nothing can be reused.
+- The state stays limited to ~5,000 tokens. For a log that keeps growing, start a new
+  state from a recent window now and then.
+
 ## What it's good (and not good) for
 
 - **Good:** decisions about a long state: a support ticket with its history, a document,
@@ -161,6 +195,7 @@ tokens: the state is still stored.
   and every question then costs one call or less.
 - **Good:** many requests about the same state, e.g. a moderation or triage policy asked
   in steps, or new questions as a conversation goes on.
+- **Good:** a state that grows by appending: each update only costs its new tokens.
 - **Not good:** one long question: instructions + options must fit in ~24 tokens (keep
   option keys short; descriptions add tokens). A question that cannot fit returns `Err`.
 - **Not good:** the most accurate answers on short inputs: use
