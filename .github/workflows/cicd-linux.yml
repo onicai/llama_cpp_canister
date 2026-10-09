@@ -123,11 +123,12 @@ jobs:
           mkdir -p ./models/google/gemma-3-270m-it-GGUF
           wget -nv -O ./models/google/gemma-3-270m-it-GGUF/gemma-3-270m-it-Q8_0.gguf https://huggingface.co/unsloth/gemma-3-270m-it-GGUF/resolve/main/gemma-3-270m-it-Q8_0.gguf?download=true
 
-      - name: Download decision models (Julia-1, Laya)
+      - name: Download decision models (Julia-1, Laya, Kev-0.8B)
         run: |
-          mkdir -p ./models/ggml-org/Julia-1-GGUF ./models/ggml-org/Laya-GGUF
+          mkdir -p ./models/ggml-org/Julia-1-GGUF ./models/ggml-org/Laya-GGUF ./models/ggml-org/Kev-0.8B-GGUF
           wget -nv -O ./models/ggml-org/Julia-1-GGUF/Julia-1-Q8_0.gguf https://huggingface.co/ggml-org/Julia-1-GGUF/resolve/main/Julia-1-Q8_0.gguf?download=true
           wget -nv -O ./models/ggml-org/Laya-GGUF/Laya-Q8_0.gguf https://huggingface.co/ggml-org/Laya-GGUF/resolve/main/Laya-Q8_0.gguf?download=true
+          wget -nv -O ./models/ggml-org/Kev-0.8B-GGUF/Kev-0.8B-Q8_0.gguf https://huggingface.co/ggml-org/Kev-0.8B-GGUF/resolve/main/Kev-0.8B-Q8_0.gguf?download=true
 
       - name: test-llm-wasm (against the Docker-built wasm)
         # `icp network start` downloads the network-launcher via the GitHub API.

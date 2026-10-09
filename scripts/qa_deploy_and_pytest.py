@@ -186,6 +186,14 @@ def main() -> int:
                 "test_paths": ["test/test_decision.py"],
             },
             {
+                "filename": "models/ggml-org/Kev-0.8B-GGUF/Kev-0.8B-Q8_0.gguf",
+                "canister_filename": "models/model.gguf",
+                "wasm_memory_limit": 4026531840,  # 3.75 GiB
+                "topup": 100000000000000,  # 812 MB upload
+                "env": {"DECISION_MODEL": "kev-0.8b"},
+                "test_paths": ["test/test_decision.py"],
+            },
+            {
                 "filename": "models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf",  # pylint: disable=line-too-long
                 "canister_filename": "models/model.gguf",
                 "wasm_memory_limit": 4026531840,  # 3.75 GiB
