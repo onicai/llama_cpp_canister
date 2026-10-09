@@ -17,6 +17,7 @@
 #include "../src/model.h"
 #include "../src/run.h"
 
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -417,38 +418,36 @@ void test_decision_kev(MockIC &mockIC) {
   const std::string KEV_REQUEST =
       "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
       "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001d10248692c2049206f7264"
+      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001910148692c2049206f7264"
       "6572656420612070616972206f662072756e6e696e672073686f657320286f72646572203838"
       "323133292074656e20646179732061676f2e2054686520747261636b696e6720706167652068"
       "6173207361696420276c6162656c2063726561746564272073696e6365207468652033726420"
-      "616e64206e6f7468696e6720686173206d6f7665642e2049206e656564207468656d20666f72"
-      "20612072616365206f6e2053617475726461792e2043616e20796f752074656c6c206d652077"
-      "68657265207468652070617263656c2061637475616c6c792069732c206f722073686f756c64"
-      "2049206a7573742063616e63656c20616e642062757920736f6d65776865726520656c73653f"
-      "20486f6e6573746c79206120626974206469736170706f696e7465642c207468697320697320"
-      "6d79207468697264206f72646572207769746820796f752e0406696e74656e740207496e7465"
-      "6e743f06757267656e740007557267656e743f046d6f6f6401054d6f6f643f047465616d021e"
-      "5768696368207465616d2073686f756c642068616e646c6520746869733f0d06726566756e64"
-      "0006696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e7405"
-      "6f746865720006696e74656e74047472756506757267656e7406757267656e740566616c7365"
-      "0863616e207761697406757267656e740463616c6d00046d6f6f6407616e6e6f79656400046d"
-      "6f6f6405616e67727900046d6f6f640762696c6c696e6700047465616d087368697070696e67"
-      "00047465616d09746563686e6963616c00047465616d0573616c657300047465616d";
+      "616e64206e6f7468696e6720686173206d6f7665642e0206696e74656e740207496e74656e74"
+      "3f06757267656e740007557267656e743f0606726566756e640006696e74656e740663616e63"
+      "656c0006696e74656e7405747261636b0006696e74656e74056f746865720006696e74656e74"
+      "047472756506757267656e7406757267656e740566616c73650863616e207761697406757267"
+      "656e74";
+  const std::string KEV_GROWN_STATE =
+      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
+      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
+      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001c10148692c2049206f7264"
+      "6572656420612070616972206f662072756e6e696e672073686f657320286f72646572203838"
+      "323133292074656e20646179732061676f2e2054686520747261636b696e6720706167652068"
+      "6173207361696420276c6162656c2063726561746564272073696e6365207468652033726420"
+      "616e64206e6f7468696e6720686173206d6f7665642e0a5570646174653a2074686520706172"
+      "63656c206172726976656420746f6461792c20616c6c20676f6f64206e6f772e0106696e7465"
+      "6e740207496e74656e743f0406726566756e640006696e74656e740663616e63656c0006696e"
+      "74656e7405747261636b0006696e74656e74056f746865720006696e74656e74";
   const std::string KEV_INTENT_ONLY =
       "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
       "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001d10248692c2049206f7264"
+      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001910148692c2049206f7264"
       "6572656420612070616972206f662072756e6e696e672073686f657320286f72646572203838"
       "323133292074656e20646179732061676f2e2054686520747261636b696e6720706167652068"
       "6173207361696420276c6162656c2063726561746564272073696e6365207468652033726420"
-      "616e64206e6f7468696e6720686173206d6f7665642e2049206e656564207468656d20666f72"
-      "20612072616365206f6e2053617475726461792e2043616e20796f752074656c6c206d652077"
-      "68657265207468652070617263656c2061637475616c6c792069732c206f722073686f756c64"
-      "2049206a7573742063616e63656c20616e642062757920736f6d65776865726520656c73653f"
-      "20486f6e6573746c79206120626974206469736170706f696e7465642c207468697320697320"
-      "6d79207468697264206f72646572207769746820796f752e0106696e74656e740207496e7465"
-      "6e743f0406726566756e640006696e74656e740663616e63656c0006696e74656e7405747261"
-      "636b0006696e74656e74056f746865720006696e74656e74";
+      "616e64206e6f7468696e6720686173206d6f7665642e0106696e74656e740207496e74656e74"
+      "3f0406726566756e640006696e74656e740663616e63656c0006696e74656e7405747261636b"
+      "0006696e74656e74056f746865720006696e74656e74";
   const std::string LOAD_KEV =
       "4449444c026c01dd9ad28304016d71010009072d2d6d6f64656c306d6f64656c732f67676d6c"
       "2d6f72672f4b65762d302e38422d474755462f4b65762d302e38422d51385f302e676775660b"
@@ -503,8 +502,12 @@ void test_decision_kev(MockIC &mockIC) {
       "6572207769746820796f752e0106696e74656e740207496e74656e743f0406726566756e6400"
       "06696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e74056f"
       "746865720006696e74656e74";
-  const std::string MAX_TOKENS_32 =
-      "4449444c016c02deb5daad0478f3a29d8e0778010020000000000000002000000000000000";
+  const std::string LOAD_KEV_PARALLEL_2 =
+      "4449444c026c01dd9ad28304016d7101000b072d2d6d6f64656c306d6f64656c732f67676d6c"
+      "2d6f72672f4b65762d302e38422d474755462f4b65762d302e38422d51385f302e676775660b"
+      "2d2d6e6f2d7761726d7570022d630438313932022d62023332032d7562023332032d6e700132";
+  const std::string MAX_TOKENS_24 =
+      "4449444c016c02deb5daad0478f3a29d8e0778010018000000000000001800000000000000";
   const std::string MAX_TOKENS_10 =
       "4449444c016c02deb5daad0478f3a29d8e077801000a000000000000000a00000000000000";
   const std::string KEV_SMALL_STATE_1 =
@@ -514,82 +517,6 @@ void test_decision_kev(MockIC &mockIC) {
       "686572652069732069743f0106696e74656e740207496e74656e743f0406726566756e640006"
       "696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e74056f74"
       "6865720006696e74656e74";
-  const std::string KEV_SMALL_STATE_2 =
-      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
-      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001154f7264657220323a2077"
-      "686572652069732069743f0106696e74656e740207496e74656e743f0406726566756e640006"
-      "696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e74056f74"
-      "6865720006696e74656e74";
-  const std::string KEV_SMALL_STATE_3 =
-      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
-      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001154f7264657220333a2077"
-      "686572652069732069743f0106696e74656e740207496e74656e743f0406726566756e640006"
-      "696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e74056f74"
-      "6865720006696e74656e74";
-  const std::string KEV_SMALL_STATE_4 =
-      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
-      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001154f7264657220343a2077"
-      "686572652069732069743f0106696e74656e740207496e74656e743f0406726566756e640006"
-      "696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e74056f74"
-      "6865720006696e74656e74";
-  const std::string KEV_SMALL_STATE_5 =
-      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
-      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001154f7264657220353a2077"
-      "686572652069732069743f0106696e74656e740207496e74656e743f0406726566756e640006"
-      "696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e74056f74"
-      "6865720006696e74656e74";
-  const std::string KEV_SMALL_STATE_6 =
-      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
-      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001154f7264657220363a2077"
-      "686572652069732069743f0106696e74656e740207496e74656e743f0406726566756e640006"
-      "696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e74056f74"
-      "6865720006696e74656e74";
-  const std::string KEV_SMALL_STATE_7 =
-      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
-      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001154f7264657220373a2077"
-      "686572652069732069743f0106696e74656e740207496e74656e743f0406726566756e640006"
-      "696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e74056f74"
-      "6865720006696e74656e74";
-  const std::string KEV_SMALL_STATE_8 =
-      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
-      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001154f7264657220383a2077"
-      "686572652069732069743f0106696e74656e740207496e74656e743f0406726566756e640006"
-      "696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e74056f74"
-      "6865720006696e74656e74";
-  const std::string KEV_SMALL_STATE_9 =
-      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
-      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001154f7264657220393a2077"
-      "686572652069732069743f0106696e74656e740207496e74656e743f0406726566756e640006"
-      "696e74656e740663616e63656c0006696e74656e7405747261636b0006696e74656e74056f74"
-      "6865720006696e74656e74";
-  const std::string LOAD_KEV_PARALLEL_2 =
-      "4449444c026c01dd9ad28304016d7101000b072d2d6d6f64656c306d6f64656c732f67676d6c"
-      "2d6f72672f4b65762d302e38422d474755462f4b65762d302e38422d51385f302e676775660b"
-      "2d2d6e6f2d7761726d7570022d630438313932022d62023332032d7562023332032d6e700132";
-  const std::string KEV_GROWN_STATE =
-      "4449444c076c0391ecada008018dcddc9e0b02dee6f8ff0d056b02c8dc858a0371cdf1cbbe03"
-      "716d036c03dbb70171d4c2a7b80404a5adfee906716b03d8b1a8c8047fd2e6e5c6077fe1febe"
-      "850c7f6d066c039f93c60271fc91f4f8057194a5a3a60b71010001810348692c2049206f7264"
-      "6572656420612070616972206f662072756e6e696e672073686f657320286f72646572203838"
-      "323133292074656e20646179732061676f2e2054686520747261636b696e6720706167652068"
-      "6173207361696420276c6162656c2063726561746564272073696e6365207468652033726420"
-      "616e64206e6f7468696e6720686173206d6f7665642e2049206e656564207468656d20666f72"
-      "20612072616365206f6e2053617475726461792e2043616e20796f752074656c6c206d652077"
-      "68657265207468652070617263656c2061637475616c6c792069732c206f722073686f756c64"
-      "2049206a7573742063616e63656c20616e642062757920736f6d65776865726520656c73653f"
-      "20486f6e6573746c79206120626974206469736170706f696e7465642c207468697320697320"
-      "6d79207468697264206f72646572207769746820796f752e0a5570646174653a207468652070"
-      "617263656c206172726976656420746f6461792c20616c6c20676f6f64206e6f772e0106696e"
-      "74656e740207496e74656e743f0406726566756e640006696e74656e740663616e63656c0006"
-      "696e74656e7405747261636b0006696e74656e74056f746865720006696e74656e74";
   const std::string MAX_TOKENS_0 =
       "4449444c016c02deb5daad0478f3a29d8e0778010000000000000000000000000000000000";
 
@@ -598,14 +525,15 @@ void test_decision_kev(MockIC &mockIC) {
                   silent_on_trap, controller);
 
   // --- the whole request in one call: the reference. The state is ingested
-  //     in chunks of n_batch (32) tokens.
+  //     in steps of 8 tokens. A short state and two questions keep this test
+  //     fast on the CI's x86 runner.
   mockIC.run_test("test_decision_kev: no budget", set_max_tokens, MAX_TOKENS_0,
                   "", silent_on_trap, controller);
   const DecisionReply full =
       call(mockIC, "kev one call", KEV_REQUEST, controller);
-  check(full.label == "Ok" && full.pending.empty() && full.a_ids.size() == 4,
+  check(full.label == "Ok" && full.pending.empty() && full.a_ids.size() == 2,
         "kev one call: not complete: " + full.err_text);
-  check(full.state_tokens.has_value() && *full.state_tokens > 64 &&
+  check(full.state_tokens.has_value() && *full.state_tokens > 24 &&
             full.state_tokens_remaining == std::optional<uint64_t>{0},
         "kev one call: state progress");
   const uint64_t n_state = full.state_tokens.value_or(0);
@@ -613,21 +541,21 @@ void test_decision_kev(MockIC &mockIC) {
         "kev one call: expected one stored state");
 
   // --- the same request over several calls, from scratch: the state is
-  //     ingested 32 tokens per call (the same chunks as above), then one
-  //     question per call. The answers must be identical.
+  //     ingested 24 tokens per call (the same 8-token steps as above), then
+  //     one question per call. The answers must be identical.
   remove_stored_states(controller);
-  mockIC.run_test("test_decision_kev: budget 32", set_max_tokens, MAX_TOKENS_32,
+  mockIC.run_test("test_decision_kev: budget 24", set_max_tokens, MAX_TOKENS_24,
                   "", silent_on_trap, controller);
   const std::vector<DecisionReply> resume =
       call_all(mockIC, "kev resume", KEV_REQUEST, controller);
   const DecisionReply &last = resume.back();
   check(last.label == "Ok" && last.pending.empty(),
         "kev resume: not complete: " + last.err_text);
-  check(resume.size() >= 3 + 4, "kev resume: expected >= 3 ingestion calls "
+  check(resume.size() >= 2 + 2, "kev resume: expected >= 2 ingestion calls "
                                 "and one call per question");
   uint64_t remaining_before = n_state + 1;
   for (const auto &r : resume) {
-    check(r.input_tokens > 0 && r.input_tokens <= 32,
+    check(r.input_tokens > 0 && r.input_tokens <= 24,
           "kev resume: input_tokens not within the budget");
     const uint64_t remaining = r.state_tokens_remaining.value_or(n_state + 1);
     check(remaining < remaining_before || remaining == 0,
@@ -648,7 +576,7 @@ void test_decision_kev(MockIC &mockIC) {
         call(mockIC, "kev reuse", KEV_INTENT_ONLY, controller);
     check(r.label == "Ok" && r.pending.empty() && r.a_ids.size() == 1,
           "kev reuse: not answered in one call: " + r.err_text);
-    check(r.input_tokens > 0 && r.input_tokens < 32 &&
+    check(r.input_tokens > 0 && r.input_tokens <= 24 &&
               r.state_tokens_remaining == std::optional<uint64_t>{0},
           "kev reuse: the state was ingested again");
     check(r.a_choice.size() == 1 && r.a_choice[0] == full.a_choice[0],
@@ -673,9 +601,10 @@ void test_decision_kev(MockIC &mockIC) {
   //     unrelated state, which must still get its own answer
   if (!states.empty()) {
     const DecisionReply clean =
-        call(mockIC, "kev small state", KEV_SMALL_STATE_1, controller);
+        call_all(mockIC, "kev small state", KEV_SMALL_STATE_1, controller)
+            .back();
     check(clean.label == "Ok" && clean.pending.empty(),
-          "kev small state: not answered in one call: " + clean.err_text);
+          "kev small state: not answered: " + clean.err_text);
     for (const auto &other : stored_states(controller)) {
       if (other == states[0]) {
         continue;
@@ -687,7 +616,8 @@ void test_decision_kev(MockIC &mockIC) {
                                  other.string() + ".icppfmt", overwrite, ec);
     }
     const DecisionReply again =
-        call(mockIC, "kev foreign file", KEV_SMALL_STATE_1, controller);
+        call_all(mockIC, "kev foreign file", KEV_SMALL_STATE_1, controller)
+            .back();
     check(again.label == "Ok" && again.p_probability == clean.p_probability,
           "kev foreign file: the foreign state was used: " + again.err_text);
   }
@@ -727,8 +657,8 @@ void test_decision_kev(MockIC &mockIC) {
   // --- another context layout (-c 4096) does not use the stored state
   mockIC.run_test("test_decision_kev: load with -c 4096", load_model,
                   LOAD_KEV_CTX_4096, "", silent_on_trap, controller);
-  mockIC.run_test("test_decision_kev: budget 32 again", set_max_tokens,
-                  MAX_TOKENS_32, "", silent_on_trap, controller);
+  mockIC.run_test("test_decision_kev: budget 24 again", set_max_tokens,
+                  MAX_TOKENS_24, "", silent_on_trap, controller);
   {
     const DecisionReply r =
         call(mockIC, "kev other layout", KEV_INTENT_ONLY, controller);
@@ -774,21 +704,40 @@ void test_decision_kev(MockIC &mockIC) {
     }
   }
 
-  // --- a principal keeps at most 8 stored states
+  // --- a principal keeps at most 8 stored states: 8 older ones (dummy files;
+  //     eviction only looks at names and mtimes), then one real one
   remove_stored_states(controller);
+  {
+    const std::string dir = ".canister_cache/" + controller + "/sessions";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    const auto now = std::filesystem::file_time_type::clock::now();
+    for (int i = 0; i < 8; i++) {
+      const std::string dummy =
+          dir + "/decision-state-dummy" + std::to_string(i) + ".session";
+      std::ofstream(dummy) << "not a session file";
+      std::filesystem::last_write_time(dummy, now - std::chrono::hours(8 - i),
+                                       ec);
+      check(!ec, "kev ninth state: could not set the mtime of " + dummy);
+    }
+  }
   mockIC.run_test("test_decision_kev: no budget (states)", set_max_tokens,
                   MAX_TOKENS_0, "", silent_on_trap, controller);
-  for (const std::string *state :
-       {&KEV_SMALL_STATE_1, &KEV_SMALL_STATE_2, &KEV_SMALL_STATE_3,
-        &KEV_SMALL_STATE_4, &KEV_SMALL_STATE_5, &KEV_SMALL_STATE_6,
-        &KEV_SMALL_STATE_7, &KEV_SMALL_STATE_8, &KEV_SMALL_STATE_9}) {
-    const DecisionReply r = call(mockIC, "kev many states", *state, controller);
+  {
+    const DecisionReply r =
+        call(mockIC, "kev ninth state", KEV_SMALL_STATE_1, controller);
     check(r.label == "Ok" && r.pending.empty(),
-          "kev many states: not answered: " + r.err_text);
+          "kev ninth state: not answered: " + r.err_text);
+    const std::vector<std::filesystem::path> kept = stored_states(controller);
+    bool oldest_kept = false;
+    for (const auto &path : kept) {
+      oldest_kept |= path.filename() == "decision-state-dummy0.session";
+    }
+    check(kept.size() == 8 && !oldest_kept,
+          "kev ninth state: expected the oldest of 9 stored states removed, "
+          "got " +
+              std::to_string(kept.size()) + " stored states");
   }
-  check(stored_states(controller).size() == 8,
-        "kev many states: expected 8 stored states, got " +
-            std::to_string(stored_states(controller).size()));
 
   // --- leave nothing behind (native runs share .canister_cache)
   remove_stored_states(controller);

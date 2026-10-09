@@ -27,7 +27,8 @@
 // questions that fit the per-call token budget (max_tokens_update, the same
 // setting that protects run_update) and returns the answers so far plus the ids
 // still pending. The answers so far are kept in a per-principal file next to
-// the prompt caches, so the cache cleanup timer covers them.
+// the prompt caches, so the prompt-cache cleanup timer (once started) covers
+// them.
 
 #include "decision.h"
 
@@ -1133,8 +1134,9 @@ std::string answer_laya(llama_context *ctx, const decision_context &d,
   return "";
 }
 
-// A stored kev state is ~20 MB. The cache cleanup timer removes it 6 h after
-// it was ingested; until then, a principal keeps at most this many.
+// A stored kev state is ~20 MB. A principal keeps at most this many. The
+// prompt-cache cleanup timer, once an operator starts it, also removes states
+// whose last ingestion (mtime) is older than its TTL.
 const size_t MAX_DECISION_STATES = 8;
 
 // Removes the oldest stored states of the principal of `keep` (by mtime),
