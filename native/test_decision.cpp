@@ -718,6 +718,7 @@ void test_decision_kev(MockIC &mockIC) {
       std::ofstream(dummy) << "not a session file";
       std::filesystem::last_write_time(dummy, now - std::chrono::hours(8 - i),
                                        ec);
+      check(!ec, "kev ninth state: could not set the mtime of " + dummy);
     }
   }
   mockIC.run_test("test_decision_kev: no budget (states)", set_max_tokens,
