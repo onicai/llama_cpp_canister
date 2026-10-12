@@ -163,11 +163,13 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
   - Deploy the wasm to a canister on the local network:
 
-    `icp.yaml` defines three canisters that share the same wasm: **`llama_cpp`** (the
+    `icp.yaml` defines four canisters that share the same wasm: **`llama_cpp`** (the
     default, serving **Qwen3-0.6B** — the steps below), **`llama_cpp_qwen25`** (the
     previous default, **Qwen2.5-0.5B** — see [README-qwen2.5.md](README-qwen2.5.md)),
-    and **`llama_cpp_qwen3_17b`** (the larger **Qwen3-1.7B** — see
-    [README-qwen3-1.7B.md](README-qwen3-1.7B.md)).
+    **`llama_cpp_qwen3_17b`** (the larger **Qwen3-1.7B** — see
+    [README-qwen3-1.7B.md](README-qwen3-1.7B.md)), and **`llama_cpp_kev`** (the
+    **Kev-0.8B** decision model — see
+    [README-decision-model-kev-0.8b.md](README-decision-model-kev-0.8b.md)).
     Deploy just the one you need by naming it:
 
     ```bash

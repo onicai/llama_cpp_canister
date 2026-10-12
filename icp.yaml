@@ -30,6 +30,13 @@ canisters:
       steps:
         - type: pre-built
           path: build/llama_cpp.wasm
+  # The Kev-0.8B decision model on mainnet (stored states, run_decision).
+  # Same wasm; see README-decision-model-kev-0.8b.md.
+  - name: llama_cpp_kev
+    build:
+      steps:
+        - type: pre-built
+          path: build/llama_cpp.wasm
 
 networks:
   # A project-local replica, started with `icp network start`. icp-cli runs one
