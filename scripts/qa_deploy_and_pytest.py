@@ -132,7 +132,12 @@ def main() -> int:
                     # (lost ICPP-PATCHes in main_.cpp). MUST stay last: it
                     # reloads the model with a deliberately small --batch-size.
                     "test/test_upgrade_regressions.py",
+                    # settings that must survive an upgrade (admin roles,
+                    # access level, cleanup timer): set here, checked after
+                    # the in-place upgrade below
+                    "test/test_upgrade_settings_before.py",
                 ],
+                "after_upgrade_test_paths": ["test/test_upgrade_settings_after.py"],
             },
             # gemma-3-270M (gemma3 / iSWA architecture, q8_0 KV): exercises the
             # small-max_tokens prompt-cache regression on a real model. Requires the
@@ -271,6 +276,21 @@ def main() -> int:
 
             for test_path in test_paths:
                 typer.echo(f"--\nRun pytest on {test_path}")
+                run_shell_cmd(
+                    f"{env_prefix}pytest -vv --network=local "
+                    f"--identity={identity} {test_path}",
+                    cwd=ROOT_PATH,
+                )
+
+            after_upgrade = test.get("after_upgrade_test_paths", [])
+            if after_upgrade:
+                typer.echo(f"--\nUpgrade {ROOT_PATH.name} in place")
+                run_shell_cmd(
+                    f"icp deploy -e local -y --mode upgrade{identity_arg}",
+                    cwd=ROOT_PATH,
+                )
+            for test_path in after_upgrade:
+                typer.echo(f"--\nRun pytest on {test_path} (after the upgrade)")
                 run_shell_cmd(
                     f"{env_prefix}pytest -vv --network=local "
                     f"--identity={identity} {test_path}",

@@ -791,6 +791,11 @@ icp canister call llama_cpp -e local get_access '()'
 icp canister call llama_cpp -e local check_access '()'
 ```
 
+The access level and the admin roles (`assignAdminRole`) are saved in the
+file `.canister_settings.json` on every change, and `canister_post_upgrade`
+restores them, so they survive an upgrade. The first upgrade from a version
+before v0.22.0 starts from the defaults, because there is no file yet.
+
 # File Management
 
 A C++ canister on the Internet Computer uses a virtual file system, stored in Stable Memory.
@@ -820,20 +825,24 @@ icp canister call llama_cpp -e local filesystem_remove '(record {filename = "<fi
 # Prompt-Cache Cleanup Timer
 
 The canister can self-maintain its prompt-cache directory on a recurring
-schedule, deleting files in `.canister_cache/<principal>/sessions/` whose
-`mtime` is older than a configurable Time to Live (TTL). Once you start the
-timer, the canister handles prompt-cache hygiene on its own.
+schedule, deleting files in `.canister_cache/<principal>/sessions/` (and in
+its scope sub-directories, see `run_decision`) whose `mtime` is older than a
+configurable Time to Live (TTL). Pinned decision states are skipped. Once you
+start the timer, the canister handles prompt-cache hygiene on its own.
 
 **Defaults:**
 - period: 600 seconds (10 minutes between cleanup ticks)
 - TTL: 21600 seconds (6 hours — older files are deleted)
 - per-tick cap: 256 files (caps work-per-tick to stay under the IC's
   per-message instruction budget; the next tick continues)
+- max_decision_states: 256 stored decision states (Kev-0.8B, ~20 MB each)
+  over all callers and scopes; storing one more removes the oldest unpinned
+  one. 0 = no limit.
 
-**Operator-driven lifecycle.** The timer is **not** auto-armed in
-`canister_init` or `canister_post_upgrade`. After every install / upgrade
-you must explicitly call `cache_cleanup_start_timer`. Timer state is
-in-memory only and does not survive an upgrade.
+**Operator-driven lifecycle.** The timer is off until you call
+`cache_cleanup_start_timer`. The config and whether the timer runs are saved
+on every change, and `canister_post_upgrade` re-arms a running timer, so you
+start it once. (Before v0.22.0 it had to be started after every upgrade.)
 
 All endpoints below require **admin role**:
 - `cache_cleanup_start_timer`, `cache_cleanup_stop_timer`,
@@ -843,7 +852,7 @@ All endpoints below require **admin role**:
 
 ```bash
 # ------------------------------------------------------------------
-# Arm the recurring timer (REQUIRED after every install / upgrade)
+# Arm the recurring timer (once; it survives upgrades)
 icp canister call llama_cpp -e local cache_cleanup_start_timer '()'
 # -> (variant { Ok = record { ok = true; is_running = true } })
 
@@ -858,7 +867,8 @@ icp canister call llama_cpp -e local cache_cleanup_now '()'
 #                             last_run_ns = ...; period_seconds = 600;
 #                             ttl_seconds = 21_600;
 #                             max_files_per_run = 256;
-#                             is_running = ... } })
+#                             is_running = ...;
+#                             max_decision_states = opt 256 } })
 
 # Inspect stats (query, fast). `runs` and `last_run_ns` are lifetime
 # counters; `files_examined`, `files_deleted`, `files_failed` reflect the
@@ -869,6 +879,7 @@ icp canister call llama_cpp -e local get_cache_cleanup_stats '()'
 #   - period_seconds: must be > 0; opt 0 is silently rejected.
 #   - ttl_seconds   : 0 is valid ("delete every file under sessions/").
 #   - max_files_per_run: clamped to [1, 10000].
+#   - max_decision_states: 0 = no limit.
 # If the timer is already running, the new period is applied transparently.
 icp canister call llama_cpp -e local set_cache_cleanup_config '(record {
   period_seconds    = opt (300 : nat64);
@@ -876,54 +887,29 @@ icp canister call llama_cpp -e local set_cache_cleanup_config '(record {
   max_files_per_run = opt (128 : nat64)
 })'
 
-# Same call to update only the TTL, leaving period and cap unchanged
+# Same call to update only the TTL (a missing field is null: no change)
 icp canister call llama_cpp -e local set_cache_cleanup_config '(record {
-  period_seconds    = null;
-  ttl_seconds       = opt (3600 : nat64);
-  max_files_per_run = null
+  ttl_seconds       = opt (172800 : nat64)
 })'
 ```
 
 # Cycle Balance Monitoring
 
-The canister can track its own cycle balance on a recurring schedule. An
-hourly timer refreshes a cached snapshot of the balance (via the IC's
-`canister_cycle_balance128` system call), which admins read cheaply through
-the `get_cycle_balance` query — no need for a live system call on every check.
-
-**Defaults:**
-- period: 3600 seconds (refreshed once per hour)
-
-**Operator-driven lifecycle.** The timer is **not** auto-armed in
-`canister_init` or `canister_post_upgrade`. After every install / upgrade you
-must explicitly call `cycle_balance_start_timer`. Timer state and the cached
-balance are in-memory only and do not survive an upgrade. While tracking is
-off, `get_cycle_balance` returns a clear error instead of a stale value.
-
-All endpoints below require **admin role**:
-- `cycle_balance_start_timer`, `cycle_balance_stop_timer` need `AdminUpdate`
-  role (controller or whitelisted via `assignAdminRole`).
-- `get_cycle_balance` needs `AdminQuery` role.
+The `get_cycle_balance` query returns the canister's live cycle balance (the
+IC's `canister_cycle_balance128` system call), with `updated_at_ns` set to the
+time of the call. It needs `AdminQuery` role (controller or whitelisted via
+`assignAdminRole`), so a controller canister can fund the canister when its
+balance runs low.
 
 ```bash
-# ------------------------------------------------------------------
-# Turn ON cycle-balance tracking (REQUIRED after every install / upgrade).
-# Refreshes the balance once immediately, then re-reads it hourly.
-icp canister call llama_cpp -e local cycle_balance_start_timer '()'
-# -> (variant { Ok = record { status_code = 200 : nat16 } })
-
-# Read the cached balance (admin query, fast). updated_at_ns is the
-# IC_API::time() at which the snapshot was taken.
 icp canister call llama_cpp -e local get_cycle_balance '()'
 # -> (variant { Ok = record { cycle_balance = ... : nat; updated_at_ns = ... : nat64 } })
-
-# If tracking is OFF, the query returns a clear error instead of a stale value:
-# -> (variant { Err = variant { Other = "cycle balance tracking is off — an admin must call cycle_balance_start_timer" } })
-
-# Turn OFF cycle-balance tracking
-icp canister call llama_cpp -e local cycle_balance_stop_timer '()'
-# -> (variant { Ok = record { status_code = 200 : nat16 } })
 ```
+
+Before v0.22.0 the query returned an error unless an admin had armed an hourly
+tracking timer after the last upgrade. The timer endpoints
+(`cycle_balance_start_timer`, `cycle_balance_stop_timer`, `AdminUpdate` role)
+are kept for compatibility; nothing requires them any more.
 
 # Memory Status
 
@@ -1032,7 +1018,7 @@ NOTEs:
 - **`Qwen3-0.6B-Q8_0`**: ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --batch-size 64 --ubatch-size 64 --ctx-size 16384` and a `wasm_memory_limit` of 3.75 GiB; the small batch shrinks the compute buffers so a 16K context fits with ~2 GiB headroom — see [Context size & memory](#appendix-b-context-size--memory) for the mechanism, levers, and risks.
 - **`LFM2.5-1.2B-Instruct-Q4_K_M` is the fastest model that still passes our word-guessing quality gate** — Liquid AI's hybrid architecture (only 6 of 16 blocks are attention; the other 10 are short convolutions). Measured on mainnet at `-c 4096`: **9 tokens/call generation, 11 ingestion**, and **12.4 B cycles per `run_update` versus Qwen3-1.7B's 26.8 B — 2.16x cheaper per call** at 34 % less disk. Note it needs one word ("small") removed from the word-game example prompt, or it copies it into its hints. See [README-LFM2.5-1.2B.md](README-LFM2.5-1.2B.md).
 - **`Qwen3-1.7B-Q4_K_M` is the largest model we tested on-chain so far.** Use Q4_K_M, not Q8_0: a single message can read at most ~2 GiB from stable memory and the Q8_0 gguf (~1.83 GB) trips `IC0524` on load. It needs `--batch-size 8 --ubatch-size 8` and a 3.75 GiB `wasm_memory_limit`, and `--ctx-size 16384` requires v0.16.4 or later. See [README-qwen3-1.7B.md](README-qwen3-1.7B.md).
-- **Decision models (System One)**: `run_decision` answers typed `choice` / `score` / yes-no questions about a state with probabilities, in one forward pass, instead of generating text. **Julia-1** (144M, 50+ languages) fits ~210 tokens per question per update call (~14.9 B instructions for an 87-token question); **Laya** (421M, English, more precise) fits 33. **Kev-0.8B** (causal, English) stores the state once per caller, ingesting it over as many calls as needed (and only the new part when the state grows), and then answers each question from it at up to ~22 tokens per question: ingest once, ask many. Multi-question requests resume across calls. See [README-decision-models.md](README-decision-models.md), [README-decision-model-julia-1.md](README-decision-model-julia-1.md), [README-decision-model-Laya.md](README-decision-model-Laya.md) and [README-decision-model-kev-0.8b.md](README-decision-model-kev-0.8b.md).
+- **Decision models (System One)**: `run_decision` answers typed `choice` / `score` / yes-no questions about a state with probabilities, in one forward pass, instead of generating text. **Julia-1** (144M, 50+ languages) fits ~210 tokens per question per update call (~14.9 B instructions for an 87-token question); **Laya** (421M, English, more precise) fits 33. **Kev-0.8B** (causal, English) stores the state once per caller, ingesting it over as many calls as needed (and only the new part when the state grows), and then answers each question from it at up to ~22 tokens per question: ingest once, ask many. Multi-question requests resume across calls. A caller that serves many users (a gateway) passes a `scope` per user, and each reply reports the instructions it used. See [README-decision-models.md](README-decision-models.md), [README-decision-model-julia-1.md](README-decision-model-julia-1.md), [README-decision-model-Laya.md](README-decision-model-Laya.md) and [README-decision-model-kev-0.8b.md](README-decision-model-kev-0.8b.md).
 - During prompt ingestion phase, the max_tokens before hitting the instruction limit is higher as during the generation phase.
 - We use `"--temp"; "0.6"; "--repeat-penalty"; "1.1";`, as recommended on several model cards
 - For each model, we selected a `--cache-type-k` that gives the highest max_tokens while still providing good results.

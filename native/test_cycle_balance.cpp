@@ -62,13 +62,12 @@ void test_cycle_balance(MockIC &mockIC) {
   const std::string ACCESS_DENIED_API_ERROR =
       "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696"
       "564";
-  // ACTUAL C++ output for the "tracking is off" error. Same nested
-  // Err/Other/text structure as ACCESS_DENIED — only the trailing length byte
-  // (0x4e = 78) and the UTF-8 text bytes differ (note the em-dash e2 80 94).
-  const std::string TRACKING_OFF_ERROR =
-      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100004e6379636c652062616c616e63"
-      "6520747261636b696e67206973206f666620e2809420616e2061646d696e206d7573742063"
-      "616c6c206379636c655f62616c616e63655f73746172745f74696d6572";
+  // ACTUAL C++ output of get_cycle_balance at the mock's initial balance and
+  // time 123456789: Ok record { cycle_balance = 3_000_000_000_000;
+  // updated_at_ns = 123_456_789 }
+  const std::string LIVE_BALANCE =
+      "4449444c026c028dc6e9f90578c392f7c6097d6b01bc8a"
+      "010001010015cd5b070000000080e0bcefa757";
 
   int extra_failures = 0;
 
@@ -98,18 +97,19 @@ void test_cycle_balance(MockIC &mockIC) {
   }
 
   // -----------------------------------------------------------------------
-  // Scenario 2: get_cycle_balance returns the clear "tracking is off" error
-  // when the timer is not armed (g_cycle_balance_timer_id == 0).
+  // Scenario 2: get_cycle_balance returns the live balance and the current
+  // time, also when the timer is not armed (g_cycle_balance_timer_id == 0).
   // -----------------------------------------------------------------------
   IC_API::cancel_all_timers();
   g_cycle_balance_timer_id = 0;
-  mockIC.run_test("get_cycle_balance (tracking off)", get_cycle_balance,
-                  EMPTY_INPUT, TRACKING_OFF_ERROR, silent_on_trap,
+  ic0mock_set_time_override(123456789);
+  mockIC.run_test("get_cycle_balance (tracking off: live balance)",
+                  get_cycle_balance, EMPTY_INPUT, LIVE_BALANCE, silent_on_trap,
                   controller_principal);
+  ic0mock_clear_time_override();
 
   // -----------------------------------------------------------------------
-  // Scenario 3: the anonymous principal is denied on every endpoint (auth is
-  // checked before the tracking-off check, so it short-circuits to denied).
+  // Scenario 3: the anonymous principal is denied on every endpoint.
   // -----------------------------------------------------------------------
   mockIC.run_test("get_cycle_balance (anon denied)", get_cycle_balance,
                   EMPTY_INPUT, ACCESS_DENIED_API_ERROR, silent_on_trap,
