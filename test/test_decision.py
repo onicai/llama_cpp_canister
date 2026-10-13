@@ -231,8 +231,7 @@ MODELS: Dict[str, Dict[str, Any]] = {
 DecisionKind = Types.Variant(
     {"choice": Types.Null, "score": Types.Null, "noul": Types.Null}
 )
-DecisionInput = Types.Record(
-    {
+DECISION_INPUT_FIELDS = {
         "state": Types.Variant({"Text": Types.Text, "Json": Types.Text}),
         "questions": Types.Vec(
             Types.Record(
@@ -249,6 +248,11 @@ DecisionInput = Types.Record(
             )
         ),
     }
+DecisionInput = Types.Record(DECISION_INPUT_FIELDS)
+# with a scope (kev); DecisionInput without one checks that a missing opt field
+# decodes as null, as it does for clients built before scopes existed
+DecisionInputScoped = Types.Record(
+    {**DECISION_INPUT_FIELDS, "scope": Types.Opt(Types.Text)}
 )
 ApiError = Types.Variant({"Other": Types.Text, "StatusCode": Types.Nat16})
 DecisionResult = Types.Variant(
@@ -280,6 +284,8 @@ DecisionResult = Types.Variant(
                 "pending": Types.Vec(Types.Text),
                 "state_tokens": Types.Opt(Types.Nat64),
                 "state_tokens_remaining": Types.Opt(Types.Nat64),
+                "state_key": Types.Opt(Types.Text),
+                "instructions": Types.Opt(Types.Nat64),
             }
         ),
         "Err": ApiError,
@@ -330,7 +336,14 @@ def decide(
         icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method="run_decision",
-        canister_argument=encode([{"type": DecisionInput, "value": request}]).hex(),
+        canister_argument=encode(
+            [
+                {
+                    "type": DecisionInputScoped if "scope" in request else DecisionInput,
+                    "value": request,
+                }
+            ]
+        ).hex(),
         canister_input="hex",
         canister_output="hex",
         network=network,
@@ -350,6 +363,8 @@ def decide_all(network: str, request: Dict[str, Any]) -> List[Dict[str, Any]]:
     for _ in range(20):
         r = decide(network, request)
         assert "Ok" in r, r
+        # every Ok reports the work done, storing calls included
+        assert len(r["Ok"]["instructions"]) == 1 and r["Ok"]["instructions"][0] > 0, r
         replies.append(r["Ok"])
         if not r["Ok"]["pending"]:
             return replies
@@ -522,6 +537,112 @@ def test__kev_grown_state_continues_from_the_stored_one(network: str) -> None:
     print(f"\ngrown state of {n_state} tokens, {n_evaluated} tokens evaluated")
     # only the appended tokens and the question, not the whole state again
     assert n_evaluated < n_state, (n_evaluated, n_state)
+
+
+# A short state (~50 tokens, more than a question), stored in one call
+KEV_SHORT_STATE = (
+    "Order 1 was sent ten days ago. The tracking page has not changed since, "
+    "and the customer asks where the parcel is and when it will arrive."
+)
+NAT64_MAX = 2**64 - 1
+
+
+def short_request(scope: Optional[str] = None) -> Dict[str, Any]:
+    request = flat(KEV_SHORT_STATE, {"intent": model()["questions"]["intent"]})
+    if scope is not None:
+        request["scope"] = [scope]
+    return request
+
+
+def ingested(replies: List[Dict[str, Any]]) -> bool:
+    """Whether the calls of a request stored the state (rather than reusing a
+    stored one). Storing it can take more than one call: each call stops
+    before the IC's instruction limit."""
+    n_evaluated = sum(r["input_tokens"] for r in replies)
+    return bool(n_evaluated > replies[-1]["state_tokens"][0])
+
+
+def status(response: str) -> bool:
+    return "status_code = 200" in response
+
+
+def set_cleanup_ttl(network: str, seconds: int) -> None:
+    response = call(
+        network,
+        "set_cache_cleanup_config",
+        f"(record {{ ttl_seconds = opt ({seconds} : nat64) }})",
+    )
+    assert "Ok" in response, response
+
+
+def test__kev_scopes_keep_separate_states(network: str) -> None:
+    """A caller (e.g. a gateway) keeps one set of stored states per scope."""
+    if not is_kev():
+        return
+    set_budget(network, 0)
+    r = decide(network, short_request("../x"))
+    assert r == {
+        "Err": {"Other": "scope: '../x' must be 1-63 characters of a-z, 0-9 and -"}
+    }, r
+    for scope in ("scope-a", "scope-b"):
+        assert status(call(network, "remove_decision_scope", f'("{scope}")'))
+
+    replies_a = decide_all(network, short_request("scope-a"))
+    replies_b = decide_all(network, short_request("scope-b"))
+    # the same state, stored once per scope
+    assert ingested(replies_a) and ingested(replies_b), (replies_a, replies_b)
+    a, b = replies_a[-1], replies_b[-1]
+    assert a["state_key"] == b["state_key"] and len(a["state_key"]) == 1, (a, b)
+    assert a["probabilities"] == b["probabilities"]
+    # stored: scope-a answers from its stored state
+    again = decide_all(network, short_request("scope-a"))
+    assert not ingested(again), again
+
+
+def test__kev_pinned_state_survives_the_cleanup(network: str) -> None:
+    if not is_kev():
+        return
+    set_budget(network, 0)
+    key = decide_all(network, short_request("scope-a"))[-1]["state_key"][0]
+    response = call(
+        network,
+        "pin_decision_state",
+        f'(record {{ scope = "scope-a"; state_key = "{key}"; until_ns = {NAT64_MAX} : nat64 }})',
+    )
+    assert status(response), response
+    response = call(
+        network,
+        "pin_decision_state",
+        f'(record {{ scope = "scope-a"; state_key = "0"; until_ns = {NAT64_MAX} : nat64 }})',
+    )
+    assert "no stored state 0 in scope scope-a" in response, response
+
+    # a cleanup with TTL 0 removes everything but the pinned state
+    set_cleanup_ttl(network, 0)
+    assert "Ok" in call(network, "cache_cleanup_now", "()")
+    assert not ingested(decide_all(network, short_request("scope-a")))
+    assert ingested(decide_all(network, short_request("scope-b")))
+
+    response = call(
+        network,
+        "unpin_decision_state",
+        f'(record {{ scope = "scope-a"; state_key = "{key}" }})',
+    )
+    assert status(response), response
+    assert "Ok" in call(network, "cache_cleanup_now", "()")
+    set_cleanup_ttl(network, 6 * 3600)
+    assert ingested(decide_all(network, short_request("scope-a")))
+
+
+def test__kev_remove_decision_scope(network: str) -> None:
+    if not is_kev():
+        return
+    set_budget(network, 0)
+    decide_all(network, short_request("scope-a"))
+    assert status(call(network, "remove_decision_scope", '("scope-a")'))
+    assert ingested(decide_all(network, short_request("scope-a")))
+    for scope in ("scope-a", "scope-b"):
+        assert status(call(network, "remove_decision_scope", f'("{scope}")'))
 
 
 def test__reset_budget(network: str) -> None:

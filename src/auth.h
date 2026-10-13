@@ -45,3 +45,10 @@ void send_access_denied_output_record(IC_API &ic_api);
 
 std::optional<AdminRoleAssignment>
 get_admin_role_for_principal(const std::string &principal);
+
+// The access level and the admin roles, for settings.cpp (saved on every
+// change, restored after an upgrade)
+uint16_t get_access_level();
+void restore_access_level(uint16_t level);
+const std::vector<AdminRoleAssignment> &get_admin_role_assignments();
+void restore_admin_role_assignments(std::vector<AdminRoleAssignment> roles);

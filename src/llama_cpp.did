@@ -275,7 +275,8 @@ type CacheCleanupStatsRecord = record {
   period_seconds : nat64;
   ttl_seconds : nat64;
   max_files_per_run : nat64;
-  is_running : bool
+  is_running : bool;
+  max_decision_states : opt nat64 // stored kev decision states per canister (0 = no limit)
 };
 
 type CacheCleanupConfigInput = record {
@@ -283,9 +284,12 @@ type CacheCleanupConfigInput = record {
   // period_seconds : opt 0 silently rejected (preserves prior).
   // ttl_seconds    : opt 0 valid ("delete everything older than 0 ns").
   // max_files_per_run : opt 0 clamped to floor (1).
+  // max_decision_states : opt 0 = no limit (default 256, ~20 MB each).
+  // The config and whether the timer runs survive an upgrade.
   period_seconds : opt nat64;
   ttl_seconds : opt nat64;
-  max_files_per_run : opt nat64
+  max_files_per_run : opt nat64;
+  max_decision_states : opt nat64
 };
 type CacheCleanupConfigResult = variant {
   Err : ApiError;
@@ -295,17 +299,18 @@ type CacheCleanupConfigRecord = record {
   period_seconds : nat64;
   ttl_seconds : nat64;
   max_files_per_run : nat64;
-  is_running : bool
+  is_running : bool;
+  max_decision_states : opt nat64
 };
 
 // -----------------------------------------------------
 // Recurring cycle-balance monitor
 type CycleBalanceRecord = record {
-  cycle_balance : nat;       // cached canister cycle balance (128-bit)
-  updated_at_ns : nat64      // IC_API::time() when the snapshot was taken
+  cycle_balance : nat;       // the live canister cycle balance (128-bit)
+  updated_at_ns : nat64      // IC_API::time() of the call
 };
 type CycleBalanceRecordResult = variant {
-  Err : ApiError;            // includes "tracking is off" when timer not armed
+  Err : ApiError;
   Ok : CycleBalanceRecord
 };
 
@@ -331,6 +336,9 @@ type DecisionInputRecord = record {
   // choice: one row per option; score: one row per level, in order (2..10);
   // noul: optional rows with key "true" / "false". description "" = none
   options : vec record { question_id : text; key : text; description : text };
+  // kev: store the caller's states below this sub-directory, e.g. one per end
+  // user of a gateway. 1-63 characters of a-z, 0-9 and -. null = no sub-directory
+  scope : opt text;
 };
 type DecisionOutputRecord = record {
   // every question answered so far: this call and earlier calls of the same request
@@ -345,7 +353,15 @@ type DecisionOutputRecord = record {
   // its size in tokens, and how many are not stored yet (0 = stored). null for laya
   state_tokens : opt nat64;
   state_tokens_remaining : opt nat64;
+  state_key : opt text;     // kev: the name of the stored state (pin_decision_state)
+  instructions : opt nat64; // the instructions this call used (performance counter 0)
 };
+type DecisionPinInputRecord = record {
+  scope : text;
+  state_key : text;
+  until_ns : nat64; // IC time: the caps and the cleanup timer keep the state until then
+};
+type DecisionUnpinInputRecord = record { scope : text; state_key : text };
 type DecisionResult = variant {
   Err : ApiError;
   Ok : DecisionOutputRecord
@@ -373,6 +389,9 @@ service : {
   run_query : (InputRecord) -> (OutputRecordResult) query;
   run_update : (InputRecord) -> (OutputRecordResult);
   run_decision : (DecisionInputRecord) -> (DecisionResult);
+  remove_decision_scope : (text) -> (StatusCodeRecordResult); // all of the caller's files of a scope
+  pin_decision_state : (DecisionPinInputRecord) -> (StatusCodeRecordResult);
+  unpin_decision_state : (DecisionUnpinInputRecord) -> (StatusCodeRecordResult);
 
   // Prompt cache endpoints
   remove_prompt_cache : (InputRecord) -> (OutputRecordResult);

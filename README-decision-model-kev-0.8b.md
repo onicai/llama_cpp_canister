@@ -478,10 +478,11 @@ llama_cpp: run_decision - 18 tokens this call, 2/2 questions answered
 A caller keeps at most 8 stored states (the oldest is removed first); each is ~20 MB +
 ~24 KB per state token. Stored states are prompt-cache files, so the
 [prompt-cache cleanup timer](README.md#prompt-cache-cleanup-timer) can also remove them.
-It is **off by default**. To use it, start it after every install and upgrade, and
-optionally set its TTL (default 6 h):
+It is **off by default**. To use it, start it once, and optionally set its TTL (default
+6 h). Both survive upgrades:
 
 ```bash
+icp canister call llama_cpp -e local set_cache_cleanup_config '(record { ttl_seconds = opt (172800 : nat64) })'
 icp canister call llama_cpp -e local cache_cleanup_start_timer '()'
 ```
 
@@ -489,11 +490,64 @@ It then deletes a stored state whose last ingestion is older than the TTL; answe
 questions does not refresh that time. A removed state is ingested again on the next request
 about it.
 
+## Serving many users through one caller
+
+A service in front of the canister (a gateway) calls `run_decision` for its users, so the
+canister sees one caller. Four things make that work.
+
+**A scope per user.** Pass `scope = opt "<user>"` (1-63 characters of `a-z`, `0-9` and
+`-`) in the request. The states of each scope are stored apart, in
+`.canister_cache/<caller>/sessions/<scope>/`, with their own cap of 8. Without a scope,
+nothing changes. With several canisters, send all requests of a scope to the same canister:
+that is where its states are stored.
+
+```bash
+icp canister call llama_cpp -e local run_decision '(record { scope = opt "u-alice"; state = variant { Text = "..." }; questions = vec { ... }; options = vec { ... } })'
+icp canister call llama_cpp -e local remove_decision_scope '("u-alice")'
+```
+
+`remove_decision_scope` removes every file of the scope; it is idempotent.
+
+**The cost of each call.** Every `Ok` reply has `instructions = opt <n>`: the
+instructions the call used: up to ~36 B for a storing call (it stops there), ~1.4 B per
+token for a question. A gateway can charge its users from it.
+
+**Pinned states.** Every kev reply has `state_key = opt "<key>"`: the name of the stored
+state. Pin it to keep it past the caps and the cleanup timer, until a time in nanoseconds
+since 1970:
+
+```bash
+icp canister call llama_cpp -e local pin_decision_state '(record { scope = "u-alice"; state_key = "<key>"; until_ns = 1_800_000_000_000_000_000 : nat64 })'
+icp canister call llama_cpp -e local unpin_decision_state '(record { scope = "u-alice"; state_key = "<key>" })'
+```
+
+Pinned states do not count toward the caps.
+
+**A cap per canister.** The canister stores at most 256 states over all callers and
+scopes (~5 GB); storing one more removes the oldest unpinned one. Change it with
+`set_cache_cleanup_config '(record { max_decision_states = opt (<n> : nat64) })'`.
+
+**Access for the gateway.** Keep access level 0 and give the gateway the `AdminUpdate`
+role. The role, the access level and the cleanup settings survive upgrades:
+
+```bash
+icp canister call llama_cpp -e local assignAdminRole '(record { "principal" = "<gateway principal>"; role = variant { AdminUpdate }; note = "gateway" })'
+```
+
+The gateway can read the canister's live balance with `get_cycle_balance`, to keep it
+funded.
+
+## Keep option keys plain words
+
+Option keys with digits and symbols take many tokens. `Which token standard?` with the keys
+`ICRC-1`, `ICRC-2`, `ERC-20` and `other` needed 27 tokens and was rejected (more than ~22
+per question). `Which request?` with `new listing`, `delisting` and `fee change` took 17.
+
 ## Optional: run the smoke tests
 
 `test/test_decision.py` runs the Kev-0.8B checks against the uploaded model: answers
-within 0.05 of llama-server, ingestion progress, reuse of a stored state, and a grown
-state.
+within 0.05 of llama-server, ingestion progress, reuse of a stored state, a grown state,
+scopes, pins and `remove_decision_scope`.
 
 ```bash
 DECISION_MODEL=kev-0.8b pytest -vv --network local --identity "$(icp identity default)" test/test_decision.py
