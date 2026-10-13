@@ -27,8 +27,11 @@ uint64_t *cleanup_value(const std::string &key) {
   return &g_max_decision_states;
 }
 
+// common_json has no is_number_unsigned(): a negative integer is told apart
+// by its text, so that get<uint64_t>() never turns it into a huge value
 bool is_uint(const common_json &j, const char *key) {
-  return j.contains(key) && j.at(key).is_number_integer();
+  return j.contains(key) && j.at(key).is_number_integer() &&
+         j.at(key).dump().rfind('-', 0) != 0;
 }
 
 bool is_string(const common_json &j, const char *key) {

@@ -74,6 +74,13 @@ void test_settings(MockIC &mockIC) {
   check(g_cleanup_timer_id != 0 && IcTimers::instance().size() == 1,
         "running cleanup timer re-armed");
 
+  // --- a negative number is not restored as a huge unsigned one
+  std::ofstream(SETTINGS_PATH, std::ios::trunc)
+      << "{\"cache_cleanup\": {\"ttl_ns\": -1}}";
+  load_settings();
+  check(g_cleanup_ttl_ns == 48ULL * 3600 * 1000000000ULL,
+        "negative value not restored");
+
   // --- an unreadable file keeps the defaults (and does not trap)
   std::ofstream(SETTINGS_PATH, std::ios::trunc) << "{not json";
   check(load_settings().find("unreadable") != std::string::npos,

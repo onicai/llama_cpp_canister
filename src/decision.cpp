@@ -1790,15 +1790,20 @@ void send_status_ok(IC_API &ic_api) {
   ic_api.to_wire(CandidTypeVariant{"Ok", r});
 }
 
-// The caller's directory of `scope`, after checking the scope
-bool scope_dir(IC_API &ic_api, const std::string &scope, std::string &dir) {
-  const std::string error = check_scope(scope);
+// The caller's directory of `scope`, after checking the scope. With
+// `allow_none`, "" is the caller's sessions/ directory itself: the states of
+// requests without a scope (never for remove_decision_scope, which would
+// otherwise empty it).
+bool scope_dir(IC_API &ic_api, const std::string &scope, std::string &dir,
+               bool allow_none = false) {
+  const std::string error =
+      allow_none && scope.empty() ? "" : check_scope(scope);
   if (!error.empty()) {
     send_error(ic_api, error);
     return false;
   }
-  dir = ".canister_cache/" + ic_api.get_caller().get_text() + "/sessions/" +
-        scope;
+  dir = ".canister_cache/" + ic_api.get_caller().get_text() + "/sessions" +
+        (scope.empty() ? "" : "/" + scope);
   return true;
 }
 
@@ -1876,7 +1881,7 @@ void pin_decision_state() {
   ic_api.from_wire(r_in);
 
   std::string dir;
-  if (!scope_dir(ic_api, scope, dir)) {
+  if (!scope_dir(ic_api, scope, dir, true)) {
     return;
   }
   const std::string key_error = check_state_key(state_key);
@@ -1887,7 +1892,8 @@ void pin_decision_state() {
   const std::string state = dir + "/decision-state-" + state_key + ".session";
   std::error_code ec;
   if (!std::filesystem::exists(state, ec)) {
-    send_error(ic_api, "no stored state " + state_key + " in scope " + scope);
+    send_error(ic_api, "no stored state " + state_key +
+                           (scope.empty() ? "" : " in scope " + scope));
     return;
   }
   std::ofstream out(pin_path(state), std::ios::trunc);
@@ -1913,7 +1919,7 @@ void unpin_decision_state() {
   ic_api.from_wire(r_in);
 
   std::string dir;
-  if (!scope_dir(ic_api, scope, dir)) {
+  if (!scope_dir(ic_api, scope, dir, true)) {
     return;
   }
   const std::string key_error = check_state_key(state_key);

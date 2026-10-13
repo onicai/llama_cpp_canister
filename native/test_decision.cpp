@@ -870,6 +870,14 @@ void test_decision_kev(MockIC &mockIC) {
                     pin_arg("Scope-A", state_key, UINT64_MAX), controller)
                 .find("must be 1-63 characters") != std::string::npos,
         "kev pin: an invalid scope was accepted");
+  check(status_call(mockIC, "pin unknown without scope", pin_decision_state,
+                    pin_arg("", "abc", UINT64_MAX),
+                    controller) == "no stored state abc",
+        "kev pin: an unknown state without a scope was pinned");
+  check(status_call(mockIC, "remove no scope", remove_decision_scope,
+                    CandidTypeText{""}, controller)
+                .find("must be 1-63 characters") != std::string::npos,
+        "kev remove scope: an empty scope was accepted");
   check(status_call(mockIC, "pin bad key", pin_decision_state,
                     pin_arg("scope-b", "../x", UINT64_MAX),
                     controller) == "state_key: '../x' is not a state key",

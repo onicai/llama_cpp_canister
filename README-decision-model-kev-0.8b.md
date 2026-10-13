@@ -521,7 +521,8 @@ icp canister call llama_cpp -e local pin_decision_state '(record { scope = "u-al
 icp canister call llama_cpp -e local unpin_decision_state '(record { scope = "u-alice"; state_key = "<key>" })'
 ```
 
-Pinned states do not count toward the caps.
+Pinned states do not count toward the caps. For a state stored without a scope, pass
+`scope = ""`.
 
 **A cap per canister.** The canister stores at most 256 states over all callers and
 scopes (~5 GB); storing one more removes the oldest unpinned one. Change it with

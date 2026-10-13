@@ -357,7 +357,7 @@ type DecisionOutputRecord = record {
   instructions : opt nat64; // the instructions this call used (performance counter 0)
 };
 type DecisionPinInputRecord = record {
-  scope : text;
+  scope : text;     // "" = the states of requests without a scope
   state_key : text;
   until_ns : nat64; // IC time: the caps and the cleanup timer keep the state until then
 };
