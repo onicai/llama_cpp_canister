@@ -34,8 +34,8 @@ unzip /tmp/llama_cpp_release_test/llama_cpp_canister_<TAG>.zip -d /tmp/llama_cpp
 All subsequent commands run from `/tmp/llama_cpp_release_test/<TAG>/`.
 
 Sanity-check the zip: `build/llama_cpp.wasm`, `build/llama_cpp.did` and
-`build/llama_cpp.wasm.sha256` present, `icp.yaml` has **three** canisters
-(`llama_cpp`, `llama_cpp_qwen25`, `llama_cpp_qwen3_17b`), and `test/test_qwen3.py` exists.
+`build/llama_cpp.wasm.sha256` present, `icp.yaml` has **four** canisters
+(`llama_cpp`, `llama_cpp_qwen25`, `llama_cpp_qwen3_17b`, `llama_cpp_kev`), and `test/test_qwen3.py` exists.
 
 Since the build became reproducible, confirm the zip carries the wasm the release
 advertises — the release title and body both state the sha256, and the release publishes
@@ -85,7 +85,7 @@ sdist -- so this step no longer needs a Mac.)
 
 ## 4. Deploy + configure the Qwen3 canister
 
-`icp.yaml` defines three canisters — deploy only **`llama_cpp`** (the Qwen3 default).
+`icp.yaml` defines four canisters — deploy only **`llama_cpp`** (the Qwen3 default).
 `icp network start -d` picks a random ephemeral port; never hardcode `localhost:8000`.
 
 Deploy as `llama-cpp-testing`: since icpp-pro 6.0.0 pytest is told which identity to
