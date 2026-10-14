@@ -12,6 +12,7 @@
 #include "test_prompt_cache_format.h"
 #include "test_qwen2.h"
 #include "test_qwen3.h"
+#include "test_settings.h"
 #include "test_tiny_stories.h"
 #include "test_utf8.h"
 
@@ -38,6 +39,7 @@ int main() {
   test_cache_cleanup(mockIC);
   test_canister_functions(mockIC);
   test_cycle_balance(mockIC);
+  test_settings(mockIC);
   test_memory_status(mockIC);
   test_files(mockIC);
   test_decision(mockIC);

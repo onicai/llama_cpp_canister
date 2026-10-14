@@ -1,15 +1,12 @@
 // Recurring canister cycle-balance monitor.
 //
-// Refreshes a cached snapshot of the canister's cycle balance on a recurring
-// schedule (hourly) using the IC's `canister_cycle_balance128` system call.
-// Admins read the cached value cheaply via the `get_cycle_balance` query.
+// The `get_cycle_balance` query returns the live balance (the IC's
+// `canister_cycle_balance128` system call), with updated_at_ns = now, whether
+// or not the timer runs.
 //
-// Lifecycle is operator-driven: the timer is NOT auto-armed in
-// canister_init / canister_post_upgrade. The deploy/upgrade workflow must
-// explicitly call `cycle_balance_start_timer` after the canister is
-// reachable. Timer state and the cached balance are in-memory only and do
-// not survive an upgrade. While the timer is not armed, `get_cycle_balance`
-// returns a clear "tracking is off" error rather than a stale value.
+// The timer endpoints are kept for compatibility: the timer refreshes a
+// cached snapshot hourly, which nothing requires any more. It is not
+// auto-armed and its state does not survive an upgrade.
 #pragma once
 
 #include "wasm_symbol.h"

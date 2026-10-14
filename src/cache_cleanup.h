@@ -6,10 +6,13 @@
 // `g_max_files_per_run` to stay under the IC's per-message instruction
 // budget; the next tick continues the cleanup.
 //
-// Lifecycle is operator-driven: the timer is NOT auto-armed in
-// canister_init / canister_post_upgrade. The deploy/upgrade workflow must
-// explicitly call `cache_cleanup_start_timer` after the canister is
-// reachable. Timer state is in-memory only and does not survive an upgrade.
+// Scope directories below sessions/ (`sessions/<scope>/`, see run_decision)
+// are cleaned too; pinned kev decision states are skipped while pinned.
+//
+// Lifecycle is operator-driven: the timer is off until an admin calls
+// `cache_cleanup_start_timer`. The config and whether the timer runs are
+// saved (settings.h), so canister_post_upgrade re-arms a running timer with
+// the same config after an upgrade.
 #pragma once
 
 #include "wasm_symbol.h"
@@ -38,6 +41,10 @@ void get_cache_cleanup_stats()
 // IC_API frame). This function does NOT construct an IC_API instance.
 void run_cache_cleanup_body();
 
+// (Re-)arms the recurring timer with the current period, cancelling an armed
+// one first. Used by canister_post_upgrade.
+void cache_cleanup_rearm();
+
 // --- Test introspection (extern for native tests) ------------------------
 // These are file-scope statics in cache_cleanup.cpp; they are exposed via
 // extern declarations here exclusively so native tests in
@@ -59,3 +66,8 @@ extern uint64_t g_cleanup_period_ns;
 extern uint64_t g_cleanup_ttl_ns;
 extern uint64_t g_cleanup_max_files_per_run;
 extern uint64_t g_cleanup_timer_id;
+
+// The most kev decision states the canister stores over all principals and
+// scopes (0 = no limit); run_decision removes the oldest unpinned ones.
+// Set with set_cache_cleanup_config.
+extern uint64_t g_max_decision_states;

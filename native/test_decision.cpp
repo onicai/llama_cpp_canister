@@ -12,6 +12,7 @@
 
 #include "test_decision.h"
 
+#include "../src/cache_cleanup.h"
 #include "../src/decision.h"
 #include "../src/max_tokens.h"
 #include "../src/model.h"
@@ -42,6 +43,8 @@ struct DecisionReply {
   uint64_t input_tokens{0};
   std::vector<std::string> pending;
   std::optional<uint64_t> state_tokens, state_tokens_remaining; // kev only
+  std::optional<std::string> state_key;                         // kev only
+  std::optional<uint64_t> instructions; // null in native builds
 };
 
 DecisionReply decode_reply(const std::string &hex) {
@@ -72,6 +75,8 @@ DecisionReply decode_reply(const std::string &hex) {
   ok.append("state_tokens", CandidTypeOptNat64{&r.state_tokens});
   ok.append("state_tokens_remaining",
             CandidTypeOptNat64{&r.state_tokens_remaining});
+  ok.append("state_key", CandidTypeOptText{&r.state_key});
+  ok.append("instructions", CandidTypeOptNat64{&r.instructions});
 
   CandidTypeVariant err{&r.err_label};
   err.append("Other", CandidTypeText{&r.err_text});
@@ -158,13 +163,16 @@ void check_pr_answers(const DecisionReply &r, const std::string &name) {
   }
 }
 
-// The stored kev states of a principal (native runs keep them in
-// .canister_cache)
-std::vector<std::filesystem::path> stored_states(const std::string &principal) {
+// The stored kev states of a principal, or of one of its scopes (native runs
+// keep them in .canister_cache)
+std::vector<std::filesystem::path>
+stored_states(const std::string &principal, const std::string &scope = "") {
   std::vector<std::filesystem::path> out;
   std::error_code ec;
   for (std::filesystem::directory_iterator
-           it(".canister_cache/" + principal + "/sessions", ec),
+           it(".canister_cache/" + principal + "/sessions" +
+                  (scope.empty() ? "" : "/" + scope),
+              ec),
        end;
        !ec && it != end; it.increment(ec)) {
     const std::string name = it->path().filename().string();
@@ -176,12 +184,66 @@ std::vector<std::filesystem::path> stored_states(const std::string &principal) {
   return out;
 }
 
-void remove_stored_states(const std::string &principal) {
-  for (const auto &path : stored_states(principal)) {
+void remove_stored_states(const std::string &principal,
+                          const std::string &scope = "") {
+  for (const auto &path : stored_states(principal, scope)) {
     std::error_code ec;
     std::filesystem::remove(path, ec);
     std::filesystem::remove(path.string() + ".icppfmt", ec);
+    std::filesystem::remove(path.string() + ".pin", ec);
   }
+}
+
+// A dummy stored state (eviction only looks at names and mtimes)
+void dummy_state(const std::string &dir, const std::string &name,
+                 std::chrono::hours age) {
+  std::error_code ec;
+  std::filesystem::create_directories(dir, ec);
+  const std::string path = dir + "/decision-state-" + name + ".session";
+  std::ofstream(path) << "not a session file";
+  std::filesystem::last_write_time(
+      path, std::filesystem::file_time_type::clock::now() - age, ec);
+  check(!ec, "could not set the mtime of " + path);
+}
+
+// Calls an endpoint that returns StatusCodeRecordResult; returns "Ok" or the
+// error text
+std::string status_call(MockIC &mockIC, const std::string &name, void (*fn)(),
+                        const CandidType &arg, const std::string &caller) {
+  std::string out;
+  mockIC.run_test(std::string("test_decision: ") + name, fn,
+                  CandidSerialize(arg).as_hex_string(), "", false, caller,
+                  &out);
+  std::string label, err_label, err_text;
+  uint16_t status_code{0}, err_code{0};
+  CandidTypeRecord ok;
+  ok.append("status_code", CandidTypeNat16{&status_code});
+  CandidTypeVariant err{&err_label};
+  err.append("Other", CandidTypeText{&err_text});
+  err.append("StatusCode", CandidTypeNat16{&err_code});
+  CandidTypeVariant result{&label};
+  result.append("Ok", ok);
+  result.append("Err", err);
+  CandidArgs args;
+  args.append(result);
+  CandidDeserialize(out, args);
+  return label == "Ok" && status_code == 200 ? "Ok" : err_text;
+}
+
+CandidTypeRecord pin_arg(const std::string &scope, const std::string &key,
+                         uint64_t until_ns) {
+  CandidTypeRecord r;
+  r.append("scope", CandidTypeText{scope});
+  r.append("state_key", CandidTypeText{key});
+  r.append("until_ns", CandidTypeNat64{until_ns});
+  return r;
+}
+
+CandidTypeRecord unpin_arg(const std::string &scope, const std::string &key) {
+  CandidTypeRecord r;
+  r.append("scope", CandidTypeText{scope});
+  r.append("state_key", CandidTypeText{key});
+  return r;
 }
 
 std::string read_file(const std::filesystem::path &path) {
@@ -737,6 +799,158 @@ void test_decision_kev(MockIC &mockIC) {
           "kev ninth state: expected the oldest of 9 stored states removed, "
           "got " +
               std::to_string(kept.size()) + " stored states");
+  }
+
+  // --- scopes: a caller (e.g. a gateway) keeps a separate set of stored
+  //     states per scope, each with its own cap of 8
+  const std::string KEV_SCOPE_A =
+      "4449444c086c0494e3e5c6070191ecada008028dcddc9e0b03dee6f8ff0d066e716b02c8dc85"
+      "8a0371cdf1cbbe03716d046c03dbb70171d4c2a7b80405a5adfee906716b03d8b1a8c8047fd2"
+      "e6e5c6077fe1febe850c7f6d076c039f93c60271fc91f4f8057194a5a3a60b71010001077363"
+      "6f70652d6101154f7264657220313a2077686572652069732069743f0106696e74656e740207"
+      "496e74656e743f0406726566756e640006696e74656e740663616e63656c0006696e74656e74"
+      "05747261636b0006696e74656e74056f746865720006696e74656e74";
+  const std::string KEV_SCOPE_B =
+      "4449444c086c0494e3e5c6070191ecada008028dcddc9e0b03dee6f8ff0d066e716b02c8dc85"
+      "8a0371cdf1cbbe03716d046c03dbb70171d4c2a7b80405a5adfee906716b03d8b1a8c8047fd2"
+      "e6e5c6077fe1febe850c7f6d076c039f93c60271fc91f4f8057194a5a3a60b71010001077363"
+      "6f70652d6201154f7264657220313a2077686572652069732069743f0106696e74656e740207"
+      "496e74656e743f0406726566756e640006696e74656e740663616e63656c0006696e74656e74"
+      "05747261636b0006696e74656e74056f746865720006696e74656e74";
+  const std::string KEV_SCOPE_BAD =
+      "4449444c086c0494e3e5c6070191ecada008028dcddc9e0b03dee6f8ff0d066e716b02c8dc85"
+      "8a0371cdf1cbbe03716d046c03dbb70171d4c2a7b80405a5adfee906716b03d8b1a8c8047fd2"
+      "e6e5c6077fe1febe850c7f6d076c039f93c60271fc91f4f8057194a5a3a60b71010001042e2e"
+      "2f7801154f7264657220313a2077686572652069732069743f0106696e74656e740207496e74"
+      "656e743f0406726566756e640006696e74656e740663616e63656c0006696e74656e74057472"
+      "61636b0006696e74656e74056f746865720006696e74656e74";
+  const std::string sessions = ".canister_cache/" + controller + "/sessions";
+  remove_stored_states(controller);
+  for (const std::string scope : {"scope-a", "scope-b", "scope-c"}) {
+    remove_stored_states(controller, scope);
+  }
+  expect_error(mockIC, "kev invalid scope", KEV_SCOPE_BAD, controller,
+               "scope: '../x' must be 1-63 characters of a-z, 0-9 and -");
+  for (int i = 0; i < 8; i++) {
+    dummy_state(sessions + "/scope-a", "dummy" + std::to_string(i),
+                std::chrono::hours(8 - i));
+  }
+  std::string state_key;
+  {
+    const DecisionReply a =
+        call_all(mockIC, "kev scope a", KEV_SCOPE_A, controller).back();
+    check(a.label == "Ok" && a.pending.empty(),
+          "kev scope a: not answered: " + a.err_text);
+    check(a.state_key.has_value() && !a.instructions.has_value(),
+          "kev scope a: expected a state_key and no instructions natively");
+    state_key = a.state_key.value_or("");
+    const auto kept = stored_states(controller, "scope-a");
+    bool oldest_kept = false;
+    for (const auto &path : kept) {
+      oldest_kept |= path.filename() == "decision-state-dummy0.session";
+    }
+    check(kept.size() == 8 && !oldest_kept,
+          "kev scope a: expected the oldest of 9 states in the scope removed");
+    const DecisionReply b =
+        call_all(mockIC, "kev scope b", KEV_SCOPE_B, controller).back();
+    check(b.label == "Ok" && b.state_key == a.state_key &&
+              b.p_probability == a.p_probability,
+          "kev scope b: expected the same state and answer as scope a");
+    check(stored_states(controller, "scope-b").size() == 1,
+          "kev scope b: expected one stored state in scope-b");
+    remove_stored_states(controller, "scope-a");
+  }
+
+  // --- pins: kept by the cleanup timer until unpinned
+  check(status_call(mockIC, "pin unknown", pin_decision_state,
+                    pin_arg("scope-a", "abc", UINT64_MAX),
+                    controller) == "no stored state abc in scope scope-a",
+        "kev pin: an unknown state was pinned");
+  check(status_call(mockIC, "pin bad scope", pin_decision_state,
+                    pin_arg("Scope-A", state_key, UINT64_MAX), controller)
+                .find("must be 1-63 characters") != std::string::npos,
+        "kev pin: an invalid scope was accepted");
+  check(status_call(mockIC, "pin unknown without scope", pin_decision_state,
+                    pin_arg("", "abc", UINT64_MAX),
+                    controller) == "no stored state abc",
+        "kev pin: an unknown state without a scope was pinned");
+  check(status_call(mockIC, "remove no scope", remove_decision_scope,
+                    CandidTypeText{""}, controller)
+                .find("must be 1-63 characters") != std::string::npos,
+        "kev remove scope: an empty scope was accepted");
+  check(status_call(mockIC, "pin bad key", pin_decision_state,
+                    pin_arg("scope-b", "../x", UINT64_MAX),
+                    controller) == "state_key: '../x' is not a state key",
+        "kev pin: an invalid state_key was accepted");
+  check(status_call(mockIC, "pin", pin_decision_state,
+                    pin_arg("scope-b", state_key, UINT64_MAX),
+                    controller) == "Ok",
+        "kev pin: failed");
+  const uint64_t ttl_ns = g_cleanup_ttl_ns;
+  g_cleanup_ttl_ns = 0;
+  run_cache_cleanup_body();
+  check(stored_states(controller, "scope-b").size() == 1 &&
+            std::filesystem::exists(
+                stored_states(controller, "scope-b")[0].string() + ".icppfmt"),
+        "kev pin: the cleanup removed a pinned state");
+  check(status_call(mockIC, "unpin", unpin_decision_state,
+                    unpin_arg("scope-b", state_key), controller) == "Ok",
+        "kev unpin: failed");
+  run_cache_cleanup_body();
+  check(stored_states(controller, "scope-b").empty(),
+        "kev unpin: the cleanup kept an unpinned state");
+  g_cleanup_ttl_ns = ttl_ns;
+
+  // --- the canister keeps at most max_decision_states over all principals
+  //     and scopes; pinned states do not count
+  {
+    const DecisionReply b =
+        call_all(mockIC, "kev pinned state", KEV_SCOPE_B, controller).back();
+    check(b.label == "Ok" &&
+              status_call(mockIC, "pin again", pin_decision_state,
+                          pin_arg("scope-b", state_key, UINT64_MAX),
+                          controller) == "Ok",
+          "kev global cap: could not store and pin a state");
+    dummy_state(".canister_cache/other-principal/sessions", "old1",
+                std::chrono::hours(3));
+    dummy_state(sessions + "/scope-c", "old2", std::chrono::hours(2));
+    const uint64_t max_states = g_max_decision_states;
+    g_max_decision_states = 2;
+    const DecisionReply a =
+        call_all(mockIC, "kev global cap", KEV_SCOPE_A, controller).back();
+    g_max_decision_states = max_states;
+    check(a.label == "Ok", "kev global cap: not answered: " + a.err_text);
+    check(stored_states("other-principal").empty() &&
+              stored_states(controller, "scope-c").size() == 1 &&
+              stored_states(controller, "scope-b").size() == 1 &&
+              stored_states(controller, "scope-a").size() == 1,
+          "kev global cap: expected only the oldest unpinned state removed");
+    remove_stored_states(controller, "scope-c");
+  }
+
+  // --- removing a scope removes all its files; the next call stores again
+  {
+    check(status_call(mockIC, "remove scope", remove_decision_scope,
+                      CandidTypeText{"scope-a"}, controller) == "Ok",
+          "kev remove scope: failed");
+    check(!std::filesystem::exists(sessions + "/scope-a"),
+          "kev remove scope: the scope directory is still there");
+    check(status_call(mockIC, "remove scope again", remove_decision_scope,
+                      CandidTypeText{"scope-a"}, controller) == "Ok",
+          "kev remove scope: not idempotent");
+    const DecisionReply a =
+        call(mockIC, "kev after remove", KEV_SCOPE_A, controller);
+    // no budget: the state is ingested again and the question answered
+    check(a.label == "Ok" && a.input_tokens > a.state_tokens.value_or(0),
+          "kev after remove: the state was not ingested again");
+    status_call(mockIC, "remove scope a", remove_decision_scope,
+                CandidTypeText{"scope-a"}, controller);
+    status_call(mockIC, "remove scope b", remove_decision_scope,
+                CandidTypeText{"scope-b"}, controller);
+    std::error_code ec;
+    std::filesystem::remove(sessions + "/scope-c", ec);
+    std::filesystem::remove(".canister_cache/other-principal/sessions", ec);
+    std::filesystem::remove(".canister_cache/other-principal", ec);
   }
 
   // --- leave nothing behind (native runs share .canister_cache)

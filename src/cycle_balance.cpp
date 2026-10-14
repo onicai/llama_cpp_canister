@@ -107,19 +107,11 @@ void get_cycle_balance() {
   }
   ic_api.from_wire();
 
-  // If the timer is not armed, the cached value is stale/zero — return a
-  // clear error instead of a misleading number.
-  if (g_cycle_balance_timer_id == 0) {
-    ic_api.to_wire(CandidTypeVariant{
-        "Err",
-        CandidTypeVariant{
-            "Other", CandidTypeText{"cycle balance tracking is off — an admin "
-                                    "must call cycle_balance_start_timer"}}});
-    return;
-  }
-
+  // The live balance: a query may read it, so it does not depend on the
+  // tracking timer (which an upgrade disarms).
   CandidTypeRecord r;
-  r.append("cycle_balance", CandidTypeNat{g_cycle_balance});
-  r.append("updated_at_ns", CandidTypeNat64{g_cycle_balance_updated_at_ns});
+  r.append("cycle_balance",
+           CandidTypeNat{ic_api.get_canister_self_cycle_balance()});
+  r.append("updated_at_ns", CandidTypeNat64{IC_API::time()});
   ic_api.to_wire(CandidTypeVariant{"Ok", CandidTypeRecord{r}});
 }

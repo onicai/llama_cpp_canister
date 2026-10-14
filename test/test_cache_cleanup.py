@@ -39,6 +39,7 @@ CANISTER_NAME = "llama_cpp"
 DEFAULT_PERIOD_SECONDS = 600
 DEFAULT_TTL_SECONDS = 6 * 3600
 DEFAULT_MAX_FILES = 256
+DEFAULT_MAX_DECISION_STATES = 256
 
 # Bounds enforced by set_cache_cleanup_config.
 MAX_FILES_FLOOR = 1
@@ -571,3 +572,29 @@ def test__cache_cleanup_now_respects_cap(network: str, principal: str) -> None:
             )
     finally:
         _restore_defaults(network)
+
+
+# ---------- max_decision_states: the cap on stored kev decision states -----
+
+
+def test__max_decision_states_config(network: str) -> None:
+    def cap() -> str:
+        response = _call("get_cache_cleanup_stats", "()", network)
+        match = re.search(r"max_decision_states\s*=\s*opt\s*\(?\s*([0-9_]+)", response)
+        assert match, response
+        return match.group(1).replace("_", "")
+
+    assert cap() == str(DEFAULT_MAX_DECISION_STATES)
+    response = _call(
+        "set_cache_cleanup_config",
+        "(record { max_decision_states = opt (100 : nat64) })",
+        network,
+    )
+    assert "Ok" in response, response
+    assert cap() == "100"
+    _call(
+        "set_cache_cleanup_config",
+        f"(record {{ max_decision_states = opt ({DEFAULT_MAX_DECISION_STATES} : nat64) }})",
+        network,
+    )
+    assert cap() == str(DEFAULT_MAX_DECISION_STATES)

@@ -33,6 +33,8 @@
 #include "decision.h"
 
 #include "auth.h"
+#include "cache_cleanup.h"
+#include "http.h"
 #include "main_.h"
 #include "max_tokens.h"
 #include "promptcache.h"
@@ -74,6 +76,36 @@ namespace {
 
 void log_line(const std::string &msg) {
   std::cout << "llama_cpp: run_decision - " << msg << std::endl;
+}
+
+// A scope is a sub-directory of the caller's sessions/ directory (a gateway
+// passes one per end user), so it must not be able to leave it.
+const size_t MAX_SCOPE_SIZE = 63;
+
+std::string check_scope(const std::string &scope) {
+  const bool ok =
+      !scope.empty() && scope.size() <= MAX_SCOPE_SIZE &&
+      std::all_of(scope.begin(), scope.end(), [](unsigned char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
+      });
+  return ok ? ""
+            : "scope: '" + scope.substr(0, MAX_SCOPE_SIZE + 1) +
+                  "' must be 1-" + std::to_string(MAX_SCOPE_SIZE) +
+                  " characters of a-z, 0-9 and -";
+}
+
+// A state key is the hex name of a stored state (state_hash)
+std::string check_state_key(const std::string &key) {
+  const bool ok = !key.empty() && key.size() <= 16 &&
+                  std::all_of(key.begin(), key.end(), [](unsigned char c) {
+                    return (c >= 'a' && c <= 'f') || (c >= '0' && c <= '9');
+                  });
+  return ok ? "" : "state_key: '" + key.substr(0, 17) + "' is not a state key";
+}
+
+// The name of a decision file below the caller's sessions/ directory
+std::string scoped(const std::string &scope, const std::string &name) {
+  return scope.empty() ? name : scope + "/" + name;
 }
 
 std::string billions(uint64_t n) {
@@ -283,6 +315,7 @@ struct decision_request {
   std::vector<std::string> o_question_ids;
   std::vector<std::string> o_keys;
   std::vector<std::string> o_descriptions;
+  std::optional<std::string> scope; // a sub-directory for the caller's files
 };
 
 // Returns an error message, empty when the request is valid.
@@ -834,6 +867,7 @@ std::string request_hash(const std::string &model_id,
   fnv1a f;
   auto add = [&f](const std::string &s) { f.add(s); };
   add(model_id);
+  add(req.scope.value_or(""));
   add(req.state_label);
   add(req.state_label == "Json" ? req.state_json : req.state_text);
   for (size_t i = 0; i < req.q_ids.size(); i++) {
@@ -998,10 +1032,11 @@ CandidTypeVariant kind_template() {
   return v;
 }
 
-// kev: how much of the state is stored
+// kev: how much of the state is stored, and its name
 struct kev_progress {
   std::optional<uint64_t> n_state;
   std::optional<uint64_t> n_remaining;
+  std::optional<std::string> state_key;
 };
 
 void send_result(IC_API &ic_api,
@@ -1053,6 +1088,13 @@ void send_result(IC_API &ic_api,
   r_out.append("state_tokens", CandidTypeOptNat64{progress.n_state});
   r_out.append("state_tokens_remaining",
                CandidTypeOptNat64{progress.n_remaining});
+  r_out.append("state_key", CandidTypeOptText{progress.state_key});
+  // the work done by this call, read last (null in native builds)
+  const uint64_t instructions = instruction_counter();
+  r_out.append("instructions",
+               CandidTypeOptNat64{instructions
+                                      ? std::optional<uint64_t>(instructions)
+                                      : std::nullopt});
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
 }
 
@@ -1134,40 +1176,88 @@ std::string answer_laya(llama_context *ctx, const decision_context &d,
   return "";
 }
 
-// A stored kev state is ~20 MB. A principal keeps at most this many. The
-// prompt-cache cleanup timer, once an operator starts it, also removes states
-// whose last ingestion (mtime) is older than its TTL.
+// A stored kev state is ~20 MB. A principal keeps at most this many per
+// scope (and without one), and the canister at most max_decision_states (see
+// cache_cleanup.h) over all principals and scopes. Pinned states count toward
+// neither. The prompt-cache cleanup timer, once an operator starts it, also
+// removes unpinned states whose last ingestion (mtime) is older than its TTL.
 const size_t MAX_DECISION_STATES = 8;
 
-// Removes the oldest stored states of the principal of `keep` (by mtime),
-// never `keep` itself, so at most MAX_DECISION_STATES remain.
-void evict_old_states(const std::string &keep) {
+bool is_state_file(const std::filesystem::path &p) {
+  const std::string name = p.filename().string();
+  return string_starts_with(name, "decision-state-") &&
+         string_ends_with(name, ".session");
+}
+
+// Appends the unpinned stored states in `dir` (not in its sub-directories),
+// other than `keep`, with their mtime.
+void collect_unpinned_states(
+    const std::filesystem::path &dir, const std::string &keep, uint64_t now_ns,
+    std::vector<std::pair<std::filesystem::file_time_type, std::string>>
+        &states) {
   namespace fs = std::filesystem;
   std::error_code ec;
-  std::vector<std::pair<fs::file_time_type, fs::path>> states;
-  for (fs::directory_iterator it(fs::path(keep).parent_path(), ec), end;
-       !ec && it != end; it.increment(ec)) {
-    const std::string name = it->path().filename().string();
-    if (string_starts_with(name, "decision-state-") &&
-        string_ends_with(name, ".session") && it->path() != fs::path(keep)) {
-      std::error_code ec_time;
-      const auto mtime = fs::last_write_time(it->path(), ec_time);
-      if (!ec_time) {
-        states.emplace_back(mtime, it->path());
-      }
+  for (fs::directory_iterator it(dir, ec), end; !ec && it != end;
+       it.increment(ec)) {
+    const std::string path = it->path().string();
+    if (!is_state_file(it->path()) || path == keep ||
+        decision_state_pinned(path, now_ns)) {
+      continue;
+    }
+    std::error_code ec_time;
+    const auto mtime = fs::last_write_time(it->path(), ec_time);
+    if (!ec_time) {
+      states.emplace_back(mtime, path);
     }
   }
-  if (states.size() < MAX_DECISION_STATES) {
+}
+
+// Removes the oldest of `states` until at most `n_keep` remain.
+void remove_oldest(
+    std::vector<std::pair<std::filesystem::file_time_type, std::string>>
+        &states,
+    size_t n_keep) {
+  if (states.size() <= n_keep) {
     return;
   }
   std::sort(states.begin(), states.end());
-  for (size_t i = 0; i + MAX_DECISION_STATES <= states.size(); i++) {
-    const std::string old = states[i].second.string();
-    std::error_code ec_remove;
-    fs::remove(old, ec_remove);
-    prompt_cache_remove_stamp(old);
-    log_line("state: removed the older stored state " + old);
+  for (size_t i = 0; i + n_keep < states.size(); i++) {
+    remove_decision_state(states[i].second);
+    log_line("state: removed the older stored state " + states[i].second);
   }
+}
+
+// Makes room for `keep`, a state about to be stored: removes the oldest
+// unpinned states of its directory (by mtime), then the oldest over the whole
+// canister, so that with `keep` at most MAX_DECISION_STATES remain in its
+// directory and max_decision_states in the canister.
+void evict_old_states(const std::string &keep) {
+  namespace fs = std::filesystem;
+  const uint64_t now_ns = IC_API::time();
+  std::vector<std::pair<fs::file_time_type, std::string>> states;
+  collect_unpinned_states(fs::path(keep).parent_path(), keep, now_ns, states);
+  remove_oldest(states, MAX_DECISION_STATES - 1);
+
+  if (g_max_decision_states == 0) {
+    return; // no limit
+  }
+  // .canister_cache/<principal>/sessions/ and its <scope>/ sub-directories
+  states.clear();
+  std::error_code ec;
+  for (fs::directory_iterator p(".canister_cache", ec), end; !ec && p != end;
+       p.increment(ec)) {
+    const fs::path sessions = p->path() / "sessions";
+    collect_unpinned_states(sessions, keep, now_ns, states);
+    std::error_code ec_s;
+    for (fs::directory_iterator s(sessions, ec_s); !ec_s && s != end;
+         s.increment(ec_s)) {
+      std::error_code ec_dir;
+      if (s->is_directory(ec_dir) && !ec_dir) {
+        collect_unpinned_states(s->path(), keep, now_ns, states);
+      }
+    }
+  }
+  remove_oldest(states, g_max_decision_states - 1);
 }
 
 // The IC ends an update call at 40 B instructions, and a trap loses all of its
@@ -1277,17 +1367,18 @@ std::string find_stored_prefix(const std::string &path,
 // one of a call re-loads the checkpoint. Returns an error message.
 std::string answer_kev(llama_context *ctx, const decision_context &d,
                        const std::string &principal_id,
-                       const std::string &model_id,
+                       const std::string &scope, const std::string &model_id,
                        const std::vector<llama_token> &state,
                        const std::vector<task> &tasks, uint64_t budget,
                        std::map<std::string, decision_answer> &answers,
                        std::vector<std::string> &pending,
                        uint64_t &input_tokens, kev_progress &progress) {
   const size_t n_state = state.size();
+  const std::string state_key = state_hash(model_id, state);
   std::string path, path_error;
-  if (!get_canister_path_session("decision-state-" +
-                                     state_hash(model_id, state) + ".session",
-                                 principal_id, path, path_error)) {
+  if (!get_canister_path_session(
+          scoped(scope, "decision-state-" + state_key + ".session"),
+          principal_id, path, path_error)) {
     return path_error;
   }
   llama_memory_t mem = llama_get_memory(ctx);
@@ -1329,9 +1420,7 @@ std::string answer_kev(llama_context *ctx, const decision_context &d,
     if (load(path)) {
       loaded = path;
     } else {
-      std::error_code ec;
-      std::filesystem::remove(path, ec);
-      prompt_cache_remove_stamp(path);
+      remove_decision_state(path);
       log_line("state: discarded " + path +
                ", it does not hold this state; starting over");
     }
@@ -1403,6 +1492,7 @@ std::string answer_kev(llama_context *ctx, const decision_context &d,
   }
   progress.n_state = n_state;
   progress.n_remaining = n_state - n_cached;
+  progress.state_key = state_key;
   input_tokens = used;
   if (n_cached < n_state) {
     for (const auto &t : tasks) {
@@ -1511,7 +1601,17 @@ void run_decision() {
   r_in.append("state", state);
   r_in.append("questions", CandidTypeVecRecord{&r_questions});
   r_in.append("options", CandidTypeVecRecord{&r_options});
+  r_in.append("scope", CandidTypeOptText{&req.scope});
   ic_api.from_wire(r_in);
+
+  const std::string scope = req.scope.value_or("");
+  if (req.scope.has_value()) {
+    const std::string scope_error = check_scope(scope);
+    if (!scope_error.empty()) {
+      send_error(ic_api, scope_error);
+      return;
+    }
+  }
 
   // --- the loaded model
   llama_context *ctx = icpp_persisted_ctx();
@@ -1540,9 +1640,9 @@ void run_decision() {
   // --- answers of earlier calls of this request
   std::string path, path_error;
   const std::string model_id = model_identity(llama_get_model(ctx));
-  if (!get_canister_path_session("decision-" + request_hash(model_id, req) +
-                                     ".json",
-                                 principal_id, path, path_error)) {
+  if (!get_canister_path_session(
+          scoped(scope, "decision-" + request_hash(model_id, req) + ".json"),
+          principal_id, path, path_error)) {
     send_error(ic_api, path_error);
     return;
   }
@@ -1644,8 +1744,8 @@ void run_decision() {
       !kev ? answer_laya(ctx, d, tasks, budget, answers, pending, input_tokens)
       : tasks.empty()
           ? ""
-          : answer_kev(ctx, d, principal_id, model_id, state_tokens, tasks,
-                       budget, answers, pending, input_tokens, progress);
+          : answer_kev(ctx, d, principal_id, scope, model_id, state_tokens,
+                       tasks, budget, answers, pending, input_tokens, progress);
   if (!answer_error.empty()) {
     send_error(ic_api, answer_error);
     return;
@@ -1672,4 +1772,165 @@ void run_decision() {
   }
 
   send_result(ic_api, questions, answers, input_tokens, pending, progress);
+}
+
+//
+// stored states: pins, and removing a scope
+//
+
+namespace {
+
+std::string pin_path(const std::string &state_path) {
+  return state_path + ".pin";
+}
+
+void send_status_ok(IC_API &ic_api) {
+  CandidTypeRecord r;
+  r.append("status_code", CandidTypeNat16{Http::StatusCode::OK});
+  ic_api.to_wire(CandidTypeVariant{"Ok", r});
+}
+
+// The caller's directory of `scope`, after checking the scope. With
+// `allow_none`, "" is the caller's sessions/ directory itself: the states of
+// requests without a scope (never for remove_decision_scope, which would
+// otherwise empty it).
+bool scope_dir(IC_API &ic_api, const std::string &scope, std::string &dir,
+               bool allow_none = false) {
+  const std::string error =
+      allow_none && scope.empty() ? "" : check_scope(scope);
+  if (!error.empty()) {
+    send_error(ic_api, error);
+    return false;
+  }
+  dir = ".canister_cache/" + ic_api.get_caller().get_text() + "/sessions" +
+        (scope.empty() ? "" : "/" + scope);
+  return true;
+}
+
+} // namespace
+
+bool decision_state_pinned(const std::string &file, uint64_t now_ns) {
+  // the state of a stamp or pin file is the state itself
+  std::string state = file;
+  for (const std::string suffix : {".icppfmt", ".pin"}) {
+    if (string_ends_with(state, suffix)) {
+      state.resize(state.size() - suffix.size());
+      break;
+    }
+  }
+  if (!is_state_file(state)) {
+    return false;
+  }
+  std::ifstream in(pin_path(state));
+  uint64_t until_ns = 0;
+  return bool(in >> until_ns) && until_ns > now_ns;
+}
+
+void remove_decision_state(const std::string &state_path) {
+  std::error_code ec;
+  std::filesystem::remove(state_path, ec);
+  std::filesystem::remove(pin_path(state_path), ec);
+  prompt_cache_remove_stamp(state_path);
+}
+
+void remove_decision_scope() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!has_admin_update_or_whitelisted(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
+  std::string scope;
+  ic_api.from_wire(CandidTypeText{&scope});
+  std::string dir;
+  if (!scope_dir(ic_api, scope, dir)) {
+    return;
+  }
+
+  // std::filesystem::remove_all does not work in a canister: remove the
+  // files one by one (listed first, not while iterating), then the directory
+  namespace fs = std::filesystem;
+  std::vector<fs::path> files;
+  std::error_code ec;
+  for (fs::directory_iterator it(dir, ec), end; !ec && it != end;
+       it.increment(ec)) {
+    files.push_back(it->path());
+  }
+  for (const auto &f : files) {
+    std::error_code ec_rm;
+    fs::remove(f, ec_rm);
+  }
+  std::error_code ec_dir;
+  fs::remove(dir, ec_dir);
+  log_line("scope: removed " + dir + " (" + std::to_string(files.size()) +
+           " files)");
+  send_status_ok(ic_api);
+}
+
+void pin_decision_state() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!has_admin_update_or_whitelisted(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
+  std::string scope, state_key;
+  uint64_t until_ns = 0;
+  CandidTypeRecord r_in;
+  r_in.append("scope", CandidTypeText{&scope});
+  r_in.append("state_key", CandidTypeText{&state_key});
+  r_in.append("until_ns", CandidTypeNat64{&until_ns});
+  ic_api.from_wire(r_in);
+
+  std::string dir;
+  if (!scope_dir(ic_api, scope, dir, true)) {
+    return;
+  }
+  const std::string key_error = check_state_key(state_key);
+  if (!key_error.empty()) {
+    send_error(ic_api, key_error);
+    return;
+  }
+  const std::string state = dir + "/decision-state-" + state_key + ".session";
+  std::error_code ec;
+  if (!std::filesystem::exists(state, ec)) {
+    send_error(ic_api, "no stored state " + state_key +
+                           (scope.empty() ? "" : " in scope " + scope));
+    return;
+  }
+  std::ofstream out(pin_path(state), std::ios::trunc);
+  out << until_ns;
+  if (!out) {
+    send_error(ic_api, "failed to pin " + state);
+    return;
+  }
+  log_line("state: pinned " + state + " until " + std::to_string(until_ns));
+  send_status_ok(ic_api);
+}
+
+void unpin_decision_state() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!has_admin_update_or_whitelisted(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
+  std::string scope, state_key;
+  CandidTypeRecord r_in;
+  r_in.append("scope", CandidTypeText{&scope});
+  r_in.append("state_key", CandidTypeText{&state_key});
+  ic_api.from_wire(r_in);
+
+  std::string dir;
+  if (!scope_dir(ic_api, scope, dir, true)) {
+    return;
+  }
+  const std::string key_error = check_state_key(state_key);
+  if (!key_error.empty()) {
+    send_error(ic_api, key_error);
+    return;
+  }
+  const std::string state = dir + "/decision-state-" + state_key + ".session";
+  std::error_code ec;
+  if (std::filesystem::remove(pin_path(state), ec)) {
+    log_line("state: unpinned " + state);
+  }
+  send_status_ok(ic_api);
 }

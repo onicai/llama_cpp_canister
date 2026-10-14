@@ -4,6 +4,7 @@
 #include "auth.h"
 #include "http.h"
 #include "ic_api.h"
+#include "settings.h"
 #include "utils.h"
 #include <algorithm>
 #include <array>
@@ -16,6 +17,16 @@ static const std::array<std::string, 2> access_levels = {
 
 // Admin RBAC Storage
 static std::vector<AdminRoleAssignment> admin_role_assignments;
+
+// For settings.cpp, which saves both and restores them after an upgrade
+uint16_t get_access_level() { return access_level; }
+void restore_access_level(uint16_t level) { access_level = level; }
+const std::vector<AdminRoleAssignment> &get_admin_role_assignments() {
+  return admin_role_assignments;
+}
+void restore_admin_role_assignments(std::vector<AdminRoleAssignment> roles) {
+  admin_role_assignments = std::move(roles);
+}
 
 // Checks if caller is controller of the canister and if not, optionally write an error to the wire
 bool is_caller_a_controller(IC_API &ic_api, bool err_to_wire) {
@@ -139,6 +150,7 @@ void set_access() {
   }
 
   access_level = level;
+  save_settings();
 
   // Return the status over the wire
   CandidTypeRecord access_record;
@@ -230,6 +242,7 @@ void assignAdminRole() {
   assignment.note = note;
 
   admin_role_assignments.push_back(assignment);
+  save_settings();
 
   // Return result
   CandidTypeRecord r_out;
@@ -268,6 +281,7 @@ void revokeAdminRole() {
   }
 
   admin_role_assignments.erase(it);
+  save_settings();
 
   ic_api.to_wire(CandidTypeVariant{
       "Ok", CandidTypeText{"Admin role revoked for " + principal_to_revoke}});

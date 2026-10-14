@@ -7,10 +7,9 @@ $ icp deploy -e local -y
 Then run the tests:
 $ pytest -vv --network local --identity "$(icp identity default)" test/test_cycle_balance.py
 
-Lifecycle is operator-driven (like the prompt-cache cleanup timer): the timer
-is not auto-armed, so right after a clean deploy `get_cycle_balance` returns a
-clear "tracking is off" error. Starting the timer refreshes the cached balance
-once immediately, so the Ok value is non-zero without waiting an hour.
+`get_cycle_balance` returns the live balance whether or not the timer runs
+(the timer is not auto-armed, and an upgrade disarms it). The timer endpoints
+are kept for compatibility.
 """
 
 # pylint: disable=missing-function-docstring, unused-import, line-too-long
@@ -23,11 +22,6 @@ from .candid_compat import call_canister_api, norm
 
 ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 CANISTER_NAME = "llama_cpp"
-
-TRACKING_OFF_MESSAGE = (
-    "cycle balance tracking is off — an admin must call cycle_balance_start_timer"
-)
-
 
 # ---------- helpers ---------------------------------------------------------
 
@@ -78,16 +72,21 @@ def test__cycle_balance_endpoints_require_auth(
         assert response == norm(expected), f"{method}: got {response!r}"
 
 
-# ---------- tracking-off error (timer not armed) ---------------------------
+def _assert_live_balance(response: str) -> None:
+    assert "Ok" in response, response
+    cycle_balance = _extract_nat(response, "cycle_balance", "nat")
+    updated_at_ns = _extract_nat(response, "updated_at_ns", "nat64")
+    assert cycle_balance > 0, f"expected non-zero cycle_balance, got {cycle_balance}"
+    assert updated_at_ns > 0, f"expected non-zero updated_at_ns, got {updated_at_ns}"
 
 
-def test__get_cycle_balance_off_returns_clear_error(network: str) -> None:
+# ---------- the live balance without the timer -----------------------------
+
+
+def test__get_cycle_balance_without_the_timer(network: str) -> None:
     # Guarantee the timer is off regardless of prior tests in this session.
     _stop(network)
-
-    response = _call("get_cycle_balance", "()", network)
-    assert "Err" in response, response
-    assert TRACKING_OFF_MESSAGE in response, response
+    _assert_live_balance(_call("get_cycle_balance", "()", network))
 
 
 # ---------- start arms the timer -------------------------------------------
@@ -105,22 +104,14 @@ def test__get_cycle_balance_ok_after_start(network: str) -> None:
     # start refreshes the cached balance once immediately.
     _start(network)
 
-    response = _call("get_cycle_balance", "()", network)
-    assert "Ok" in response, response
-
-    cycle_balance = _extract_nat(response, "cycle_balance", "nat")
-    updated_at_ns = _extract_nat(response, "updated_at_ns", "nat64")
-    assert cycle_balance > 0, f"expected non-zero cycle_balance, got {cycle_balance}"
-    assert updated_at_ns > 0, f"expected non-zero updated_at_ns, got {updated_at_ns}"
+    _assert_live_balance(_call("get_cycle_balance", "()", network))
 
 
-# ---------- stop turns tracking back off -----------------------------------
+# ---------- stop: the query still returns the live balance -----------------
 
 
 def test__cycle_balance_stop_timer(network: str) -> None:
     response = _stop(network)
     assert response == norm("(variant { Ok = record { status_code = 200 : nat16;} })"), response
 
-    # After stop, the query again reports tracking is off.
-    off = _call("get_cycle_balance", "()", network)
-    assert TRACKING_OFF_MESSAGE in off, off
+    _assert_live_balance(_call("get_cycle_balance", "()", network))
