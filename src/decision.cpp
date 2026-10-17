@@ -35,6 +35,7 @@
 #include "auth.h"
 #include "cache_cleanup.h"
 #include "http.h"
+#include "ic_api.h"
 #include "main_.h"
 #include "max_tokens.h"
 #include "promptcache.h"
@@ -65,9 +66,7 @@
 
 // The IC's instruction counter, for the canister log. 0 in native builds.
 #ifdef __wasm__
-extern "C" uint64_t ic0_performance_counter(uint32_t counter_type)
-    __attribute__((import_module("ic0"), import_name("performance_counter")));
-static uint64_t instruction_counter() { return ic0_performance_counter(0); }
+static uint64_t instruction_counter() { return IC_API::performance_counter(); }
 #else
 static uint64_t instruction_counter() { return 0; }
 #endif
