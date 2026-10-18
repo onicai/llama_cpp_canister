@@ -14,6 +14,7 @@
 #include "test_qwen3.h"
 #include "test_settings.h"
 #include "test_tiny_stories.h"
+#include "test_alternating_sessions.h"
 #include "test_utf8.h"
 
 #include <iostream>
@@ -45,6 +46,7 @@ int main() {
   test_decision(mockIC);
   test_decision_kev(mockIC);
   test_tiny_stories(mockIC);
+  test_alternating_sessions(mockIC);
   test_prompt_cache_format(mockIC);
   test_qwen2(mockIC);
   test_qwen3(mockIC);

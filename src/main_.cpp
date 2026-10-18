@@ -620,6 +620,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   //             state machine (max_tokens budget) depends on it, so we keep
   //             our own logic and only migrate the KV cache API.
   size_t n_matching_session_tokens = 0;
+  // ICPP-PATCH: the last cached token is decoded again when the session is
+  // not longer than the prompt (see below). It is a cached prompt token, so it
+  // is not counted as generated.
+  bool reevaluated_last_token = false;
   if (!session_tokens.empty()) {
     for (llama_token id : session_tokens) {
       if (n_matching_session_tokens >= embd_inp.size() ||
@@ -657,13 +661,23 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
   // if we will use the cache for the full prompt without reaching the end of the cache, force
   // reevaluation of the last token to recalculate the cached logits
-  if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() &&
-      session_tokens.size() > embd_inp.size()) {
+  //
+  // ICPP-PATCH: also when the session is NOT longer than the prompt (an empty
+  // prompt continues the session). The session file holds the KV cache only,
+  // not the logits, so without this the first token is sampled from the
+  // logits of whatever the shared context decoded last - another caller's.
+  // Drop the last token from the KV cache too, so it is decoded at its own
+  // position again.
+  if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size()) {
+    const size_t session_tokens_before = session_tokens.size();
     LOG_DBG(
         "recalculate the cached logits (do): session_tokens.resize( %zu )\n",
         embd_inp.size() - 1);
 
     session_tokens.resize(embd_inp.size() - 1);
+    llama_memory_seq_rm(mem, -1, (llama_pos)embd_inp.size() - 1, -1);
+    // upstream (a longer session) counts it as generated; keep that as is
+    reevaluated_last_token = session_tokens_before <= embd_inp.size();
   }
 
   // number of tokens to keep when resetting context
@@ -1075,7 +1089,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         // (-) if we generated max_tokens, to avoid running into IC's instruction limit
         //
         n_eval_total += n_eval;
-        if (generated_eog || (max_tokens > 0 && n_eval_total >= max_tokens)) {
+        // (the re-evaluated last cached token is not part of max_tokens)
+        const int n_eval_budget =
+            n_eval_total - (reevaluated_last_token ? 1 : 0);
+        if (generated_eog ||
+            (max_tokens > 0 && n_eval_budget >= (int)max_tokens)) {
           // ICPP-PATCH: NOT gated on params.prompt_cache_all. This canister
           // reloads the session file at the start of every run_update (see
           // llama_state_load_file above), so the file — not the in-heap KV
@@ -1497,7 +1515,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   n_prompt_tokens = (uint64_t)embd_inp.size();
   n_prompt_tokens_cached = (uint64_t)n_matching_session_tokens;
   n_prompt_tokens_decoded = (uint64_t)decoded_prompt;
-  n_tokens_generated = (uint64_t)((int64_t)n_eval_total - decoded_prompt);
+  n_tokens_generated = (uint64_t)((int64_t)n_eval_total - decoded_prompt -
+                                  (reevaluated_last_token ? 1 : 0));
   n_prompt_tokens_remaining =
       (uint64_t)((int64_t)embd_inp.size() - (int64_t)n_consumed);
 
