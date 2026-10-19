@@ -685,8 +685,16 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
               __func__);
     }
   }
-  // Write the sidecars that describe the session file just saved.
-  auto write_session_sidecars = [&]() {
+  // Write the sidecars that describe the session file just saved. If the save
+  // failed, the file may hold old or partial bytes: drop all sidecars, so the
+  // cache counts as unstamped and is discarded on its next use (a cold start).
+  auto write_session_sidecars = [&](bool session_saved) {
+    if (!session_saved) {
+      LOG_WRN("%s: failed to save the session file %s; dropping its sidecars\n",
+              __func__, path_session.c_str());
+      prompt_cache_remove_stamp(path_session);
+      return;
+    }
     prompt_cache_write_format_stamp(path_session);
     if (logits_valid) {
       prompt_cache_write_logits(path_session, ctx, session_tokens);
@@ -1158,13 +1166,14 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         LOG_INF("%s", msg.c_str());
         // ICPP-PATCH-END
         need_to_save_session = false;
-        llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(),
-                              session_tokens.size());
+        const bool session_saved = llama_state_save_file(
+            ctx, path_session.c_str(), session_tokens.data(),
+            session_tokens.size());
         // ICPP-PATCH: re-stamp so the sidecar's layout line matches the bytes
         // just written (a re-load_model with different context flags must
         // discard, not trap; see prompt_cache_discard_if_stale). Also save
         // the logits that go with the bytes.
-        write_session_sidecars();
+        write_session_sidecars(session_saved);
 
         LOG_DBG("saved session to %s\n", path_session.c_str());
       }
@@ -1500,15 +1509,16 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   if (!path_session.empty() && !params.prompt_cache_ro) {
     LOG("\n%s: saving final output to session file '%s'\n", __func__,
         path_session.c_str());
-    llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(),
-                          session_tokens.size());
+    const bool session_saved =
+        llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(),
+                              session_tokens.size());
     // ICPP-PATCH: (re)stamp the sidecar so it always describes the file we
     // just wrote -- format, model AND context layout. Without this, a cache
     // the load above discarded would be re-created unstamped and discarded
     // again on every call (a permanent cold start), and a re-load_model with
     // different context flags would trap instead of cold-starting. Also save
     // the logits that go with the bytes.
-    write_session_sidecars();
+    write_session_sidecars(session_saved);
   }
 
   LOG("\n\n");
