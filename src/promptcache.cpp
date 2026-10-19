@@ -63,11 +63,13 @@ std::string prompt_cache_format() {
          " seq=" + std::to_string(LLAMA_STATE_SEQ_VERSION);
 }
 
+// The format stamp of a cache: "<cache>.icppfmt".
 static std::string
 prompt_cache_stamp_path(const std::string &canister_path_session) {
   return canister_path_session + ".icppfmt";
 }
 
+// The logits sidecar of a cache: "<cache>.logits".
 static std::string
 prompt_cache_logits_path(const std::string &canister_path_session) {
   return canister_path_session + ".logits";
@@ -141,6 +143,7 @@ bool prompt_cache_format_is_current(const std::string &canister_path_session) {
   return true;
 }
 
+// Removes the stamp and every other sidecar of a cache.
 void prompt_cache_remove_stamp(const std::string &canister_path_session) {
   // Drop the sidecar so the cache counts as UNSTAMPED and will be discarded.
   // Must be called by anything that removes or overwrites the cache bytes:
@@ -154,6 +157,7 @@ void prompt_cache_remove_stamp(const std::string &canister_path_session) {
   }
 }
 
+// Copies the stamp and every other sidecar along with the cache bytes.
 void prompt_cache_copy_stamp(const std::string &from_session,
                              const std::string &to_session) {
   // The stamp describes the BYTES, so it must travel with them. A cache copied
@@ -195,10 +199,12 @@ struct prompt_cache_logits_header {
   uint64_t n_tokens;
 };
 
+// The vocabulary size of the context's model: the length of a logits row.
 static int32_t ctx_n_vocab(llama_context *ctx) {
   return llama_vocab_n_tokens(llama_model_get_vocab(llama_get_model(ctx)));
 }
 
+// Saves the logits after session_tokens.back(); see promptcache.h.
 bool prompt_cache_write_logits(const std::string &canister_path_session,
                                llama_context *ctx,
                                const std::vector<llama_token> &session_tokens) {
@@ -227,6 +233,7 @@ bool prompt_cache_write_logits(const std::string &canister_path_session,
   return true;
 }
 
+// Restores the saved logits into ctx after validating them; see promptcache.h.
 bool prompt_cache_restore_logits(
     const std::string &canister_path_session, llama_context *ctx,
     const std::vector<llama_token> &session_tokens) {
@@ -254,12 +261,14 @@ bool prompt_cache_restore_logits(
   return llama_set_logits_last(ctx, logits.data(), h.n_vocab);
 }
 
+// Removes the logits sidecar, so no stale logits outlive the cache bytes.
 void prompt_cache_remove_logits(const std::string &canister_path_session) {
   if (canister_path_session.empty()) return;
   std::error_code ec;
   std::filesystem::remove(prompt_cache_logits_path(canister_path_session), ec);
 }
 
+// Deletes a cache (and its sidecars) not written by this build with this model.
 bool prompt_cache_discard_if_stale(const std::string &canister_path_session,
                                    std::string &msg) {
   if (canister_path_session.empty()) return false;

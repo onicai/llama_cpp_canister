@@ -182,6 +182,7 @@ def test__multi_turn_recall(network: str) -> None:
 
 # --------------------------------------------------------------------------------
 def _greedy(network: str, cache: str, prompt: str, n: str) -> str:
+    """One greedy (temp 0) run_update on the given prompt cache."""
     arg = (
         f'(record {{ args = vec {{"--prompt-cache"; "{cache}"; "--prompt-cache-all"; '
         f'{_CACHE}; "--samplers"; "temperature"; "--temp"; "0.0"; "-sp"; '
@@ -193,6 +194,7 @@ def _greedy(network: str, cache: str, prompt: str, n: str) -> str:
 
 
 def _start(network: str, cache: str) -> None:
+    """Start the prompt cache from scratch: remove it, then new_chat."""
     for method in ("remove_prompt_cache", "new_chat"):
         _call(
             network,
@@ -213,12 +215,13 @@ def test__alternating_sessions_equal_solo(network: str) -> None:
     n_generate_calls = 3
 
     def turns(cache: str, prompt: str) -> list:
-        # ingest with -n 1 until the prompt is in, then generate
+        """The calls of one session: ingest with -n 1, then generate."""
         calls = [(cache, prompt, "1")] * 25
         calls += [(cache, "", "512")] * n_generate_calls
         return calls
 
     def run(calls: list) -> dict:
+        """Run the calls in order; return the last conversation per cache."""
         conversations: dict = {}
         ingested: set = set()
         for cache, prompt, n in calls:
@@ -239,7 +242,7 @@ def test__alternating_sessions_equal_solo(network: str) -> None:
         _start(network, f"{name}.cache")
     a_calls = turns("alt-a.cache", prompts["alt-a"])
     b_calls = turns("alt-b.cache", prompts["alt-b"])
-    interleaved = [call for pair in zip(a_calls, b_calls) for call in pair]
+    interleaved = [call for pair in zip(a_calls, b_calls, strict=True) for call in pair]
     alternating = run(interleaved)
 
     assert solo["alt-a"] != solo["alt-b"]
