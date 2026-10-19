@@ -666,6 +666,36 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     session_tokens.resize(embd_inp.size() - 1);
   }
 
+  // ICPP-PATCH-START
+  // True while llama_get_logits_ith(ctx, -1) holds the logits after
+  // session_tokens.back(): after a decode, or after restoring them below.
+  // Only then may they be saved in the cache's .logits sidecar.
+  bool logits_valid = false;
+  // The session covers the whole prompt, so nothing is decoded before the
+  // first sample. The model context is shared, and the session file holds no
+  // logits: the context still holds the logits of whatever it decoded last,
+  // possibly another caller's. Restore this session's own from the sidecar.
+  if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() &&
+      session_tokens.size() == embd_inp.size()) {
+    logits_valid =
+        prompt_cache_restore_logits(path_session, ctx, session_tokens);
+    if (!logits_valid) {
+      LOG_WRN("%s: no valid logits sidecar for the session file; the first "
+              "token is sampled from the context's last logits\n",
+              __func__);
+    }
+  }
+  // Write the sidecars that describe the session file just saved.
+  auto write_session_sidecars = [&]() {
+    prompt_cache_write_format_stamp(path_session);
+    if (logits_valid) {
+      prompt_cache_write_logits(path_session, ctx, session_tokens);
+    } else {
+      prompt_cache_remove_logits(path_session);
+    }
+  };
+  // ICPP-PATCH-END
+
   // number of tokens to keep when resetting context
   if (params.n_keep < 0 || params.n_keep > (int)embd_inp.size()) {
     params.n_keep = (int)embd_inp.size();
@@ -1047,6 +1077,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           // ICPP-PATCH-END
           return 1;
         }
+        logits_valid = true; // ICPP-PATCH
 
         n_past += n_eval;
 
@@ -1131,8 +1162,9 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
                               session_tokens.size());
         // ICPP-PATCH: re-stamp so the sidecar's layout line matches the bytes
         // just written (a re-load_model with different context flags must
-        // discard, not trap; see prompt_cache_discard_if_stale).
-        prompt_cache_write_format_stamp(path_session);
+        // discard, not trap; see prompt_cache_discard_if_stale). Also save
+        // the logits that go with the bytes.
+        write_session_sidecars();
 
         LOG_DBG("saved session to %s\n", path_session.c_str());
       }
@@ -1474,8 +1506,9 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     // just wrote -- format, model AND context layout. Without this, a cache
     // the load above discarded would be re-created unstamped and discarded
     // again on every call (a permanent cold start), and a re-load_model with
-    // different context flags would trap instead of cold-starting.
-    prompt_cache_write_format_stamp(path_session);
+    // different context flags would trap instead of cold-starting. Also save
+    // the logits that go with the bytes.
+    write_session_sidecars();
   }
 
   LOG("\n\n");
