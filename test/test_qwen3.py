@@ -178,3 +178,73 @@ def test__multi_turn_recall(network: str) -> None:
     assert any(
         name in answer for name in ("Milo", "Coco", "Ziggy")
     ), f"did not recall the cat names: {answer!r}"
+
+
+# --------------------------------------------------------------------------------
+def _greedy(network: str, cache: str, prompt: str, n: str) -> str:
+    """One greedy (temp 0) run_update on the given prompt cache."""
+    arg = (
+        f'(record {{ args = vec {{"--prompt-cache"; "{cache}"; "--prompt-cache-all"; '
+        f'{_CACHE}; "--samplers"; "temperature"; "--temp"; "0.0"; "-sp"; '
+        f'"-p"; "{prompt}"; "-n"; "{n}"}} }})'
+    )
+    response = _call(network, "run_update", arg)
+    _assert_ok(response, f"run_update {cache}")
+    return response
+
+
+def _start(network: str, cache: str) -> None:
+    """Start the prompt cache from scratch: remove it, then new_chat."""
+    for method in ("remove_prompt_cache", "new_chat"):
+        _call(
+            network,
+            method,
+            f'(record {{ args = vec {{"--prompt-cache"; "{cache}"; {_CACHE}}} }})',
+        )
+
+
+def test__alternating_sessions_equal_solo(network: str) -> None:
+    """Two prompt caches alternating run_update calls equal their solo runs.
+
+    The model context is shared, and a session file holds no logits. Every
+    generate call continues its session without decoding first, so it must
+    sample from the session's own logits (the .logits sidecar), not from the
+    other session's last decode.
+    """
+    prompts = {"alt-a": PROMPT_INTRO, "alt-b": PROMPT_MULTITURN}
+    n_generate_calls = 3
+
+    def turns(cache: str, prompt: str) -> list:
+        """The calls of one session: ingest with -n 1, then generate."""
+        calls = [(cache, prompt, "1")] * 25
+        calls += [(cache, "", "512")] * n_generate_calls
+        return calls
+
+    def run(calls: list) -> dict:
+        """Run the calls in order; return the last conversation per cache."""
+        conversations: dict = {}
+        ingested: set = set()
+        for cache, prompt, n in calls:
+            if prompt and cache in ingested:
+                continue
+            response = _greedy(network, cache, prompt, n)
+            if prompt and 'prompt_remaining = ""' in response:
+                ingested.add(cache)
+            conversations[cache] = _field(response, "conversation")
+        return conversations
+
+    solo = {}
+    for name, prompt in prompts.items():
+        _start(network, f"{name}-solo.cache")
+        solo[name] = run(turns(f"{name}-solo.cache", prompt))[f"{name}-solo.cache"]
+
+    for name in prompts:
+        _start(network, f"{name}.cache")
+    a_calls = turns("alt-a.cache", prompts["alt-a"])
+    b_calls = turns("alt-b.cache", prompts["alt-b"])
+    interleaved = [call for pair in zip(a_calls, b_calls, strict=True) for call in pair]
+    alternating = run(interleaved)
+
+    assert solo["alt-a"] != solo["alt-b"]
+    assert alternating["alt-a.cache"] == solo["alt-a"]
+    assert alternating["alt-b.cache"] == solo["alt-b"]

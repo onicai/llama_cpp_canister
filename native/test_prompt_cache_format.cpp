@@ -82,4 +82,5 @@ void test_prompt_cache_format(MockIC &mockIC) {
   std::error_code ec;
   std::filesystem::remove(cache, ec);
   std::filesystem::remove(cache + ".icppfmt", ec);
+  std::filesystem::remove(cache + ".logits", ec);
 }

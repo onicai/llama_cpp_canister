@@ -1,8 +1,10 @@
 #pragma once
 
+#include "llama.h"
 #include "wasm_symbol.h"
 #include <cstdint>
 #include <string>
+#include <vector>
 
 bool get_canister_path_session(const std::string &path_session,
                                const std::string &principal_id,
@@ -47,21 +49,46 @@ std::string prompt_cache_layout_id();
 bool prompt_cache_format_is_current(const std::string &canister_path_session);
 void prompt_cache_write_format_stamp(const std::string &canister_path_session);
 
-// Drop the stamp, so the cache counts as unstamped and is discarded on next
-// use. MUST be called by anything that removes or overwrites the cache bytes
-// (remove_prompt_cache, upload_prompt_cache_chunk): a stamp that outlives the
-// file it describes vouches for content this build never wrote, and llama.cpp
-// then traps on it.
+// Drop the stamp and the other sidecars (.logits), so the cache counts as
+// unstamped and is discarded on next use. MUST be called by anything that
+// removes or overwrites the cache bytes (remove_prompt_cache,
+// upload_prompt_cache_chunk): a stamp that outlives the file it describes
+// vouches for content this build never wrote, and llama.cpp then traps on it.
 void prompt_cache_remove_stamp(const std::string &canister_path_session);
 
-// Carry the stamp along when the cache BYTES are copied (copy_prompt_cache).
-// The copied cache really was written by this build with this model, so it
-// stays valid — without this, save/restore silently degrades to a cold start.
+// Carry the stamp and the other sidecars along when the cache BYTES are copied
+// (copy_prompt_cache). The copied cache really was written by this build with
+// this model, so it stays valid — without this, save/restore silently degrades
+// to a cold start.
 void prompt_cache_copy_stamp(const std::string &from_session,
                              const std::string &to_session);
 
+// --- logits sidecar ----------------------------------------------------------
+//
+// A session file holds the memory (KV cache / recurrent state) but no logits,
+// and the model context is shared by all callers. A call that continues a
+// session without decoding anything first would otherwise sample its first
+// token from the logits of whatever the context decoded last -- possibly
+// another caller's. So next to each cache we keep "<cache>.logits": the logits
+// after the cache's last token, validated against the cache's token count and
+// last token before use.
+
+// Save the logits of the last decoded token (llama_get_logits_ith(ctx, -1)),
+// which must belong to session_tokens.back(). On failure the sidecar is removed.
+bool prompt_cache_write_logits(const std::string &canister_path_session,
+                               llama_context *ctx,
+                               const std::vector<llama_token> &session_tokens);
+
+// Restore the saved logits into ctx. Returns false, leaving ctx unchanged, when
+// the sidecar is missing or does not match session_tokens or the model.
+bool prompt_cache_restore_logits(
+    const std::string &canister_path_session, llama_context *ctx,
+    const std::vector<llama_token> &session_tokens);
+
+void prompt_cache_remove_logits(const std::string &canister_path_session);
+
 // If a cache exists but was not written by this build, delete it (and its
-// sidecar) so a fresh one is created. Returns true if something was discarded;
+// sidecars) so a fresh one is created. Returns true if something was discarded;
 // `msg` describes what happened.
 bool prompt_cache_discard_if_stale(const std::string &canister_path_session,
                                    std::string &msg);

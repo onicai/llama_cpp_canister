@@ -626,6 +626,13 @@ When a prompt cache file is already present, llama_cpp_canister automatically ap
 
 All repetitive content at the beginning of the prompt does not need to be processed by the LLM, so make sure to design your AI agent prompts such that repetitive content is placed at the beginning.
 
+Next to each prompt cache file `<name>` the canister keeps two small sidecar files:
+
+- `<name>.icppfmt` stamps the format, model and context layout the cache was written with.
+- `<name>.logits` holds the logits after the cache's last token: `n_vocab` × 4 bytes, about 600 KB for Qwen3. The model context is shared by all callers, and the cache itself holds no logits. A call that continues a conversation without decoding anything first, such as a generate call with an empty prompt, samples its first token from these logits instead of from whatever the context decoded last for another caller.
+
+`remove_prompt_cache` and `copy_prompt_cache` remove and copy the sidecars together with the cache. A cache written before v0.23.0 has no `.logits` file; it gets one after its next call.
+
 Each caller of the llama_cpp_canister has it's own cache folder, and has the following endpoints available to manage their prompt-cache files:
 
 ```bash
