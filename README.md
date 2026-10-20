@@ -538,6 +538,34 @@ icp canister call llama_cpp -e local log_pause '()'
 icp canister call llama_cpp -e local log_resume '()'
 ```
 
+# Monitoring the canister log
+
+The canister log (`icp canister logs llama_cpp`) is a small ring buffer: it keeps ~50
+records, and every logged line takes two. During a `run_update_full` or
+`run_decision_full`, each chunk or step logs a few lines, so a busy refusal, an expiry or
+a trap rotates out within seconds.
+
+To keep the log, capture it from outside with `scripts/monitor_logs.sh`:
+
+```bash
+# local network, as the test identity (llama-cpp-testing or $ICPP_PRO_TEST_IDENTITY)
+scripts/monitor_logs.sh --network local
+
+# mainnet, as the identity named in .icp-identity
+scripts/monitor_logs.sh --network production
+```
+
+- **What it does:** it polls the log every second, prints the new records, and appends
+  them to `scripts/logs-<network>/<canister>.log` and `scripts/logs-<network>/combined.log`.
+  Ctrl+C stops it.
+- **Lost records:** when the buffer wrapped between two polls, it prints how many records
+  were lost. Lower `--interval` then.
+- **Options:**
+  - `--canister <name or id>`, repeated for several canisters (default `llama_cpp`);
+  - `--identity <name>`, which must be a controller unless the log visibility is public;
+  - `--interval <seconds>` (default 1);
+  - `--keep-empty`, to keep the empty record that follows every logged line.
+
 # Logging to a file
 
 For debug purposes, you can tell the canister to log to a file and download it afterwards.
