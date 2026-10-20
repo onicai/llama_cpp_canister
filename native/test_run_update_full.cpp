@@ -19,12 +19,14 @@
 #include "ic0.h"
 #include "mock_ic.h"
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -393,6 +395,87 @@ void test_run_update_full(MockIC &mockIC) {
         "a holder that lost its session stops with 409");
   check(mockIC.call_done(taker) && status_of(mockIC.reply_hex(taker)) == 200,
         "the new holder completes");
+
+  // --- Bad requests: a full call needs a prompt cache, and loads no model.
+  mockIC.run_test("test_run_update_full: no --prompt-cache", run_update_full,
+                  args_hex({"-p", PROMPT, "-n", "4"}), "", silent_on_trap,
+                  my_principal, &out_hex);
+  check(status_of(out_hex) == 400, "a full call without a prompt cache: 400");
+  std::vector<std::string> with_model = run_args("model.cache", PROMPT, "4");
+  with_model.insert(with_model.begin(), {"--model", MODEL});
+  mockIC.run_test("test_run_update_full: --model", run_update_full,
+                  args_hex(with_model), "", silent_on_trap, my_principal,
+                  &out_hex);
+  check(status_of(out_hex) == 400, "a full call with --model: 400");
+
+  // --- Saved chats. db_chats_new names a chat by the wall-clock second, so
+  // the chats below are created a second apart.
+  {
+    const bool chats_were_active = is_db_chats_active();
+    mockIC.run_test("test_run_update_full: chats_resume", chats_resume,
+                    "4449444c0000", "", silent_on_trap, my_principal);
+    auto new_chat_on = [&](const std::string &cache) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+      mockIC.run_test("test_run_update_full: new_chat " + cache, new_chat,
+                      args_hex({"--prompt-cache", cache}), "", silent_on_trap,
+                      my_principal);
+      return saved_chats(my_principal).rbegin()->first; // the newest chat
+    };
+
+    // A full call saves to the chat that was the latest when it started,
+    // also after a new_chat on another session.
+    const std::string chat_x = new_chat_on("chat-x.cache");
+    mockIC.set_auto_drain(false);
+    MockIC::CallHandle full_x = mockIC.start_call(
+        "test_run_update_full: chat full x", run_update_full,
+        args_hex(run_args("chat-x.cache", PROMPT, "8")), my_principal);
+    check(mockIC.pending_calls() == 1, "chat: the full call yielded");
+    const std::string chat_y = new_chat_on("chat-y.cache");
+    mockIC.drain();
+    mockIC.set_auto_drain(true);
+    check(mockIC.call_done(full_x) &&
+              status_of(mockIC.reply_hex(full_x)) == 200,
+          "chat: the full call completes");
+    std::map<std::string, std::string> chats = saved_chats(my_principal);
+    check(chats[chat_x].find(PROMPT) != std::string::npos &&
+              chats[chat_y].find(PROMPT) == std::string::npos,
+          "chat: the full call saved to its own chat, not the newer one");
+
+    // The latest chat is the newest by name, not the last written: chat_x
+    // was written last, but a save on chat-y goes to chat_y.
+    mockIC.run_test("test_run_update_full: chat run_update y", run_update,
+                    args_hex(run_args("chat-y.cache", PROMPT_B, "4")), "",
+                    silent_on_trap, my_principal);
+    std::map<std::string, std::string> after = saved_chats(my_principal);
+    check(after[chat_y] != chats[chat_y] && after[chat_x] == chats[chat_x],
+          "chat: a save goes to the newest chat by name");
+
+    // A full call whose chat was cleaned up while it was suspended does not
+    // recreate it. A principal keeps 3 chats.
+    const std::string chat_z = new_chat_on("chat-z.cache");
+    mockIC.set_auto_drain(false);
+    MockIC::CallHandle full_z = mockIC.start_call(
+        "test_run_update_full: chat full z", run_update_full,
+        args_hex(run_args("chat-z.cache", PROMPT, "8")), my_principal);
+    check(mockIC.pending_calls() == 1, "chat cleanup: the full call yielded");
+    for (const char *c : {"chat-1.cache", "chat-2.cache", "chat-3.cache"})
+      new_chat_on(c);
+    check(!saved_chats(my_principal).contains(chat_z),
+          "chat cleanup: three newer chats clean up the full call's chat");
+    mockIC.drain();
+    mockIC.set_auto_drain(true);
+    check(mockIC.call_done(full_z) &&
+              status_of(mockIC.reply_hex(full_z)) == 200,
+          "chat cleanup: the full call completes");
+    after = saved_chats(my_principal);
+    check(!after.contains(chat_z) && after.size() == 3,
+          "chat cleanup: the full call does not recreate its chat");
+
+    if (!chats_were_active) {
+      mockIC.run_test("test_run_update_full: chats_pause", chats_pause,
+                      "4449444c0000", "", silent_on_trap, my_principal);
+    }
+  }
 
   // --- Stopping: the yield returns CanisterStopping, and the call replies
   // with what it has instead of continuing.

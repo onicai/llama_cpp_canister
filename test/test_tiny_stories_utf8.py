@@ -27,6 +27,7 @@ $ pytest -vv --network local --identity llama-cpp-testing test/test_tiny_stories
 # pylint: disable=missing-function-docstring, line-too-long
 
 import inspect
+import re
 from pathlib import Path
 
 from .candid_compat import call_canister_api
@@ -48,13 +49,16 @@ PROMPT_HINDI = "धैर्य पर एक सूक्ति लिखिए
 REPLACEMENT_CHAR = "�"
 
 
-def _call(network: str, method: str, arg: str) -> str:
+def _call(
+    network: str, method: str, arg: str, timeout_seconds: int | None = None
+) -> str:
     response = call_canister_api(
         icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method=method,
         canister_argument=arg,
         network=network,
+        timeout_seconds=timeout_seconds,
     )
     if PRINT_RESPONSE:
         print(f"{inspect.stack()[1].function}: {method}: {response[:300]}")
@@ -127,7 +131,50 @@ def test__generate_after_devanagari_prompt(network: str) -> None:
 
 
 def _field(response: str, name: str) -> str:
-    import re  # pylint: disable=import-outside-toplevel
-
     match = re.search(rf'{name} = "((?:[^"\\]|\\.)*)"', response)
     return match.group(1) if match else ""
+
+
+def test__run_update_full_devanagari_stays_valid_utf8(network: str) -> None:
+    """One run_update_full call ingests a Devanagari prompt and generates.
+
+    With max_tokens_update 1, every chunk is one token, so chunk boundaries split
+    the byte tokens of each character. The reply must still be valid UTF-8, and
+    `output`, made valid once at the end of the call, must lose no bytes.
+    """
+    cache = '"--prompt-cache"; "utf8_full.cache"'
+    limits = _call(network, "get_max_tokens", "()")
+    query = re.search(r"max_tokens_query = (\d+)", limits)
+    update = re.search(r"max_tokens_update = (\d+)", limits)
+    assert query and update, limits
+    _call(
+        network,
+        "set_max_tokens",
+        f"(record {{ max_tokens_query = {query.group(1)} : nat64; "
+        "max_tokens_update = 1 : nat64 })",
+    )
+    try:
+        _call(network, "remove_prompt_cache", f"(record {{ args = vec {{{cache}}} }})")
+        _assert_ok(
+            _call(network, "new_chat", f"(record {{ args = vec {{{cache}}} }})"),
+            "new_chat",
+        )
+        resp = _call(
+            network,
+            "run_update_full",
+            f'(record {{ args = vec {{{cache}; "--prompt-cache-all"; '
+            f'"-n"; "20"; "-p"; "{PROMPT_HINDI}"}} }})',
+            timeout_seconds=300,
+        )
+        _assert_ok(resp, "run_update_full")
+        assert "partial = opt false" in resp, resp[:400]
+        assert PROMPT_HINDI in _field(resp, "conversation"), resp[:400]
+        out = _field(resp, "output")
+        assert REPLACEMENT_CHAR not in out, f"U+FFFD in generated output: {out!r}"
+    finally:
+        _call(
+            network,
+            "set_max_tokens",
+            f"(record {{ max_tokens_query = {query.group(1)} : nat64; "
+            f"max_tokens_update = {update.group(1)} : nat64 }})",
+        )
