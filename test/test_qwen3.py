@@ -251,6 +251,7 @@ def test__alternating_sessions_equal_solo(network: str) -> None:
 
 
 def _set_max_tokens(network: str, query: int, update: int) -> None:
+    """Sets the max_tokens of run_query and run_update; 0 means no cap."""
     response = _call(
         network,
         "set_max_tokens",

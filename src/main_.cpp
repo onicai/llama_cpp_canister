@@ -140,6 +140,7 @@ static bool file_is_empty(const std::string &path) {
 const uint64_t ICPP_SAVE_RESERVE = 1'000'000'000ULL;
 static double g_decode_rate = 0.0;
 
+// llama-cli's main, run for one chunk (see main_.h).
 int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           std::string &icpp_error_msg, std::ostringstream &conversation_ss,
           std::ostringstream &output_ss, const uint64_t &max_tokens,
