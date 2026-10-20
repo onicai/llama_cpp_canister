@@ -15,6 +15,7 @@
 #include "../src/promptcache.h"
 #include "../src/run.h"
 
+#include "ic0.h"
 #include "mock_ic.h"
 
 #include <iostream>
@@ -336,6 +337,32 @@ void test_run_update_full(MockIC &mockIC) {
                   run_update, args_hex(run_args("busy.cache", "", "4")), "",
                   silent_on_trap, my_principal, &out_hex);
   check(status_of(out_hex) == 200, "the session is free again");
+
+  // --- Expiry: a holder that made no progress for 10 minutes loses its
+  // session. Another call can take it, and the old holder, when it resumes,
+  // stops without touching the session.
+  mockIC.run_test("test_run_update_full: new_chat expiry", new_chat,
+                  args_hex({"--prompt-cache", "own.cache"}), "", silent_on_trap,
+                  my_principal);
+  const uint64_t t0 = IC_API::time();
+  ic0mock_set_time_override(t0);
+  mockIC.set_auto_drain(false);
+  MockIC::CallHandle stale = mockIC.start_call(
+      "test_run_update_full: expiry stale holder", run_update_full,
+      args_hex(run_args("own.cache", PROMPT, "20")), my_principal);
+  check(mockIC.pending_calls() == 1, "the stale holder yielded");
+  ic0mock_set_time_override(t0 + 11ULL * 60 * 1'000'000'000ULL);
+  MockIC::CallHandle taker = mockIC.start_call(
+      "test_run_update_full: expiry new holder", run_update_full,
+      args_hex(run_args("own.cache", PROMPT, "20")), my_principal);
+  check(mockIC.pending_calls() == 2, "an expired session can be taken");
+  mockIC.drain();
+  ic0mock_clear_time_override();
+  mockIC.set_auto_drain(true);
+  check(mockIC.call_done(stale) && status_of(mockIC.reply_hex(stale)) == 409,
+        "a holder that lost its session stops with 409");
+  check(mockIC.call_done(taker) && status_of(mockIC.reply_hex(taker)) == 200,
+        "the new holder completes");
 
   // --- Stopping: the yield returns CanisterStopping, and the call replies
   // with what it has instead of continuing.

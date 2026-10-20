@@ -225,10 +225,14 @@ const uint32_t FULL_MAX_CHUNKS = 500;
 // The sessions with a run_update_full in flight: which call holds each, and
 // when it last made progress. Two generations on one session file overwrite
 // each other's progress (and never finish), so another call on it is refused.
-// An entry is removed when its generation ends - also on a trap, when the IC's
-// cleanup destroys the coroutine - and expires, as a safety net, when its call
-// made no progress for FULL_BUSY_TTL_NS.
-const uint64_t FULL_BUSY_TTL_NS = 30ULL * 60 * 1'000'000'000ULL;
+// An entry is removed when its generation ends. A trap in the first message
+// rolls the entry back with it, but a trap after a yield leaves it: the
+// cleanup destroys the coroutine without running its destructors (icpp-pro's
+// ic_async.h). Such an entry expires when its call made no progress for
+// FULL_BUSY_TTL_NS. A live call makes progress at least every ~5.5 minutes:
+// a chunk takes seconds, and the yield is a bounded-wait self-call that the
+// IC answers within 300s.
+const uint64_t FULL_BUSY_TTL_NS = 10ULL * 60 * 1'000'000'000ULL;
 struct BusyEntry {
   uint64_t owner;
   uint64_t seen_ns;
@@ -262,11 +266,13 @@ struct SessionBusy {
       : key(k), owner(++g_full_busy_owner) {
     g_full_busy[key] = {owner, IC_API::time()};
   }
-  // Marks progress, so a call that is still running does not expire.
-  void touch() {
+  // Marks progress, so a call that is still running does not expire. False
+  // when the entry expired, and this call no longer holds `key`.
+  bool touch() {
     auto it = g_full_busy.find(key);
-    if (it != g_full_busy.end() && it->second.owner == owner)
-      it->second.seen_ns = IC_API::time();
+    if (it == g_full_busy.end() || it->second.owner != owner) return false;
+    it->second.seen_ns = IC_API::time();
+    return true;
   }
   // Releases the session, unless it expired and another call holds it now.
   ~SessionBusy() {
@@ -604,7 +610,17 @@ static IC_Async run_update_full_async() {
       break;
     }
     max_instructions = RUN_CALLBACK_INSTRUCTIONS;
-    busy.touch();
+    // The session expired while this call waited, and another call may hold
+    // it now: leave its files alone.
+    if (!busy.touch()) {
+      std::cout << "llama_cpp: run_update_full - lost its session after "
+                << chunks << " chunks" << std::endl;
+      send_output_record_result_error_to_wire(
+          ic_api, Http::StatusCode::Conflict,
+          "run_update_full: the session expired while this call waited, and "
+          "is no longer held by it.");
+      co_return;
+    }
   }
   // The token that ended the call by -n was sampled, not decoded.
   if (c.n_predict_reached) ++totals.n_tokens_generated;
