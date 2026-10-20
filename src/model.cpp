@@ -6,6 +6,7 @@
 #include "main_.h"
 #include "max_tokens.h"
 #include "ready.h"
+#include "run.h"
 #include "upload.h"
 #include "utils.h"
 
@@ -47,6 +48,12 @@ void load_model() {
   }
 
   if (!params.model.empty()) {
+    if (full_call_running()) {
+      send_output_record_result_error_to_wire(
+          ic_api, Http::StatusCode::Conflict,
+          "a run_update_full is running: cannot change the model.");
+      return;
+    }
     // We're going to load a new model, first free the Orthogonally Persisted memory of a previously loaded model
     icpp_free_model();
   } else {

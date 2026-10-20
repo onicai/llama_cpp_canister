@@ -59,10 +59,14 @@ def strip_token_accounting(candid_text: str) -> str:
     so exact-match assertions written before v0.15.0 keep working regardless of
     where the Candid printer slots the new fields. A no-op on responses that do
     not carry the fields (e.g. new_chat / load_model records).
+
+    Also removes `partial = null`: the v0.23.0 `opt bool` that only
+    run_update_full sets, so run_update / run_query replies carry it as null.
     """
     s = norm(candid_text)
     for name in _TOKEN_ACCOUNTING_FIELDS:  # longer names first: no prefix clashes
         s = re.sub(rf";?\s*{name}\s*=\s*opt \([\d_]+ : nat64\)", "", s)
+    s = re.sub(r";?\s*partial\s*=\s*null", "", s)
     s = re.sub(r"record \{\s*;\s*", "record { ", s)  # leading field removed
     return norm(s)  # re-normalize spacing / trailing `;`
 

@@ -272,6 +272,19 @@ void test_run_update_full(MockIC &mockIC) {
         "a second run_update_full on a held session gets 409");
   check(mockIC.call_done(update) && status_of(mockIC.reply_hex(update)) == 409,
         "run_update on a held session gets 409");
+  // The model must not change under the suspended holder, from any session.
+  MockIC::CallHandle reload =
+      mockIC.start_call("test_run_update_full: busy load_model", load_model,
+                        args_hex({"--model", MODEL}), my_principal);
+  check(mockIC.call_done(reload) && status_of(mockIC.reply_hex(reload)) == 409,
+        "load_model while a run_update_full is running gets 409");
+  std::vector<std::string> model_args = run_args("other.cache", "", "4");
+  model_args.insert(model_args.begin(), {"--model", MODEL});
+  MockIC::CallHandle swap =
+      mockIC.start_call("test_run_update_full: busy run_update --model",
+                        run_update, args_hex(model_args), my_principal);
+  check(mockIC.call_done(swap) && status_of(mockIC.reply_hex(swap)) == 409,
+        "run_update --model while a run_update_full is running gets 409");
   mockIC.drain();
   mockIC.set_auto_drain(true);
   check(mockIC.call_done(holder) &&
@@ -304,6 +317,10 @@ void test_run_update_full(MockIC &mockIC) {
   check(!full.partial, "a complete generation is not partial");
   check(stopped.n_tokens_generated < N && ref.rfind(stopped.output, 0) == 0,
         "the reply of a stopped generation is a prefix of the full response");
+  mockIC.run_test("test_run_update_full: run_update after the stop", run_update,
+                  args_hex(run_args("stop.cache", "", "4")), "", silent_on_trap,
+                  my_principal, &out_hex);
+  check(status_of(out_hex) == 200, "a stopped generation frees its session");
 
   // Restore the default budget for the tests that follow
   // '(record { max_tokens_query = 0 : nat64; max_tokens_update = 0 : nat64 })'

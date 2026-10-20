@@ -215,30 +215,59 @@ const uint64_t RUN_CALLBACK_INSTRUCTIONS = 34'000'000'000ULL;
 // A runaway guard: a run_update_full never takes more chunks than this.
 const uint32_t FULL_MAX_CHUNKS = 500;
 
-// The sessions with a run_update_full in flight, and when it started. Two
-// generations on one session file overwrite each other's progress (and never
-// finish), so another call on it is refused. An entry is removed when its
-// generation ends - also on a trap, when the IC's cleanup destroys the
-// coroutine - and expires as a safety net.
+// The sessions with a run_update_full in flight: which call holds each, and
+// when it last made progress. Two generations on one session file overwrite
+// each other's progress (and never finish), so another call on it is refused.
+// An entry is removed when its generation ends - also on a trap, when the IC's
+// cleanup destroys the coroutine - and expires, as a safety net, when its call
+// made no progress for FULL_BUSY_TTL_NS.
 const uint64_t FULL_BUSY_TTL_NS = 30ULL * 60 * 1'000'000'000ULL;
-static std::map<std::string, uint64_t> g_full_busy;
+struct BusyEntry {
+  uint64_t owner;
+  uint64_t seen_ns;
+};
+static std::map<std::string, BusyEntry> g_full_busy;
+static uint64_t g_full_busy_owner = 0;
+
+// Removes the entries whose call made no progress for FULL_BUSY_TTL_NS.
+static void expire_busy() {
+  const uint64_t now = IC_API::time();
+  std::erase_if(g_full_busy, [now](const auto &kv) {
+    return now - kv.second.seen_ns >= FULL_BUSY_TTL_NS;
+  });
+}
 
 // Whether a run_update_full holds the session `key`.
 static bool session_busy(const std::string &key) {
-  auto it = g_full_busy.find(key);
-  if (it == g_full_busy.end()) return false;
-  if (IC_API::time() - it->second < FULL_BUSY_TTL_NS) return true;
-  g_full_busy.erase(it);
-  return false;
+  expire_busy();
+  return g_full_busy.contains(key);
+}
+
+bool full_call_running() {
+  expire_busy();
+  return !g_full_busy.empty();
 }
 
 // Holds the session `key` while it is in scope.
 struct SessionBusy {
   std::string key;
-  explicit SessionBusy(const std::string &k) : key(k) {
-    g_full_busy[key] = IC_API::time();
+  uint64_t owner;
+  explicit SessionBusy(const std::string &k)
+      : key(k), owner(++g_full_busy_owner) {
+    g_full_busy[key] = {owner, IC_API::time()};
   }
-  ~SessionBusy() { g_full_busy.erase(key); }
+  // Marks progress, so a call that is still running does not expire.
+  void touch() {
+    auto it = g_full_busy.find(key);
+    if (it != g_full_busy.end() && it->second.owner == owner)
+      it->second.seen_ns = IC_API::time();
+  }
+  // Releases the session, unless it expired and another call holds it now.
+  ~SessionBusy() {
+    auto it = g_full_busy.find(key);
+    if (it != g_full_busy.end() && it->second.owner == owner)
+      g_full_busy.erase(it);
+  }
 };
 
 // Calls main_, just like it is called in the llama-cli app. max_instructions
@@ -385,6 +414,12 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
 
   // If we're going to load a new model, first free the Orthogonally Persisted memory of a previously loaded model
   if (!req.params.model.empty()) {
+    if (full_call_running()) {
+      send_output_record_result_error_to_wire(
+          ic_api, Http::StatusCode::Conflict,
+          "a run_update_full is running: cannot change the model.");
+      return;
+    }
     icpp_free_model();
   }
 
@@ -553,6 +588,7 @@ static IC_Async run_update_full_async() {
       break;
     }
     max_instructions = RUN_CALLBACK_INSTRUCTIONS;
+    busy.touch();
   }
   // The token that ended the call by -n was sampled, not decoded.
   if (c.n_predict_reached) ++totals.n_tokens_generated;

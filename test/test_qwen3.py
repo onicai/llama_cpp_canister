@@ -23,7 +23,6 @@ Notes:
 import inspect
 import re
 import threading
-import time
 from pathlib import Path
 
 from .candid_compat import call_canister_api, norm
@@ -379,6 +378,8 @@ def test__run_update_full_concurrent(network: str) -> None:
         thread.start()
     for thread in threads:
         thread.join()
+    # A call that raised in its thread stored nothing.
+    assert set(responses) == set(prompts), sorted(responses)
     for name, response in responses.items():
         _assert_ok(response, f"concurrent {name}")
         assert _field(response, "output") == solo[name], name
@@ -393,9 +394,12 @@ def test__run_update_full_busy_session(network: str) -> None:
         target=lambda: responses.update(full=_full(network, cache, PROMPT_INTRO))
     )
     holder.start()
-    time.sleep(4)  # the first chunk of the holder is committed by now
-    response = _greedy_raw(network, cache, "", "1")
+    # Poll until the holder takes the session. -n 0 decodes nothing, so a probe
+    # that comes before the holder leaves the session as it is.
+    seen_409 = False
+    while holder.is_alive() and not seen_409:
+        seen_409 = "status_code = 409" in _greedy_raw(network, cache, "", "0")
     holder.join()
-    assert "status_code = 409" in response, response
+    assert seen_409, "run_update on the held session never got a 409"
     _assert_ok(responses["full"], "the holder")
     assert "status_code = 200" in _greedy_raw(network, cache, "", "1")
