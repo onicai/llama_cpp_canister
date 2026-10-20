@@ -524,8 +524,10 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
       between two chunks; every chunk reloads the caller's session file.
     - **Same output, same cost:** it gives the same output as the loop at the same
       chunk size and uses the same cycles. Each chunk is one consensus round, so a
-      response takes about as long as the loop: ~16s for 64 tokens on a local
-      replica, ~60s on mainnet. Give the client a timeout of 60s or more.
+      response takes about as long as the loop: ~16s per 64 tokens on a local
+      replica, ~60s per 64 tokens on mainnet. The reply only comes when the whole
+      response is done, so give the client a timeout that covers all of it: several
+      minutes for `-n 512` on mainnet.
     - **`-n`** is the total for the whole response.
     - **`n_*` counts** cover the whole call. A response that ends on `-n` counts its
       last sampled token.

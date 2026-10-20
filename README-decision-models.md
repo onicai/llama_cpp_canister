@@ -223,12 +223,16 @@ call.
   `run_decision` calls. After each step it yields to itself (a self-call), which
   commits the step (its answers and the stored state are in files) and continues
   in a new message with a fresh instruction limit.
-- **Same answers, same cost:** the answers equal those of the `run_decision` loop,
-  for the same cycles.
+- **Same answers, about the same cost:** a successful call gives the same answers as
+  the `run_decision` loop. Its cycles are within a few percent of the loop's: on day 1
+  of the Kev walkthrough, 392.9 B cycles for one call against 383.6 B for 12 calls.
 - **`input_tokens` and `instructions`** cover the whole call. `instructions` counts
   over all the messages of a call, for `run_decision` too.
-- **`pending`:** a non-empty `pending` means the call stopped early, because the
-  canister is stopping. Re-send the request with `run_decision` (or
+- **Check for `Err` first:** a question that does not fit in a step after a yield
+  returns an `Err` that names it and points to `run_decision` (see the Laya limit
+  below). Continue that request with `run_decision`.
+- **`pending`:** an `Ok` with a non-empty `pending` means the call stopped early,
+  because the canister is stopping. Re-send the request with `run_decision` (or
   `run_decision_full`) to continue from the answers so far.
 - **The model stays loaded:** while a `run_decision_full` runs, `load_model` gets
   status 409.
@@ -291,6 +295,7 @@ type DecisionInputRecord = record {
   state : variant { Text : text; Json : text };
   questions : vec record { id : text; kind : DecisionKind; instructions : text };
   options : vec record { question_id : text; key : text; description : text };
+  scope : opt text;                    // kev only: store the caller's states below this sub-directory
 };
 type DecisionOutputRecord = record {
   answers : vec record { id : text; kind : DecisionKind; choice : text;
@@ -300,9 +305,12 @@ type DecisionOutputRecord = record {
   pending : vec text;
   state_tokens : opt nat64;            // kev only: the state's size in tokens
   state_tokens_remaining : opt nat64;  // kev only: not stored yet (0 = stored)
+  state_key : opt text;                // kev only: the name of the stored state (pin_decision_state)
+  instructions : opt nat64;            // the instructions this call used, over all its messages
 };
 type DecisionResult = variant { Err : ApiError; Ok : DecisionOutputRecord };
 run_decision : (DecisionInputRecord) -> (DecisionResult);
+run_decision_full : (DecisionInputRecord) -> (DecisionResult); // the whole request in one call
 ```
 
   - `choice`: one option row per option (key + optional description).
