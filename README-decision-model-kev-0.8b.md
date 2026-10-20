@@ -14,8 +14,9 @@
 
 ![Kev-0.8B in a canister: a DEXSwapper support ticket is stored over several calls, five questions are answered from it, then a follow-up message is appended and only the new tokens are ingested](images/kev-0.8b-decision.gif)
 
-_The demo below, recorded on a local network: top, the calls; bottom, the canister log.
-The storing calls are shown at 4x speed._
+_The demo below with the `run_decision` loop, recorded on a local network: top, the
+calls; bottom, the canister log. The storing calls are shown at 4x speed. The walkthrough
+below does the same with one `run_decision_full` call per request._
 
 # Ingest once, ask many
 
@@ -23,7 +24,7 @@ Julia-1 and Laya read the whole question + options + state in one forward pass, 
 must fit in one update call. Kev is different: it is causal and its prompt starts with
 the state, so the state is a prefix that does not depend on the question.
 
-`run_decision` therefore stores the state per caller:
+The canister therefore stores the state per caller:
 
 1. The first calls of a request **ingest the state**, ~24 tokens per call, into a
    session file, exactly like `run_update` ingests a long prompt. The reply shows the
@@ -35,7 +36,14 @@ the state, so the state is a prefix that does not depend on the question.
 4. A **grown state** (the stored state with new data appended) continues from the
    stored one: only the new tokens are ingested.
 
-You re-send the same request until `pending` is empty, as for the other decision models.
+**One call does all of it:** `run_decision_full` ingests the state and answers every
+question in one update call. Between steps it yields to itself (a self-call), which commits
+the step and continues in a new message with a fresh instruction limit (see
+[One call: `run_decision_full`](README-decision-models.md#one-call-run_decision_full)).
+
+`run_decision` runs one step per call instead: you re-send the same request until `pending`
+is empty, as for the other decision models. Both endpoints read and write the same stored
+states, so you can mix them.
 
 # Headline results
 
@@ -52,6 +60,14 @@ mainnet), llama_cpp_canister v0.21.0 (llama.cpp b11476):
 | max state size                  | ~4,000 tokens: `-c 4096` holds the state plus one question (measured up to 2,000)   |
 | `max_tokens_update`             | 0: each call stops itself before the IC's instruction limit                         |
 | accuracy vs llama-server (CPU)  | within 0.013 on every probability                                                   |
+
+With `run_decision_full` (development build of v0.23.0rc1, the walkthrough below):
+
+| Request                                             | One `run_decision_full` call | The `run_decision` loop  |
+|-----------------------------------------------------|------------------------------|--------------------------|
+| Day 1: store a 167-token ticket, answer 5 questions | 44.4 s, 392.9 B cycles       | 12 calls, 383.6 B cycles |
+| Day 2: append a message (47 tokens), ask 2 again    | 14.6 s, 129.9 B cycles       | 5 calls, 129.1 B cycles  |
+| One more question about the stored state            | 2.6-3.3 s, 21-28 B cycles    | 1 call, the same         |
 
 # Quality
 
@@ -249,12 +265,11 @@ question that cannot fit in one call, even on its own, returns `Err`.
 The state is the ticket: the wallet, the failed swap, and the user's message. The
 questions extract the facts the support desk acts on.
 
-Repeat this call until `pending` in the response is empty. Keep sending the same request:
-the first calls store the state (watch `state_tokens_remaining` count down), then each call
-answers questions from the stored state.
+One call stores the ticket and answers the five questions. It takes ~45 s on a local
+network:
 
 ```bash
-icp canister call llama_cpp -e local run_decision '(record {
+icp canister call llama_cpp -e local run_decision_full '(record {
   state = variant { Text = "DEXSwapper support ticket 7741. Wallet: 3vx2k-...-cae, user since 2024, 312 swaps, no open tickets.\nSwap, March 3, 14:02 UTC: 500 ICP -> ckUSDC on the ICP/ckUSDC pool, quote 4,180 ckUSDC, slippage 0.5%. 500 ICP left the wallet; the swap status shows failed, price moved; 0 ckUSDC received.\nUser message, March 3: My swap failed but the 500 ICP is gone from my wallet and I got no ckUSDC. Please refund the 500 ICP to my wallet." };
   questions = vec {
     record { id = "product"; kind = variant { choice }; instructions = "Which product?" };
@@ -279,28 +294,26 @@ icp canister call llama_cpp -e local run_decision '(record {
 })'
 ```
 
-The calls of this run (cycles measured with `icp canister status`):
+The steps of this call, from the canister log:
 
-| Call | `state_tokens_remaining` | `input_tokens` | Answered this call        | Cycles |
-|------|--------------------------|----------------|---------------------------|--------|
-| 1    | 143                      | 24             | - (storing the state)     | 35.5 B |
-| 2    | 119                      | 24             | - (storing the state)     | 35.5 B |
-| 3    | 95                       | 24             | - (storing the state)     | 35.7 B |
-| 4    | 71                       | 24             | - (storing the state)     | 36.0 B |
-| 5    | 47                       | 24             | - (storing the state)     | 36.1 B |
-| 6    | 23                       | 24             | - (storing the state)     | 36.4 B |
-| 7    | 0                        | 23             | - (storing the state)     | 35.2 B |
-| 8    | 0                        | 20             | product: swap (0.78)      | 29.5 B |
-| 9    | 0                        | 21             | issue: failed swap (0.81) | 30.9 B |
-| 10   | 0                        | 13             | refund: yes (0.85)        | 19.6 B |
-| 11   | 0                        | 18             | mood: 0.95                | 26.6 B |
-| 12   | 0                        | 18             | repeat: no (0.43)         | 26.6 B |
+| Step  | Message       | `input_tokens` | State stored after | Answered                  | Instructions   |
+|-------|---------------|----------------|--------------------|---------------------------|----------------|
+| 1     | first         | 24             | 24 of 167          | -                         | 35.6 B         |
+| 2-9   | after a yield | 16 each        | 40 ... 152 of 167  | -                         | 24.4-25.6 B    |
+| 10    | after a yield | 15             | 167 of 167         | -                         | 24.3 B         |
+| 11    | after a yield | 20             | 167 of 167         | product: swap (0.78)      | 29.5 B         |
+| 12    | after a yield | 21             | 167 of 167         | issue: failed swap (0.81) | 30.9 B         |
+| 13    | after a yield | 13             | 167 of 167         | refund: yes (0.85)        | 19.7 B         |
+| 14    | after a yield | 18             | 167 of 167         | mood: 0.95                | 26.7 B         |
+| 15    | after a yield | 18             | 167 of 167         | repeat: no (0.43)         | 26.7 B         |
 
-The ticket is 167 tokens. Calls 1-7 store it, 24 tokens per call (three steps of 8), and
-each stops before the instruction limit. Calls 8-12 answer one question each, from the
+The ticket is 167 tokens. The first message has a limit of 40 B instructions and stores 24
+tokens (three batches of 8). Every message after a yield has a limit of 38 B, and a step
+there keeps under 34 B: it stores 16 tokens. Steps 11-15 answer one question each from the
 stored state; each costs only its own 13-21 tokens.
 
-The reply of the last call has every answer (`probabilities` shortened):
+The reply has every answer (`probabilities` shortened). `input_tokens` and `instructions`
+cover the whole call:
 
 ```
 (
@@ -309,6 +322,7 @@ The reply of the last call has every answer (`probabilities` shortened):
       probabilities = vec { ... };
       state_tokens_remaining = opt (0 : nat64);
       pending = vec {};
+      state_key = opt "2911f0148b6430f8";
       answers = vec {
         record {
           id = "product";
@@ -351,7 +365,8 @@ The reply of the last call has every answer (`probabilities` shortened):
           confidence = 0.0 : float64;
         };
       };
-      input_tokens = 18 : nat64;
+      instructions = opt (392_703_315_134 : nat64);
+      input_tokens = 257 : nat64;
       state_tokens = opt (167 : nat64);
     }
   },
@@ -362,16 +377,38 @@ The reply of the last call has every answer (`probabilities` shortened):
 - `refund` and `repeat` are `noul` (yes/no) questions: `yes` is the probability of yes.
 - `mood` is a `score` question: `score` is the expected level, from 0 (calm) to 2 (angry).
 
+**The same with `run_decision`.** Send the same request to `run_decision`, and repeat the
+call until `pending` in the response is empty. The first calls store the state (watch
+`state_tokens_remaining` count down), then each call answers questions from the stored
+state. The answers are the same. The calls of that run, with v0.21.0 (cycles measured with
+`icp canister status`):
+
+| Call | `state_tokens_remaining` | `input_tokens` | Answered this call        | Cycles |
+|------|--------------------------|----------------|---------------------------|--------|
+| 1    | 143                      | 24             | - (storing the state)     | 35.5 B |
+| 2    | 119                      | 24             | - (storing the state)     | 35.5 B |
+| 3    | 95                       | 24             | - (storing the state)     | 35.7 B |
+| 4    | 71                       | 24             | - (storing the state)     | 36.0 B |
+| 5    | 47                       | 24             | - (storing the state)     | 36.1 B |
+| 6    | 23                       | 24             | - (storing the state)     | 36.4 B |
+| 7    | 0                        | 23             | - (storing the state)     | 35.2 B |
+| 8    | 0                        | 20             | product: swap (0.78)      | 29.5 B |
+| 9    | 0                        | 21             | issue: failed swap (0.81) | 30.9 B |
+| 10   | 0                        | 13             | refund: yes (0.85)        | 19.6 B |
+| 11   | 0                        | 18             | mood: 0.95                | 26.6 B |
+| 12   | 0                        | 18             | repeat: no (0.43)         | 26.6 B |
+
+Calls 1-7 store the ticket, 24 tokens per call (three steps of 8), and each stops before
+the instruction limit. Calls 8-12 answer one question each, from the stored state.
+
 ## Day 2: the user writes again
 
 The new message is **appended** to the state, starting with a newline, and the two
 questions that can change are asked again. The canister finds the stored state of day 1
-as the start of the new one, so it only ingests the new message.
-
-Repeat until `pending` is empty:
+as the start of the new one, so it only ingests the new message:
 
 ```bash
-icp canister call llama_cpp -e local run_decision '(record {
+icp canister call llama_cpp -e local run_decision_full '(record {
   state = variant { Text = "DEXSwapper support ticket 7741. Wallet: 3vx2k-...-cae, user since 2024, 312 swaps, no open tickets.\nSwap, March 3, 14:02 UTC: 500 ICP -> ckUSDC on the ICP/ckUSDC pool, quote 4,180 ckUSDC, slippage 0.5%. 500 ICP left the wallet; the swap status shows failed, price moved; 0 ckUSDC received.\nUser message, March 3: My swap failed but the 500 ICP is gone from my wallet and I got no ckUSDC. Please refund the 500 ICP to my wallet.\nUser message, March 5: Still nothing!! This is the second time I report this swap and nobody answers. This is unacceptable. Give me back my 500 ICP today or I post the transaction on X." };
   questions = vec {
     record { id = "mood"; kind = variant { score }; instructions = "User mood?" };
@@ -385,21 +422,20 @@ icp canister call llama_cpp -e local run_decision '(record {
 })'
 ```
 
-The calls of this run:
+The steps of this call (~15 s):
 
-| Call | `state_tokens_remaining` | `input_tokens` | Answered this call    | Cycles |
-|------|--------------------------|----------------|-----------------------|--------|
-| 1    | 30                       | 17             | - (storing the state) | 27.8 B |
-| 2    | 6                        | 24             | - (storing the state) | 36.5 B |
-| 3    | 0                        | 6              | - (storing the state) | 11.6 B |
-| 4    | 0                        | 18             | mood: 1.23            | 26.6 B |
-| 5    | 0                        | 18             | repeat: yes (0.71)    | 26.6 B |
+| Step | `input_tokens` | State stored after | Answered           | Instructions |
+|------|----------------|--------------------|--------------------|--------------|
+| 1    | 17             | 184 of 214         | -                  | 27.9 B       |
+| 2    | 16             | 200 of 214         | -                  | 25.6 B       |
+| 3    | 14             | 214 of 214         | -                  | 22.9 B       |
+| 4    | 18             | 214 of 214         | mood: 1.23         | 26.7 B       |
+| 5    | 18             | 214 of 214         | repeat: yes (0.71) | 26.7 B       |
 
-The new state is 214 tokens. Call 1 loads the stored day-1 state (167 tokens) and only
-ingests the new message: after it, 30 of 214 tokens remain. In all, 47 tokens are ingested
-instead of 214.
+The new state is 214 tokens. Step 1 loads the stored day-1 state (167 tokens) and only
+ingests the new message: 47 tokens are ingested instead of 214.
 
-The reply of the last call:
+The reply:
 
 ```
 (
@@ -408,6 +444,7 @@ The reply of the last call:
       probabilities = vec { ... };
       state_tokens_remaining = opt (0 : nat64);
       pending = vec {};
+      state_key = opt "4d1643fc8857d99";
       answers = vec {
         record {
           id = "mood";
@@ -426,17 +463,122 @@ The reply of the last call:
           confidence = 0.0 : float64;
         };
       };
-      input_tokens = 18 : nat64;
+      instructions = opt (129_820_854_345 : nat64);
+      input_tokens = 83 : nat64;
       state_tokens = opt (214 : nat64);
     }
   },
 )
 ```
 
+With `run_decision`, the same request takes 5 calls:
+
+| Call | `state_tokens_remaining` | `input_tokens` | Answered this call    | Cycles |
+|------|--------------------------|----------------|-----------------------|--------|
+| 1    | 30                       | 17             | - (storing the state) | 27.8 B |
+| 2    | 6                        | 24             | - (storing the state) | 36.5 B |
+| 3    | 0                        | 6              | - (storing the state) | 11.6 B |
+| 4    | 0                        | 18             | mood: 1.23            | 26.6 B |
+| 5    | 0                        | 18             | repeat: yes (0.71)    | 26.6 B |
+
 | Question | Day 1         | Day 2          |
 |----------|---------------|----------------|
 | mood     | 0.95          | **1.23**       |
 | repeat   | **no** (0.43) | **yes** (0.71) |
+
+## Ask one question at a time
+
+A later request about the same state does not ingest it again: it only decodes its own
+question. So a client can ask its questions one call at a time, with either endpoint:
+
+- Send the **whole state** every time. The canister tokenizes it and finds the stored copy
+  by its tokens; there is no field to name a stored state.
+- Every request has at least one question: a request with none returns
+  `questions: must not be empty`. The first request about a state ingests it, and answers
+  its question in the same call.
+
+With `run_decision_full`, about the day-2 ticket (~3 s):
+
+```bash
+icp canister call llama_cpp -e local run_decision_full '(record {
+  state = variant { Text = "DEXSwapper support ticket 7741. Wallet: 3vx2k-...-cae, user since 2024, 312 swaps, no open tickets.\nSwap, March 3, 14:02 UTC: 500 ICP -> ckUSDC on the ICP/ckUSDC pool, quote 4,180 ckUSDC, slippage 0.5%. 500 ICP left the wallet; the swap status shows failed, price moved; 0 ckUSDC received.\nUser message, March 3: My swap failed but the 500 ICP is gone from my wallet and I got no ckUSDC. Please refund the 500 ICP to my wallet.\nUser message, March 5: Still nothing!! This is the second time I report this swap and nobody answers. This is unacceptable. Give me back my 500 ICP today or I post the transaction on X." };
+  questions = vec {
+    record { id = "asset"; kind = variant { choice }; instructions = "Which token does the user want back?" };
+  };
+  options = vec {
+    record { question_id = "asset"; key = "ICP"; description = "" };
+    record { question_id = "asset"; key = "ckUSDC"; description = "" };
+  };
+})'
+```
+
+```
+(
+  variant {
+    Ok = record {
+      probabilities = vec { ... };
+      state_tokens_remaining = opt (0 : nat64);
+      pending = vec {};
+      state_key = opt "4d1643fc8857d99";
+      answers = vec {
+        record {
+          id = "asset";
+          yes = 0.0 : float64;
+          kind = variant { choice };
+          score = 0.0 : float64;
+          choice = "ICP";
+          confidence = 0.8487900283179279 : float64;
+        };
+      };
+      instructions = opt (28_097_263_967 : nat64);
+      input_tokens = 19 : nat64;
+      state_tokens = opt (214 : nat64);
+    }
+  },
+)
+```
+
+With `run_decision`: a question about a stored state fits one call (~3 s):
+
+```bash
+icp canister call llama_cpp -e local run_decision '(record {
+  state = variant { Text = "DEXSwapper support ticket 7741. Wallet: 3vx2k-...-cae, user since 2024, 312 swaps, no open tickets.\nSwap, March 3, 14:02 UTC: 500 ICP -> ckUSDC on the ICP/ckUSDC pool, quote 4,180 ckUSDC, slippage 0.5%. 500 ICP left the wallet; the swap status shows failed, price moved; 0 ckUSDC received.\nUser message, March 3: My swap failed but the 500 ICP is gone from my wallet and I got no ckUSDC. Please refund the 500 ICP to my wallet.\nUser message, March 5: Still nothing!! This is the second time I report this swap and nobody answers. This is unacceptable. Give me back my 500 ICP today or I post the transaction on X." };
+  questions = vec {
+    record { id = "answered"; kind = variant { noul }; instructions = "Has support answered the user?" };
+  };
+  options = vec {};
+})'
+```
+
+```
+(
+  variant {
+    Ok = record {
+      probabilities = vec { ... };
+      state_tokens_remaining = opt (0 : nat64);
+      pending = vec {};
+      state_key = opt "4d1643fc8857d99";
+      answers = vec {
+        record {
+          id = "answered";
+          yes = 0.2498668044613383 : float64;
+          kind = variant { noul };
+          score = 0.0 : float64;
+          choice = "";
+          confidence = 0.0 : float64;
+        };
+      };
+      instructions = opt (21_064_978_122 : nat64);
+      input_tokens = 14 : nat64;
+      state_tokens = opt (214 : nat64);
+    }
+  },
+)
+```
+
+Kev answers `ICP` (confidence 0.85), and no to "Has support answered the user?" (p(yes) =
+0.25). Each call only decoded its question, 19 and 14 tokens, after loading the stored
+state (0.9 B instructions).
 
 ## Apply the policy in your code
 
@@ -453,8 +595,9 @@ On day 1, `repeat` is 0.43: no escalation. On day 2 it is 0.71: the ticket is es
 
 ## Watch the canister log
 
-Every step is logged, with its token counts and instructions. The canister keeps only the
-most recent records; these are the last two calls of day 2:
+Every step is logged, with its token counts and instructions. A step of
+`run_decision_full` logs like a `run_decision` call, and then `full: step <n>`. The
+canister keeps only the most recent records; these are the last two steps of day 2:
 
 ```bash
 icp canister logs llama_cpp -e local
@@ -462,15 +605,17 @@ icp canister logs llama_cpp -e local
 
 ```
 llama_cpp: run_decision - request: 2 question(s), Text state of 613 bytes, token budget none
-llama_cpp: run_decision - state: loaded 214/214 tokens from .canister_cache/<principal>/sessions/decision-state-<hash>.session, 0.80 B instructions
+llama_cpp: run_decision - state: loaded 214/214 tokens from .canister_cache/<principal>/sessions/decision-state-<hash>.session, 0.88 B instructions
 llama_cpp: run_decision - mood: 18 tokens after the state, 25.59 B instructions (1.42 B per token), scores [-0.42, 4.61, 2.93], softmax T=2.35
 llama_cpp: run_decision - mood (score, 18 tokens) -> score 1.23, frustrated (p=0.62, confidence=0.43)
 llama_cpp: run_decision - 18 tokens this call, 1/2 questions answered, pending: repeat
+llama_cpp: run_decision - full: step 4, 18 tokens, 1 pending, 26.70 B instructions
 llama_cpp: run_decision - request: 2 question(s), Text state of 613 bytes, token budget none, 1 answered by earlier calls
-llama_cpp: run_decision - state: loaded 214/214 tokens from .canister_cache/<principal>/sessions/decision-state-<hash>.session, 0.80 B instructions
+llama_cpp: run_decision - state: loaded 214/214 tokens from .canister_cache/<principal>/sessions/decision-state-<hash>.session, 0.88 B instructions
 llama_cpp: run_decision - repeat: 18 tokens after the state, 25.57 B instructions (1.42 B per token), scores [1.15, 3.25], softmax T=2.35
 llama_cpp: run_decision - repeat (noul, 18 tokens) -> yes (p(yes)=0.71)
 llama_cpp: run_decision - 18 tokens this call, 2/2 questions answered
+llama_cpp: run_decision - full: step 5, 18 tokens, 0 pending, 26.68 B instructions
 ```
 
 ## Optional: expire stored states by age
@@ -492,8 +637,8 @@ about it.
 
 ## Serving many users through one caller
 
-A service in front of the canister (a gateway) calls `run_decision` for its users, so the
-canister sees one caller. Four things make that work.
+A service in front of the canister (a gateway) calls `run_decision_full` (or
+`run_decision`) for its users, so the canister sees one caller. Four things make that work.
 
 **A scope per user.** Pass `scope = opt "<user>"` (1-63 characters of `a-z`, `0-9` and
 `-`) in the request. The states of each scope are stored apart, in
@@ -502,15 +647,16 @@ nothing changes. With several canisters, send all requests of a scope to the sam
 that is where its states are stored.
 
 ```bash
-icp canister call llama_cpp -e local run_decision '(record { scope = opt "u-alice"; state = variant { Text = "..." }; questions = vec { ... }; options = vec { ... } })'
+icp canister call llama_cpp -e local run_decision_full '(record { scope = opt "u-alice"; state = variant { Text = "..." }; questions = vec { ... }; options = vec { ... } })'
 icp canister call llama_cpp -e local remove_decision_scope '("u-alice")'
 ```
 
 `remove_decision_scope` removes every file of the scope; it is idempotent.
 
 **The cost of each call.** Every `Ok` reply has `instructions = opt <n>`: the
-instructions the call used: up to ~36 B for a storing call (it stops there), ~1.4 B per
-token for a question. A gateway can charge its users from it.
+instructions the call used, over all its messages. That is ~1.4 B per token, stored or
+asked; a `run_decision` call that stores the state stops at ~36 B. A gateway can charge
+its users from it.
 
 **Pinned states.** Every kev reply has `state_key = opt "<key>"`: the name of the stored
 state. Pin it to keep it past the caps and the cleanup timer, until a time in nanoseconds
@@ -548,7 +694,8 @@ per question). `Which request?` with `new listing`, `delisting` and `fee change`
 
 `test/test_decision.py` runs the Kev-0.8B checks against the uploaded model: answers
 within 0.05 of llama-server, ingestion progress, reuse of a stored state, a grown state,
-scopes, pins and `remove_decision_scope`.
+scopes, pins, `remove_decision_scope`, and one `run_decision_full` call against the
+`run_decision` loop.
 
 ```bash
 DECISION_MODEL=kev-0.8b pytest -vv --network local --identity "$(icp identity default)" test/test_decision.py
@@ -556,8 +703,9 @@ DECISION_MODEL=kev-0.8b pytest -vv --network local --identity "$(icp identity de
 
 ## The same with llama.cpp
 
-This sequence of update calls is equivalent to running `llama-server` locally and posting
-the request to its System One endpoint (`POST /v1/systemone`), with the same model. The
+This update call (or the sequence of `run_decision` calls) is equivalent to running
+`llama-server` locally and posting the request to its System One endpoint
+(`POST /v1/systemone`), with the same model. The
 canister's answers are within 0.013 of llama-server's (CPU). In the `curl` command below,
 replace `...` with the full ticket text:
 
@@ -573,7 +721,7 @@ curl -s http://127.0.0.1:8080/v1/systemone -H "Content-Type: application/json" -
 
 Day 2 above is a grown state. Any state that grows as data arrives (a ticket with a new
 message, a log with a new day, a game's move list after each move) does not have to be
-ingested again. When a request's state is not stored yet, `run_decision` looks for the
+ingested again. When a request's state is not stored yet, the canister looks for the
 caller's stored state with the longest token list that the new state starts with, loads
 it, and ingests only the rest. The older state stays stored, so requests about it keep
 working.
