@@ -1,0 +1,315 @@
+// Native (MockIC) test of run_update_full: ONE update call that ingests the
+// prompt and generates the whole response, yielding to itself between chunks.
+//
+// The reference is the multi-call loop a client runs today with run_update:
+// ingest until prompt_remaining is empty, then generate until generated_eog.
+// With greedy sampling both must produce exactly the same output.
+//
+// The Mock IC delivers the yields natively: run_test returns after the whole
+// coroutine ran.
+
+#include "test_run_update_full.h"
+
+#include "../src/max_tokens.h"
+#include "../src/model.h"
+#include "../src/run.h"
+
+#include "mock_ic.h"
+
+#include <iostream>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace {
+
+const std::string MODEL = "models/stories15Mtok4096.gguf";
+const std::string PROMPT = "Joe loves writing stories";
+const std::string PROMPT_B = "Once upon a time, a little cat";
+// The tokens of the response: stories15M rarely ends a story with an eog.
+const uint64_t N = 30;
+
+std::string args_hex(const std::vector<std::string> &args) {
+  std::vector<std::string> a = args;
+  CandidTypeRecord r;
+  r.append("args", CandidTypeVecText{a});
+  return CandidSerialize(r).as_hex_string();
+}
+
+struct Out {
+  std::string conversation;
+  std::string output;
+  std::string prompt_remaining;
+  bool generated_eog = false;
+  uint64_t n_tokens_generated = 0;
+  bool partial = false;
+};
+
+// full: a run_update_full reply, which also carries `partial`.
+Out decode_out(const std::string &hex, bool full = false) {
+  Out o;
+  uint16_t status_code = 0;
+  std::string error;
+  CandidTypeRecord r;
+  r.append("status_code", CandidTypeNat16{&status_code});
+  r.append("conversation", CandidTypeText{&o.conversation});
+  r.append("output", CandidTypeText{&o.output});
+  r.append("error", CandidTypeText{&error});
+  r.append("prompt_remaining", CandidTypeText{&o.prompt_remaining});
+  r.append("generated_eog", CandidTypeBool{&o.generated_eog});
+  std::optional<uint64_t> n_gen;
+  r.append("n_tokens_generated", CandidTypeOptNat64{&n_gen});
+  std::optional<bool> partial;
+  if (full) r.append("partial", CandidTypeOptBool{&partial});
+  std::string label;
+  CandidTypeVariant v{&label};
+  v.append("Ok", r);
+  v.append("Err", r);
+  VecBytes bytes;
+  bytes.store_hex_string(hex);
+  CandidArgs args;
+  args.append(v);
+  CandidDeserialize(bytes, args);
+  if (label != "Ok") {
+    std::cout << "run_update_full test: Err - " << error << std::endl;
+    exit(1);
+  }
+  o.n_tokens_generated = n_gen.value_or(0);
+  o.partial = partial.value_or(false);
+  return o;
+}
+
+// The status code of a reply, Ok or Err.
+uint16_t status_of(const std::string &hex) {
+  uint16_t status_code = 0;
+  std::string text;
+  bool eog = false;
+  CandidTypeRecord r;
+  r.append("status_code", CandidTypeNat16{&status_code});
+  r.append("conversation", CandidTypeText{&text});
+  r.append("output", CandidTypeText{&text});
+  r.append("error", CandidTypeText{&text});
+  r.append("prompt_remaining", CandidTypeText{&text});
+  r.append("generated_eog", CandidTypeBool{&eog});
+  std::string label;
+  CandidTypeVariant v{&label};
+  v.append("Ok", r);
+  v.append("Err", r);
+  VecBytes bytes;
+  bytes.store_hex_string(hex);
+  CandidArgs args;
+  args.append(v);
+  CandidDeserialize(bytes, args);
+  return status_code;
+}
+
+std::vector<std::string> run_args(const std::string &cache,
+                                  const std::string &prompt,
+                                  const std::string &n) {
+  return {"--prompt-cache",
+          cache,
+          "--prompt-cache-all",
+          "--samplers",
+          "temperature",
+          "--temp",
+          "0.0",
+          "-p",
+          prompt,
+          "-n",
+          n};
+}
+
+void check(bool ok, const std::string &what) {
+  if (!ok) {
+    std::cout << "Test 'test_run_update_full: " << what << "' Failed\n";
+    exit(1);
+  }
+  std::cout << "Test 'test_run_update_full: " << what << "' - Passed\n";
+}
+
+} // namespace
+
+void test_run_update_full(MockIC &mockIC) {
+  std::string my_principal{MOCKIC_CONTROLLER};
+  bool silent_on_trap = true;
+  std::string out_hex;
+
+  std::cout << "\n========== test_run_update_full ==========\n";
+
+  mockIC.run_test("test_run_update_full: load_model", load_model,
+                  args_hex({"--model", MODEL}), "", silent_on_trap,
+                  my_principal);
+
+  // A small budget per call, so the prompt and the response take many chunks.
+  // '(record { max_tokens_query = 4 : nat64; max_tokens_update = 4 : nat64 })'
+  mockIC.run_test(
+      "test_run_update_full: set_max_tokens 4", set_max_tokens,
+      "4449444c016c02deb5daad0478f3a29d8e077801000400000000000000040000000000"
+      "0000",
+      "", silent_on_trap, my_principal);
+
+  // --- The reference: the multi-call loop of today
+  mockIC.run_test("test_run_update_full: new_chat ref", new_chat,
+                  args_hex({"--prompt-cache", "ref.cache"}), "", silent_on_trap,
+                  my_principal);
+  // The tokens per call; -n binds when it is <= this (see the generate loop)
+  const uint64_t MTU = 4;
+  std::string ref;
+  bool eog = false;
+  uint64_t generated = 0;
+  int calls = 0;
+  // ingest with -n 1. Like test/test_qwen3.py, the output is not used: the
+  // token -n 1 samples at the end of the prompt is not decoded into the
+  // session file, so the first generate call samples it again.
+  while (calls < 100) {
+    ++calls;
+    mockIC.run_test("test_run_update_full: run_update ref ingest", run_update,
+                    args_hex(run_args("ref.cache", PROMPT, "1")), "",
+                    silent_on_trap, my_principal, &out_hex);
+    if (decode_out(out_hex).prompt_remaining.empty()) break;
+  }
+  // generate, empty prompt, N tokens in total. The last call is the one where
+  // -n is within the max_tokens budget: it ends that call after sampling.
+  while (calls < 100 && !eog && generated < N) {
+    ++calls;
+    const uint64_t r = N - generated;
+    mockIC.run_test("test_run_update_full: run_update ref generate", run_update,
+                    args_hex(run_args("ref.cache", "", std::to_string(r))), "",
+                    silent_on_trap, my_principal, &out_hex);
+    Out o = decode_out(out_hex);
+    ref += o.output;
+    eog = o.generated_eog;
+    generated += r <= MTU ? r : o.n_tokens_generated;
+  }
+  check(eog || generated == N, "reference loop: " + std::to_string(generated) +
+                                   " tokens in " + std::to_string(calls) +
+                                   " calls");
+
+  // --- One call
+  mockIC.run_test("test_run_update_full: new_chat full", new_chat,
+                  args_hex({"--prompt-cache", "full.cache"}), "",
+                  silent_on_trap, my_principal);
+  mockIC.run_test("test_run_update_full: run_update_full", run_update_full,
+                  args_hex(run_args("full.cache", PROMPT, std::to_string(N))),
+                  "", silent_on_trap, my_principal, &out_hex);
+  Out full = decode_out(out_hex, true);
+  check(full.prompt_remaining.empty(), "run_update_full ingested the prompt");
+  check(full.n_tokens_generated == generated,
+        "run_update_full generated " + std::to_string(full.n_tokens_generated) +
+            " tokens");
+  std::cout << "reference: " << ref << "\nfull     : " << full.output
+            << std::endl;
+  check(full.output == ref, "run_update_full output == multi-call output");
+
+  // --- -n is the total of the whole response
+  mockIC.run_test("test_run_update_full: new_chat n10", new_chat,
+                  args_hex({"--prompt-cache", "n10.cache"}), "", silent_on_trap,
+                  my_principal);
+  mockIC.run_test("test_run_update_full: run_update_full -n 10",
+                  run_update_full,
+                  args_hex(run_args("n10.cache", PROMPT, "10")), "",
+                  silent_on_trap, my_principal, &out_hex);
+  Out n10 = decode_out(out_hex, true);
+  check(n10.n_tokens_generated == 10 && !n10.output.empty() &&
+            ref.rfind(n10.output, 0) == 0,
+        "run_update_full -n 10 is a prefix of the full response");
+
+  // --- Interleaving: two generations whose chunks take turns on the shared
+  // model context. Each chunk reloads its own session file, so each must end
+  // with the same reply as when it ran alone.
+  for (const std::string c : {"soloA", "soloB", "ia", "ib"}) {
+    mockIC.run_test("test_run_update_full: new_chat " + c, new_chat,
+                    args_hex({"--prompt-cache", c + ".cache"}), "",
+                    silent_on_trap, my_principal);
+  }
+  mockIC.run_test("test_run_update_full: solo A", run_update_full,
+                  args_hex(run_args("soloA.cache", PROMPT, "20")), "",
+                  silent_on_trap, my_principal, &out_hex);
+  const Out solo_a = decode_out(out_hex, true);
+  mockIC.run_test("test_run_update_full: solo B", run_update_full,
+                  args_hex(run_args("soloB.cache", PROMPT_B, "20")), "",
+                  silent_on_trap, my_principal, &out_hex);
+  const Out solo_b = decode_out(out_hex, true);
+  check(!solo_a.output.empty() && solo_a.output != solo_b.output,
+        "the solo replies differ");
+  mockIC.set_auto_drain(false);
+  MockIC::CallHandle ia = mockIC.start_call(
+      "test_run_update_full: interleaved A", run_update_full,
+      args_hex(run_args("ia.cache", PROMPT, "20")), my_principal);
+  MockIC::CallHandle ib = mockIC.start_call(
+      "test_run_update_full: interleaved B", run_update_full,
+      args_hex(run_args("ib.cache", PROMPT_B, "20")), my_principal);
+  check(mockIC.pending_calls() == 2, "both generations yielded");
+  mockIC.drain();
+  mockIC.set_auto_drain(true);
+  check(mockIC.call_done(ia) && !mockIC.was_rejected(ia) &&
+            mockIC.call_done(ib) && !mockIC.was_rejected(ib),
+        "both interleaved generations replied");
+  const Out a = decode_out(mockIC.reply_hex(ia), true);
+  const Out b = decode_out(mockIC.reply_hex(ib), true);
+  check(a.output == solo_a.output && a.conversation == solo_a.conversation,
+        "interleaved A == solo A");
+  check(b.output == solo_b.output && b.conversation == solo_b.conversation,
+        "interleaved B == solo B");
+
+  // --- Busy: while a run_update_full holds a session, other calls on that
+  // session get a 409; calls on another session run.
+  mockIC.run_test("test_run_update_full: new_chat busy", new_chat,
+                  args_hex({"--prompt-cache", "busy.cache"}), "",
+                  silent_on_trap, my_principal);
+  mockIC.set_auto_drain(false);
+  MockIC::CallHandle holder = mockIC.start_call(
+      "test_run_update_full: busy holder", run_update_full,
+      args_hex(run_args("busy.cache", PROMPT, "20")), my_principal);
+  check(mockIC.pending_calls() == 1, "the holder yielded");
+  MockIC::CallHandle second = mockIC.start_call(
+      "test_run_update_full: busy run_update_full", run_update_full,
+      args_hex(run_args("busy.cache", PROMPT, "20")), my_principal);
+  MockIC::CallHandle update = mockIC.start_call(
+      "test_run_update_full: busy run_update", run_update,
+      args_hex(run_args("busy.cache", "", "4")), my_principal);
+  check(mockIC.call_done(second) && status_of(mockIC.reply_hex(second)) == 409,
+        "a second run_update_full on a held session gets 409");
+  check(mockIC.call_done(update) && status_of(mockIC.reply_hex(update)) == 409,
+        "run_update on a held session gets 409");
+  mockIC.drain();
+  mockIC.set_auto_drain(true);
+  check(mockIC.call_done(holder) &&
+            decode_out(mockIC.reply_hex(holder), true).output == solo_a.output,
+        "the holder completes as if alone");
+  mockIC.run_test("test_run_update_full: run_update after the holder",
+                  run_update, args_hex(run_args("busy.cache", "", "4")), "",
+                  silent_on_trap, my_principal, &out_hex);
+  check(status_of(out_hex) == 200, "the session is free again");
+
+  // --- Stopping: the yield returns CanisterStopping, and the call replies
+  // with what it has instead of continuing.
+  mockIC.run_test("test_run_update_full: new_chat stop", new_chat,
+                  args_hex({"--prompt-cache", "stop.cache"}), "",
+                  silent_on_trap, my_principal);
+  mockIC.set_auto_drain(false);
+  MockIC::CallHandle st = mockIC.start_call(
+      "test_run_update_full: stop mid-generation", run_update_full,
+      args_hex(run_args("stop.cache", PROMPT, std::to_string(N))),
+      my_principal);
+  check(mockIC.pending_calls() == 1, "the generation yielded");
+  mockIC.set_canister_status(MOCKIC_CANISTER_STATUS_STOPPING);
+  mockIC.drain();
+  mockIC.set_canister_status(MOCKIC_CANISTER_STATUS_RUNNING);
+  mockIC.set_auto_drain(true);
+  check(mockIC.call_done(st) && !mockIC.was_rejected(st),
+        "a stopping canister replies to the generation");
+  const Out stopped = decode_out(mockIC.reply_hex(st), true);
+  check(stopped.partial, "the reply of a stopped generation is partial");
+  check(!full.partial, "a complete generation is not partial");
+  check(stopped.n_tokens_generated < N && ref.rfind(stopped.output, 0) == 0,
+        "the reply of a stopped generation is a prefix of the full response");
+
+  // Restore the default budget for the tests that follow
+  // '(record { max_tokens_query = 0 : nat64; max_tokens_update = 0 : nat64 })'
+  mockIC.run_test(
+      "test_run_update_full: set_max_tokens 0", set_max_tokens,
+      "4449444c016c02deb5daad0478f3a29d8e077801000000000000000000000000000000"
+      "0000",
+      "", silent_on_trap, my_principal);
+}

@@ -13,7 +13,9 @@
 #include "log.h"
 
 #include <filesystem>
+#include <initializer_list>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -208,6 +210,36 @@ struct RunChunk {
 // A run_update call stops decoding before it would use more instructions than
 // this, keeping a margin to the IC's limit of 40B for one update message.
 const uint64_t RUN_UPDATE_INSTRUCTIONS = 36'000'000'000ULL;
+// The same after a yield of run_update_full: a reply callback gets 38B.
+const uint64_t RUN_CALLBACK_INSTRUCTIONS = 34'000'000'000ULL;
+// A runaway guard: a run_update_full never takes more chunks than this.
+const uint32_t FULL_MAX_CHUNKS = 500;
+
+// The sessions with a run_update_full in flight, and when it started. Two
+// generations on one session file overwrite each other's progress (and never
+// finish), so another call on it is refused. An entry is removed when its
+// generation ends - also on a trap, when the IC's cleanup destroys the
+// coroutine - and expires as a safety net.
+const uint64_t FULL_BUSY_TTL_NS = 30ULL * 60 * 1'000'000'000ULL;
+static std::map<std::string, uint64_t> g_full_busy;
+
+// Whether a run_update_full holds the session `key`.
+static bool session_busy(const std::string &key) {
+  auto it = g_full_busy.find(key);
+  if (it == g_full_busy.end()) return false;
+  if (IC_API::time() - it->second < FULL_BUSY_TTL_NS) return true;
+  g_full_busy.erase(it);
+  return false;
+}
+
+// Holds the session `key` while it is in scope.
+struct SessionBusy {
+  std::string key;
+  explicit SessionBusy(const std::string &k) : key(k) {
+    g_full_busy[key] = IC_API::time();
+  }
+  ~SessionBusy() { g_full_busy.erase(key); }
+};
 
 // Calls main_, just like it is called in the llama-cli app. max_instructions
 // > 0 stops decoding before that many instructions (see main_).
@@ -251,7 +283,8 @@ static void send_run_err(IC_API &ic_api, const std::string &conversation_text,
 static void send_run_ok(IC_API &ic_api, const std::string &conversation_text,
                         const std::string &output_text,
                         const std::string &prompt_remaining_text,
-                        bool generated_eog, const RunChunk &counts) {
+                        bool generated_eog, const RunChunk &counts,
+                        std::optional<bool> partial = std::nullopt) {
   CandidTypeRecord r_out;
   r_out.append("status_code", CandidTypeNat16{Http::StatusCode::OK}); // 200
   r_out.append("conversation", CandidTypeText{conversation_text});
@@ -276,7 +309,64 @@ static void send_run_ok(IC_API &ic_api, const std::string &conversation_text,
   r_out.append("n_prompt_tokens_remaining",
                CandidTypeOptNat64{
                    std::optional<uint64_t>{counts.n_prompt_tokens_remaining}});
+  // run_update_full only: whether the response was cut short
+  if (partial.has_value()) {
+    r_out.append("partial", CandidTypeOptBool{partial});
+  }
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
+}
+
+// ---------------------------------------------------------------------------
+// Make every outgoing Candid `text` valid UTF-8 (see utils.h).
+//
+// `output` is CARRIED, not sanitized: callers concatenate the output of
+// successive run_update calls, so a codepoint split across a chunk boundary
+// must be DEFERRED to the next call, never dropped or replaced.
+//
+// `conversation` and `prompt_remaining` are rebuilt from the token vector on
+// every call rather than accumulated, so there is nothing to carry - they are
+// sanitized. That is lossy but safe: callers treat them as informational and
+// re-send the FULL prompt until prompt_remaining is empty (see the README run
+// loop), so a U+FFFD here is never fed back in as input.
+//
+// The carry needs a per-session, per-principal key (session_key). Derive it with
+// pure string work (utf8_session_key): get_canister_path_session() would do the
+// same normalization, but it also stats the filesystem and may create
+// directories - a VFS round trip, on every single update call, against a
+// canister whose stable memory holds the whole prompt-cache tree. The key never
+// needs the path to exist.
+//
+// An empty key is NOT usable: without the emptiness check every principal
+// calling without a --prompt-cache would share one carry entry, and one
+// caller's trailing bytes could be prepended to another caller's output.
+//
+// Returns the output to reply with. can_carry: false for a query, whose state
+// changes are discarded. flush: the conversation finished (or failed), so no
+// bytes are kept for a next call.
+static std::string carry_output(const std::string &session_key, bool can_carry,
+                                std::string output_text, bool flush) {
+  if (can_carry && !session_key.empty()) {
+    std::string full = utf8_carry_get(session_key) + output_text;
+    // ONE pass yields both the split point and whether the prefix holds an
+    // invalid byte, so the common case (valid text) never walks it twice nor
+    // builds a second buffer.
+    bool clean = true;
+    const size_t n = utf8_valid_prefix_len(full, &clean);
+    std::string tail = full.substr(n); // 0-3 bytes of a split codepoint
+    full.resize(n);                    // truncate in place; no copy
+    output_text = clean ? std::move(full) : utf8_sanitize(std::move(full));
+    if (flush) {
+      // Flush: never retain bytes across a finished conversation.
+      output_text += utf8_sanitize(std::move(tail));
+      utf8_carry_clear(session_key);
+    } else {
+      utf8_carry_set(session_key, tail);
+    }
+    return output_text;
+  }
+  // A query call cannot carry: state changes are discarded when the message
+  // ends. Sanitize instead, accepting the loss.
+  return utf8_sanitize(std::move(output_text));
 }
 
 // One run_query or run_update call: read the request, run one chunk of at most
@@ -284,6 +374,14 @@ static void send_run_ok(IC_API &ic_api, const std::string &conversation_text,
 void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   RunRequest req;
   if (!run_request_from_wire(ic_api, is_query, req)) return;
+
+  if (!is_query && session_busy(utf8_session_key(req.params.path_prompt_cache,
+                                                 req.principal_id))) {
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::Conflict,
+        "a run_update_full is running on this prompt-cache.");
+    return;
+  }
 
   // If we're going to load a new model, first free the Orthogonally Persisted memory of a previously loaded model
   if (!req.params.model.empty()) {
@@ -294,53 +392,11 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
       run_chunk(req.argc, req.argv.data(), req.principal_id, max_tokens,
                 is_query ? 0 : RUN_UPDATE_INSTRUCTIONS);
 
-  // ---------------------------------------------------------------------------
-  // Make every outgoing Candid `text` valid UTF-8 (see utils.h).
-  //
-  // `output` is CARRIED, not sanitized: callers concatenate the output of
-  // successive run_update calls, so a codepoint split across a chunk boundary
-  // must be DEFERRED to the next call, never dropped or replaced.
-  //
-  // `conversation` and `prompt_remaining` are rebuilt from the token vector on
-  // every call rather than accumulated, so there is nothing to carry - they are
-  // sanitized. That is lossy but safe: callers treat them as informational and
-  // re-send the FULL prompt until prompt_remaining is empty (see the README run
-  // loop), so a U+FFFD here is never fed back in as input.
-  std::string output_text = c.output;
-  // The carry needs a per-session, per-principal key. Derive it with pure string
-  // work: get_canister_path_session() would do the same normalization, but it
-  // also stats the filesystem and may create directories - a VFS round trip, on
-  // every single update call, against a canister whose stable memory holds the
-  // whole prompt-cache tree. The key never needs the path to exist.
-  //
-  // An empty key is NOT usable: without the emptiness check every principal
-  // calling without a --prompt-cache would share one carry entry, and one
-  // caller's trailing bytes could be prepended to another caller's output.
+  // Make every outgoing Candid `text` valid UTF-8 (see carry_output)
   const std::string session_key =
       utf8_session_key(req.params.path_prompt_cache, req.principal_id);
-  const bool have_session_key = !is_query && !session_key.empty();
-  if (have_session_key) {
-    std::string full = utf8_carry_get(session_key) + output_text;
-    // ONE pass yields both the split point and whether the prefix holds an
-    // invalid byte, so the common case (valid text) never walks it twice nor
-    // builds a second buffer.
-    bool clean = true;
-    const size_t n = utf8_valid_prefix_len(full, &clean);
-    std::string tail = full.substr(n); // 0-3 bytes of a split codepoint
-    full.resize(n);                    // truncate in place; no copy
-    output_text = clean ? std::move(full) : utf8_sanitize(std::move(full));
-    if (c.generated_eog || c.result != 0) {
-      // Flush: never retain bytes across a finished conversation.
-      output_text += utf8_sanitize(std::move(tail));
-      utf8_carry_clear(session_key);
-    } else {
-      utf8_carry_set(session_key, tail);
-    }
-  } else {
-    // A query call cannot carry: state changes are discarded when the message
-    // ends. Sanitize instead, accepting the loss.
-    output_text = utf8_sanitize(std::move(output_text));
-  }
+  const std::string output_text = carry_output(
+      session_key, !is_query, c.output, c.generated_eog || c.result != 0);
   const std::string conversation_text = utf8_sanitize(c.conversation);
   const std::string prompt_remaining_text = utf8_sanitize(c.prompt_remaining);
 
@@ -377,3 +433,156 @@ void run_update() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   run(ic_api, max_tokens_update, false);
 }
+
+// ---------------------------------------------------------------------------
+// run_update_full: ONE update call that ingests the prompt and generates the
+// whole response, in chunks. After each chunk the coroutine yields to itself
+// (yield_fresh_budget), which commits that chunk - the session file included -
+// and continues in a new message with a fresh instruction limit.
+//
+// Other messages can run between two chunks and change the shared model
+// context, so every chunk starts from the caller's session file: main_()
+// always clears the context and reloads that file.
+
+// The index of the value of the first option in `names`, or -1.
+static int find_arg_value(const std::vector<std::string> &args,
+                          std::initializer_list<const char *> names) {
+  for (size_t i = 0; i + 1 < args.size(); ++i) {
+    for (const char *name : names) {
+      if (args[i] == name) return (int)i + 1;
+    }
+  }
+  return -1;
+}
+
+// Sets the value at index i of the args, and its argv pointer.
+static void set_arg_value(RunRequest &req, int i, const std::string &value) {
+  (*req.args)[i] = value;
+  req.argv[i] = (*req.args)[i].data();
+}
+
+// The generation loop of run_update_full. A coroutine: each co_await is a new
+// message.
+static IC_Async run_update_full_async() {
+  IC_API ic_api(CanisterUpdate{"run_update_full"}, false);
+  RunRequest req;
+  if (!run_request_from_wire(ic_api, false, req)) co_return;
+
+  if (!req.params.model.empty()) {
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::BadRequest,
+        "run_update_full does not load a model: use load_model.");
+    co_return;
+  }
+  const std::string session_key =
+      utf8_session_key(req.params.path_prompt_cache, req.principal_id);
+  if (session_key.empty()) {
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::BadRequest,
+        "run_update_full needs a --prompt-cache.");
+    co_return;
+  }
+  if (session_busy(session_key)) {
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::Conflict,
+        "a run_update_full is already running on this prompt-cache.");
+    co_return;
+  }
+  SessionBusy busy{session_key};
+
+  // -n is the total for the whole response; each chunk gets what is left.
+  const int64_t n_total = req.params.n_predict; // < 0: until eog
+  const int i_prompt = find_arg_value(*req.args, {"-p", "--prompt"});
+  const int i_n = find_arg_value(*req.args, {"-n", "--n-predict", "--predict"});
+
+  std::string output; // raw bytes; made valid UTF-8 once, at the end
+  RunChunk totals;    // the token counts of the whole call
+  RunChunk c;
+  uint32_t chunks = 0;
+  bool partial = false;
+  uint64_t max_instructions = RUN_UPDATE_INSTRUCTIONS;
+  while (true) {
+    const uint64_t ins_0 = instruction_counter();
+    c = run_chunk(req.argc, req.argv.data(), req.principal_id,
+                  max_tokens_update, max_instructions);
+    ++chunks;
+    if (chunks == 1) {
+      totals.n_prompt_tokens = c.n_prompt_tokens;
+      totals.n_prompt_tokens_cached = c.n_prompt_tokens_cached;
+    }
+    output += c.output;
+    totals.n_prompt_tokens_decoded += c.n_prompt_tokens_decoded;
+    totals.n_tokens_generated += c.n_tokens_generated;
+    totals.n_prompt_tokens_remaining = c.n_prompt_tokens_remaining;
+    std::cout << "llama_cpp: run_update_full - chunk " << chunks
+              << ": decoded=" << c.n_prompt_tokens_decoded
+              << " generated=" << c.n_tokens_generated
+              << " prompt_remaining_tokens=" << c.n_prompt_tokens_remaining
+              << " eog=" << c.generated_eog
+              << " instructions=" << instruction_counter() - ins_0 << std::endl;
+    if (c.result != 0) break;
+    if (c.generated_eog || c.n_predict_reached) break;
+    if (c.n_prompt_tokens_decoded == 0 && c.n_tokens_generated == 0) {
+      c.result = 1;
+      c.icpp_error_msg = "run_update_full: a chunk made no progress";
+      break;
+    }
+    if (chunks >= FULL_MAX_CHUNKS) {
+      partial = true;
+      break;
+    }
+
+    // Once the prompt is in the session file, continue from it.
+    if (c.n_prompt_tokens_remaining == 0 && i_prompt > 0) {
+      set_arg_value(req, i_prompt, "");
+    }
+    if (n_total >= 0 && i_n > 0) {
+      set_arg_value(
+          req, i_n,
+          std::to_string(n_total - (int64_t)totals.n_tokens_generated));
+    }
+
+    // Commit this chunk and continue in a new message. On an error (the
+    // canister is stopping, or the yield was not performed), reply with what
+    // this call has.
+    IC_CallResult<void> r = co_await ic_api.yield_fresh_budget();
+    if (!r) {
+      std::cout << "llama_cpp: run_update_full - yield failed: "
+                << r.error().to_string() << std::endl;
+      partial = true;
+      break;
+    }
+    max_instructions = RUN_CALLBACK_INSTRUCTIONS;
+  }
+  // The token that ended the call by -n was sampled, not decoded.
+  if (c.n_predict_reached) ++totals.n_tokens_generated;
+  std::cout << "llama_cpp: run_update_full - done: chunks=" << chunks
+            << " generated=" << totals.n_tokens_generated
+            << " partial=" << partial << std::endl;
+
+  const std::string output_text =
+      carry_output(session_key, true, output, c.generated_eog || c.result != 0);
+  const std::string conversation_text = utf8_sanitize(c.conversation);
+  const std::string prompt_remaining_text = utf8_sanitize(c.prompt_remaining);
+  if (c.result != 0) {
+    send_run_err(ic_api, conversation_text, output_text,
+                 utf8_sanitize(c.icpp_error_msg), prompt_remaining_text,
+                 c.generated_eog);
+    co_return;
+  }
+
+  std::string icpp_error_msg;
+  if (is_db_chats_active() &&
+      !db_chats_save_conversation(conversation_text, req.principal_id,
+                                  icpp_error_msg)) {
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, icpp_error_msg);
+    co_return;
+  }
+
+  send_run_ok(ic_api, conversation_text, output_text, prompt_remaining_text,
+              c.generated_eog, totals, partial);
+}
+
+// One update call that ingests the prompt and generates the whole response.
+void run_update_full() { run_update_full_async(); }
