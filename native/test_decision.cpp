@@ -665,6 +665,31 @@ void test_decision_kev(MockIC &mockIC) {
           "kev full held: completes");
   }
 
+  // --- a stopping canister: run_decision_full replies with the answers so far
+  //     and the rest pending; run_decision then completes the request
+  remove_stored_states(controller);
+  {
+    mockIC.set_auto_drain(false);
+    MockIC::CallHandle stopped = mockIC.start_call(
+        "kev full stopped", run_decision_full, KEV_REQUEST, controller);
+    check(mockIC.pending_calls() == 1, "kev full stopped: yielded");
+    mockIC.set_canister_status(MOCKIC_CANISTER_STATUS_STOPPING);
+    mockIC.drain();
+    mockIC.set_canister_status(MOCKIC_CANISTER_STATUS_RUNNING);
+    mockIC.set_auto_drain(true);
+    check(mockIC.call_done(stopped) && !mockIC.was_rejected(stopped),
+          "kev full stopped: a stopping canister replies");
+    const DecisionReply r = decode_reply(mockIC.reply_hex(stopped));
+    check(r.label == "Ok" && !r.pending.empty(),
+          "kev full stopped: the rest of the request is pending");
+    DecisionReply last = r;
+    for (int i = 0; i < 20 && !last.pending.empty(); ++i)
+      last = call(mockIC, "kev full stopped: resume", KEV_REQUEST, controller);
+    check(last.pending.empty() && last.p_probability == full.p_probability &&
+              last.a_choice == full.a_choice,
+          "kev full stopped: run_decision completes it, with the same answers");
+  }
+
   // --- a new request about the stored state: only the question is decoded,
   //     and the stored state is not modified
   const std::vector<std::filesystem::path> states = stored_states(controller);
