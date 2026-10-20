@@ -671,9 +671,12 @@ def test__run_decision_full_equals_loop(network: str) -> None:
 
     request["scope"] = [f"full{int(time.time())}"]
     r = decide(network, request, method="run_decision_full")
-    if "Err" in r:
-        assert "run_decision" in str(r["Err"]) and "Reject" not in r["Err"], r
+    if os.environ.get("DECISION_MODEL", "julia-1") == "laya":
+        # Laya must get the error, and only Laya: any other model must succeed
+        assert "Err" in r, r
+        assert "run_decision" in str(r["Err"]) and "Reject" not in str(r["Err"]), r
         return
+    assert "Ok" in r, r
     ok = r["Ok"]
     assert ok["pending"] == [], ok
     assert probabilities(ok) == probabilities(looped)
