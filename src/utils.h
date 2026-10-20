@@ -11,6 +11,16 @@ const uint64_t MAX_CHUNK_SIZE = 2 * 1024 * 1024; // ICP message size limit
 const uint64_t MAX_FILENAME_SIZE = 4096;         // Linux PATH_MAX
 const uint64_t MAX_SHA256_SIZE = 64;             // SHA256 hex string length
 
+// The IC's instruction counter for the current message. 0 in native builds:
+// the Mock IC returns nanoseconds there, which would trip instruction budgets.
+inline uint64_t instruction_counter() {
+#ifdef __wasm__
+  return IC_API::performance_counter();
+#else
+  return 0;
+#endif
+}
+
 bool open_ifstream(const std::string &f_name,
                    const std::ios_base::openmode &mode,
                    std::ifstream &if_stream, std::string &msg);
