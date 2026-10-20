@@ -131,13 +131,24 @@ static bool file_is_empty(const std::string &path) {
 // #endif
 //icpp-end NO CONSOLE
 
+// With max_instructions > 0, a call stops decoding before it would exceed it.
+// ICPP_SAVE_RESERVE: room to save the session file (measured: at most 0.32B).
+// g_decode_rate: the instructions per token measured by the last call on the
+// loaded model, assumed until this call measured its own. Before any call
+// measured it, a call first decodes 1 token alone to measure it: the larger
+// models spend 5-9B per token, so no assumed rate is safe for all of them.
+const uint64_t ICPP_SAVE_RESERVE = 1'000'000'000ULL;
+static double g_decode_rate = 0.0;
+
+// llama-cli's main, run for one chunk (see main_.h).
 int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           std::string &icpp_error_msg, std::ostringstream &conversation_ss,
           std::ostringstream &output_ss, const uint64_t &max_tokens,
           std::string &prompt_remaining, bool &generated_eog,
           uint64_t &n_prompt_tokens, uint64_t &n_prompt_tokens_cached,
           uint64_t &n_prompt_tokens_decoded, uint64_t &n_tokens_generated,
-          uint64_t &n_prompt_tokens_remaining) {
+          uint64_t &n_prompt_tokens_remaining, uint64_t max_instructions,
+          bool *n_predict_reached) {
   // Exact token accounting (put on the wire by run.cpp). Initialize to 0 so the
   // early return-sites below (embedding tool, load_model_only) report 0; the real
   // values are assigned just before the success `return 0;` at the end.
@@ -181,6 +192,16 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       reset_static_memory();
     }
   } teardown{&smpl};
+
+  // Instructions per phase of this call, for the canister log (0 natively).
+  uint64_t ins_clear = 0, ins_load = 0, ins_decode = 0, ins_save = 0;
+  // The highest instructions per decoded token seen in this call, used to
+  // stay within max_instructions. The guard is off natively, where the
+  // instruction counter is 0.
+  double decode_rate = 0.0;
+  bool instructions_exhausted = false;
+  const bool instructions_guard =
+      max_instructions > 0 && instruction_counter() > 0;
   // ICPP-PATCH-END
 
   if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMPLETION,
@@ -364,7 +385,9 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   // from a clean memory. When a prompt-cache is used, the KV cache is restored
   // from the session file further down (llama_state_load_file).
   llama_memory_t mem = llama_get_memory(ctx);
+  const uint64_t ins_clear_0 = instruction_counter();
   llama_memory_clear(mem, true);
+  ins_clear = instruction_counter() - ins_clear_0;
   // ICPP-PATCH-END
 
   const llama_vocab *vocab = llama_model_get_vocab(model);
@@ -500,9 +523,12 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       // The file exists and is not empty
       session_tokens.resize(n_ctx);
       size_t n_token_count_out = 0;
-      if (!llama_state_load_file(
-              ctx, path_session.c_str(), session_tokens.data(),
-              session_tokens.capacity(), &n_token_count_out)) {
+      const uint64_t ins_load_0 = instruction_counter();
+      const bool loaded = llama_state_load_file(
+          ctx, path_session.c_str(), session_tokens.data(),
+          session_tokens.capacity(), &n_token_count_out);
+      ins_load = instruction_counter() - ins_load_0;
+      if (!loaded) {
         LOG_ERR("%s: failed to load session file '%s'\n", __func__,
                 path_session.c_str());
         // ICPP-PATCH-START
@@ -875,6 +901,15 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   int n_consumed = 0;
   int n_session_consumed = 0;
 
+  // ICPP-PATCH: prompt_remaining is the part of the prompt not consumed yet
+  auto set_prompt_remaining = [&]() {
+    prompt_remaining.clear();
+    for (size_t k = n_consumed; k < embd_inp.size(); ++k) {
+      prompt_remaining +=
+          common_token_to_piece(ctx, embd_inp[k], true); // with special tokens
+    }
+  };
+
   // ICPP-PATCH-START
   // We can only handle max_tokens evaluations per call
   int n_eval_total = 0;
@@ -1059,8 +1094,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       // ICPP-PATCH: upstream replaced this loop with common_prompt_batch_decode,
       //             but we need per-batch control to honor the max_tokens budget
       //             and to track conversation_ss, so we keep our own eval loop.
-      for (int i = 0; i < (int)embd.size(); i += n_batch_ctx) {
-        int n_eval = (int)embd.size() - i;
+      int n_eval = 0;
+      // ICPP-PATCH: advance by n_eval, not n_batch_ctx: the 1-token probe of
+      //             the instruction guard decodes a batch in two steps.
+      for (int i = 0; i < (int)embd.size(); i += n_eval) {
+        n_eval = (int)embd.size() - i;
         // ICPP-PATCH: clamp to the CONTEXT's batch (see n_batch_ctx above),
         // not params.n_batch -- exceeding it trips a GGML_ASSERT in
         // llama_decode, which traps instead of returning an error.
@@ -1070,13 +1108,49 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
         // ICPP-PATCH-START
         // We must process the predictions in multiple calls due to IC's instruction limit
-        if (max_tokens > 0 && n_eval >= max_tokens) {
-          n_eval = max_tokens;
+        // (counted from the start of embd, also when the probe split it)
+        if (max_tokens > 0 && (uint64_t)(i + n_eval) >= max_tokens) {
+          n_eval = (int)(max_tokens - i);
+        }
+        // Or by instructions: decode only what fits before max_instructions,
+        // keeping room to save the session file.
+        if (instructions_guard) {
+          const uint64_t used = instruction_counter() + ICPP_SAVE_RESERVE;
+          const double rate = decode_rate > 0 ? decode_rate : g_decode_rate;
+          int n_fit = used >= max_instructions ? 0
+                      : rate <= 0
+                          ? 1
+                          : (int)((max_instructions - used) / rate);
+          // After a decode, the check below already found room for a token.
+          if (n_eval_total > 0) {
+            n_fit = std::max(1, n_fit);
+          }
+          // On the first decode, loading the session left no room. Decoding
+          // anyway would trap; returning without progress would make the
+          // caller repeat this call forever.
+          if (n_fit == 0) {
+            icpp_error_msg = std::format(
+                "{}: error: no token fits in max_instructions {} after {} "
+                "instructions to load the session",
+                __func__, max_instructions, instruction_counter());
+            return 1;
+          }
+          if (rate <= 0) {
+            // No measured rate: decode 1 token to measure it, then go on with
+            // the rest of embd.
+            n_eval = 1;
+          } else if (n_fit < n_eval) {
+            // A clamped batch must end the call, like a max_tokens clamp: the
+            // rest of embd is not decoded, and is picked up by the next call.
+            n_eval = n_fit;
+            instructions_exhausted = true;
+          }
         }
         // ICPP-PATCH-END
 
         LOG_DBG("eval: %s\n", string_from(ctx, embd).c_str());
 
+        const uint64_t ins_decode_0 = instruction_counter();
         if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval))) {
           LOG_ERR("%s : failed to eval\n", __func__);
           // ICPP-PATCH-START
@@ -1086,6 +1160,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           return 1;
         }
         logits_valid = true; // ICPP-PATCH
+        // ICPP-PATCH-START
+        const uint64_t ins_this_decode = instruction_counter() - ins_decode_0;
+        ins_decode += ins_this_decode;
+        decode_rate = std::max(decode_rate, (double)ins_this_decode / n_eval);
+        // ICPP-PATCH-END
 
         n_past += n_eval;
 
@@ -1114,7 +1193,24 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         // (-) if we generated max_tokens, to avoid running into IC's instruction limit
         //
         n_eval_total += n_eval;
-        if (generated_eog || (max_tokens > 0 && n_eval_total >= max_tokens)) {
+        // (-) if the next token would not fit in max_instructions
+        if (instructions_guard &&
+            instruction_counter() + ICPP_SAVE_RESERVE + decode_rate >
+                max_instructions) {
+          instructions_exhausted = true;
+        }
+        if (generated_eog ||
+            (max_tokens > 0 && n_eval_total >= max_tokens) ||
+            instructions_exhausted) {
+          // ICPP-PATCH: the instruction guard can end the call before all of
+          // embd is decoded. Its prompt tokens were counted as consumed when
+          // they were queued in embd: hand them back to the prompt.
+          const int n_undecoded = (int)embd.size() - i - n_eval;
+          if (n_undecoded > 0 && n_consumed > 0 &&
+              (int)embd_inp.size() >= n_consumed) {
+            n_consumed -= n_undecoded;
+            set_prompt_remaining();
+          }
           // ICPP-PATCH: NOT gated on params.prompt_cache_all. This canister
           // reloads the session file at the start of every run_update (see
           // llama_state_load_file above), so the file — not the in-heap KV
@@ -1124,11 +1220,9 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           // next call reloads the same short prefix and ingestion never
           // advances (prompt_remaining stalls). prompt_cache_ro still opts out.
           if (!path_session.empty() && !params.prompt_cache_ro) {
-            // Append THIS chunk: [i, i + n_eval). embd holds at most one batch
-            // (see the n_batch_ctx cap on the fill loop), so i is 0 today, but
-            // offsetting by i keeps the append correct — and the cache
-            // uncorrupted — if embd ever spans more than one chunk.
-            session_tokens.insert(session_tokens.end(), embd.begin() + i,
+            // Append what this call decoded of embd: [0, i + n_eval). i > 0
+            // when the probe of the instruction guard split the batch.
+            session_tokens.insert(session_tokens.end(), embd.begin(),
                                   embd.begin() + i + n_eval);
             n_session_consumed = session_tokens.size();
           }
@@ -1232,25 +1326,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       }
     }
 
-    // ICPP-PATCH-START
-    std::string prompt_consumed = "";
-    prompt_remaining.clear();
-    int n_prompt_tokens_remaining = 0;
-    size_t iii = 0;
-    for (auto id : embd_inp) {
-      const std::string token_str =
-          common_token_to_piece(ctx, id, true); // include special tokens
-      if (iii < n_consumed) {
-        prompt_consumed += token_str;
-      } else {
-        ++n_prompt_tokens_remaining;
-        prompt_remaining += token_str;
-      }
-      ++iii;
-    }
-    // std::cout << "llama_cpp: " << std::string(__func__) << " - " << "llama_cpp: " << std::string(__func__) << " - " << "prompt_consumed (" << n_consumed << " tokens) = " << prompt_consumed << std::endl;
-    // std::cout << "llama_cpp: " << std::string(__func__) << " - " << "llama_cpp: " << std::string(__func__) << " - " << "prompt_remaining (" << n_prompt_tokens_remaining << " tokens) = "<< prompt_remaining << std::endl;
-    // ICPP-PATCH-END
+    set_prompt_remaining(); // ICPP-PATCH
 
     // display text
     if (input_echo && display) {
@@ -1509,9 +1585,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   if (!path_session.empty() && !params.prompt_cache_ro) {
     LOG("\n%s: saving final output to session file '%s'\n", __func__,
         path_session.c_str());
+    const uint64_t ins_save_0 = instruction_counter();
     const bool session_saved =
         llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(),
                               session_tokens.size());
+    ins_save = instruction_counter() - ins_save_0;
     // ICPP-PATCH: (re)stamp the sidecar so it always describes the file we
     // just wrote -- format, model AND context layout. Without this, a cache
     // the load above discarded would be re-created unstamped and discarded
@@ -1544,6 +1622,21 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   n_prompt_tokens_remaining =
       (uint64_t)((int64_t)embd_inp.size() - (int64_t)n_consumed);
 
+  // ICPP-PATCH: whether -n ended this call. Its last sampled token is then in
+  // the output, but was not decoded into the session file.
+  if (n_predict_reached) {
+    *n_predict_reached = params.n_predict >= 0 && n_remain <= 0;
+  }
+
+  if (decode_rate > 0) g_decode_rate = decode_rate; // ICPP-PATCH
+
+  // ICPP-PATCH: where the instructions of this call went (0 natively)
+  std::cout << "llama_cpp: main_ - instructions: clear=" << ins_clear
+            << " load=" << ins_load << " decode=" << ins_decode << " ("
+            << n_eval_total << " tokens) save=" << ins_save
+            << " total=" << instruction_counter()
+            << " session_tokens=" << session_tokens.size() << std::endl;
+
   return 0;
 }
 
@@ -1562,6 +1655,7 @@ void icpp_free_model() {
 
   g_model_persistent = nullptr;
   g_ctx_persistent = nullptr;
+  g_decode_rate = 0.0; // ICPP-PATCH: measured on the freed model
 
   if (g_model) {
     *g_model = nullptr;
