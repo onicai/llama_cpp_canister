@@ -211,6 +211,45 @@ instruction limit, so a long state never traps.
 The batch and micro-batch size (`--batch-size`, `--ubatch-size`) must be at
 least the length of the longest question's sequence.
 
+### One call: `run_decision_full`
+
+`run_decision_full` takes the same `DecisionInputRecord` and returns the same
+`DecisionResult` as `run_decision`, but it answers the whole request in one update
+call.
+
+**How it works:**
+
+- **Steps:** it runs the steps that a client would otherwise drive with repeated
+  `run_decision` calls. After each step it yields to itself (a self-call), which
+  commits the step (its answers and the stored state are in files) and continues
+  in a new message with a fresh instruction limit.
+- **Same answers, same cost:** the answers equal those of the `run_decision` loop,
+  for the same cycles.
+- **`input_tokens` and `instructions`** cover the whole call. `instructions` counts
+  over all the messages of a call, for `run_decision` too.
+- **`pending`:** a non-empty `pending` means the call stopped early, because the
+  canister is stopping. Re-send the request with `run_decision` (or
+  `run_decision_full`) to continue from the answers so far.
+- **The model stays loaded:** while a `run_decision_full` runs, `load_model` gets
+  status 409.
+
+**The Laya limit:** a message after a yield has a limit of 38B instructions, not
+40B, and every step after the first keeps under 34B. One Laya forward pass
+of ~32 tokens (~38B) does not fit there. `run_decision_full` then stops with an
+error that names the question and points to `run_decision`, which runs every
+question in a first message. Julia-1 and Kev-0.8B fit.
+
+Measured on a local replica, with the 4-question request of `test/test_decision.py`:
+
+| Model    | `run_decision` loop         | `run_decision_full`              |
+|----------|-----------------------------|----------------------------------|
+| Julia-1  | 7.7s, 3 calls, 68.2B cycles | 7.6s, 3 steps, 68.1B cycles      |
+| Kev-0.8B | 26.1s, 8 calls, 231B cycles | 25.4s, 8-9 steps, 231B cycles    |
+| Laya     | 12.2s, 3 calls              | error after step 1: use the loop |
+
+**No queries:** a decision question cannot be a query. A query has 5B instructions,
+and every model needs more for one question.
+
 ## Jinja is not a blocker
 
 The canister build used to exclude `common/jinja/*` and `common/chat*.cpp`
