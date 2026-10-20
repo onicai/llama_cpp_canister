@@ -16,6 +16,16 @@ bool db_chats_new(const std::string &principal_id, std::string &error_msg);
 
 bool db_chats_clean(const std::string &principal_id, std::string &error_msg);
 
+// The principal's latest chat file: where a conversation is saved.
+bool db_chats_latest_file(const std::string &principal_id,
+                          std::string &file_path, std::string &error_msg);
+
+bool db_chats_write_conversation(const std::string &file_path,
+                                 const std::string &conversation,
+                                 const std::string &principal_id,
+                                 std::string &error_msg);
+
+// Saves the conversation in the principal's latest chat file.
 bool db_chats_save_conversation(const std::string &conversation,
                                 const std::string &principal_id,
                                 std::string &error_msg);

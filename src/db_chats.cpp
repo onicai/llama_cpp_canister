@@ -39,6 +39,7 @@ bool get_saved_chats_dir(const std::string &principal_id,
   return true;
 }
 
+// Writes the conversation to the chat file, after a line with the principal.
 bool db_chats_write_conversation(const std::string &file_path,
                                  const std::string &conversation,
                                  const std::string &principal_id,
@@ -106,6 +107,7 @@ bool db_chats_new(const std::string &principal_id, std::string &error_msg) {
   return true;
 }
 
+// Keeps the principal's max_chats newest chats, and deletes the rest.
 bool db_chats_clean(const std::string &principal_id, std::string &error_msg) {
   if (!DB_CHATS_ACTIVE) {
     error_msg = std::string(__func__) +
@@ -141,12 +143,13 @@ bool db_chats_clean(const std::string &principal_id, std::string &error_msg) {
 
   // If the number of files is more than 'n', delete the older ones
   if (files.size() > max_chats) {
-    // Sort files by their last write time (most recent first)
+    // Sort files by name, most recent first: a name is the time db_chats_new
+    // created it. Not by last write: a run_update_full that saves into its
+    // chat after a new_chat would make an older chat look the most recent.
     std::sort(files.begin(), files.end(),
-              [&ec](const std::filesystem::directory_entry &a,
-                    const std::filesystem::directory_entry &b) {
-                return get_last_write_time(a.path(), ec) >
-                       get_last_write_time(b.path(), ec);
+              [](const std::filesystem::directory_entry &a,
+                 const std::filesystem::directory_entry &b) {
+                return a.path().filename() > b.path().filename();
               });
     // keep only max_chats
     for (std::size_t i = max_chats; i < files.size(); ++i) {
@@ -165,14 +168,9 @@ bool db_chats_clean(const std::string &principal_id, std::string &error_msg) {
   return true;
 }
 
-bool db_chats_save_conversation(const std::string &conversation,
-                                const std::string &principal_id,
-                                std::string &error_msg) {
-  if (!DB_CHATS_ACTIVE) {
-    error_msg = std::string(__func__) +
-                ": do not call this function if DB_CHATS_ACTIVE is false";
-    return false;
-  }
+// The principal's newest chat: the one a conversation is saved in.
+bool db_chats_latest_file(const std::string &principal_id,
+                          std::string &file_path, std::string &error_msg) {
   std::string saved_chats_dir;
   if (!get_saved_chats_dir(principal_id, saved_chats_dir, error_msg)) {
     return false;
@@ -200,27 +198,31 @@ bool db_chats_save_conversation(const std::string &conversation,
     return false;
   }
 
-  // Find the file with the most recent last write time
+  // The most recent chat has the largest name (see db_chats_clean)
   auto latest_file =
       std::max_element(files.begin(), files.end(),
-                       [&ec](const std::filesystem::directory_entry &a,
-                             const std::filesystem::directory_entry &b) {
-                         return get_last_write_time(a.path(), ec) <
-                                get_last_write_time(b.path(), ec);
+                       [](const std::filesystem::directory_entry &a,
+                          const std::filesystem::directory_entry &b) {
+                         return a.path().filename() < b.path().filename();
                        });
 
-  if (ec) {
-    error_msg = std::string(__func__) +
-                ": Error retrieving last write time: " + ec.message();
-    return false;
-  }
-
-  std::string file_path = latest_file->path().string();
-  if (!db_chats_write_conversation(file_path, conversation, principal_id,
-                                   error_msg)) {
-    return false;
-  }
+  file_path = latest_file->path().string();
   return true;
+}
+
+// Saves the conversation in the principal's newest chat.
+bool db_chats_save_conversation(const std::string &conversation,
+                                const std::string &principal_id,
+                                std::string &error_msg) {
+  if (!DB_CHATS_ACTIVE) {
+    error_msg = std::string(__func__) +
+                ": do not call this function if DB_CHATS_ACTIVE is false";
+    return false;
+  }
+  std::string file_path;
+  return db_chats_latest_file(principal_id, file_path, error_msg) &&
+         db_chats_write_conversation(file_path, conversation, principal_id,
+                                     error_msg);
 }
 
 // Canister API to retrieve saved chats for authenticated caller

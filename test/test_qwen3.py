@@ -22,6 +22,7 @@ Notes:
 
 import inspect
 import re
+import threading
 from pathlib import Path
 
 from .candid_compat import call_canister_api, norm
@@ -54,13 +55,17 @@ PROMPT_MULTITURN = (
 )
 
 
-def _call(network: str, method: str, arg: str) -> str:
+def _call(
+    network: str, method: str, arg: str, timeout_seconds: int | None = None
+) -> str:
+    """Calls a canister method; a full call needs a longer client timeout."""
     response = call_canister_api(
         icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
         canister_method=method,
         canister_argument=arg,
         network=network,
+        timeout_seconds=timeout_seconds,
     )
     if PRINT_RESPONSE:
         print(f"{inspect.stack()[1].function}: {method}: {response}")
@@ -181,14 +186,19 @@ def test__multi_turn_recall(network: str) -> None:
 
 
 # --------------------------------------------------------------------------------
-def _greedy(network: str, cache: str, prompt: str, n: str) -> str:
-    """One greedy (temp 0) run_update on the given prompt cache."""
+def _greedy_raw(network: str, cache: str, prompt: str, n: str) -> str:
+    """One greedy (temp 0) run_update on the given prompt cache, Ok or Err."""
     arg = (
         f'(record {{ args = vec {{"--prompt-cache"; "{cache}"; "--prompt-cache-all"; '
         f'{_CACHE}; "--samplers"; "temperature"; "--temp"; "0.0"; "-sp"; '
         f'"-p"; "{prompt}"; "-n"; "{n}"}} }})'
     )
-    response = _call(network, "run_update", arg)
+    return _call(network, "run_update", arg)
+
+
+def _greedy(network: str, cache: str, prompt: str, n: str) -> str:
+    """One greedy (temp 0) run_update on the given prompt cache."""
+    response = _greedy_raw(network, cache, prompt, n)
     _assert_ok(response, f"run_update {cache}")
     return response
 
@@ -303,3 +313,95 @@ def test__instruction_bounded_chunks(network: str) -> None:
         assert generated_eog, "the generation did not end within 10 calls"
     finally:
         _set_max_tokens(network, 1, 20)
+
+
+def _full(network: str, cache: str, prompt: str, n: str = "-1") -> str:
+    """One greedy (temp 0) run_update_full on the given prompt cache."""
+    arg = (
+        f'(record {{ args = vec {{"--prompt-cache"; "{cache}"; "--prompt-cache-all"; '
+        f'{_CACHE}; "--samplers"; "temperature"; "--temp"; "0.0"; "-sp"; '
+        f'"-p"; "{prompt}"; "-n"; "{n}"}} }})'
+    )
+    # One call generates the whole response, over many messages
+    return _call(network, "run_update_full", arg, timeout_seconds=300)
+
+
+def _loop(network: str, cache: str, prompt: str) -> str:
+    """The multi-call run_update loop: ingest with -n 1, then generate to eog."""
+    for _ in range(25):
+        if 'prompt_remaining = ""' in _greedy(network, cache, prompt, "1"):
+            break
+    output = ""
+    for _ in range(25):
+        response = _greedy(network, cache, "", "512")
+        output += _field(response, "output")
+        if "generated_eog = true" in response:
+            return output
+    raise AssertionError("the loop did not reach eog within 25 calls")
+
+
+def test__run_update_full_equals_loop(network: str) -> None:
+    """One run_update_full call returns what the run_update loop returns.
+
+    Both use the same chunk size (max_tokens_update 20), so greedy decoding
+    sees the same batches.
+    """
+    _start(network, "full-loop.cache")
+    looped = _loop(network, "full-loop.cache", PROMPT_INTRO)
+    _start(network, "full-one.cache")
+    response = _full(network, "full-one.cache", PROMPT_INTRO)
+    _assert_ok(response, "run_update_full")
+    assert "generated_eog = true" in response
+    assert "partial = opt false" in response
+    assert _field(response, "output") == looped
+
+
+def test__run_update_full_concurrent(network: str) -> None:
+    """Three run_update_full calls at once each equal their solo run.
+
+    Their chunks interleave on the shared model context; each chunk reloads
+    its own session file.
+    """
+    prompts = {"cc-a": PROMPT_INTRO, "cc-b": PROMPT_MULTITURN, "cc-c": PROMPT_INTRO}
+    solo = {}
+    for name, prompt in prompts.items():
+        _start(network, f"{name}-solo.cache")
+        solo[name] = _field(_full(network, f"{name}-solo.cache", prompt), "output")
+        _start(network, f"{name}.cache")
+
+    responses: dict = {}
+
+    def call(name: str) -> None:
+        """Stores the reply of a full call on its own cache."""
+        responses[name] = _full(network, f"{name}.cache", prompts[name])
+
+    threads = [threading.Thread(target=call, args=(name,)) for name in prompts]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    # A call that raised in its thread stored nothing.
+    assert set(responses) == set(prompts), sorted(responses)
+    for name, response in responses.items():
+        _assert_ok(response, f"concurrent {name}")
+        assert _field(response, "output") == solo[name], name
+
+
+def test__run_update_full_busy_session(network: str) -> None:
+    """While a run_update_full holds a session, run_update on it gets a 409."""
+    cache = "busy.cache"
+    _start(network, cache)
+    responses: dict = {}
+    holder = threading.Thread(
+        target=lambda: responses.update(full=_full(network, cache, PROMPT_INTRO))
+    )
+    holder.start()
+    # Poll until the holder takes the session. -n 0 decodes nothing, so a probe
+    # that comes before the holder leaves the session as it is.
+    seen_409 = False
+    while holder.is_alive() and not seen_409:
+        seen_409 = "status_code = 409" in _greedy_raw(network, cache, "", "0")
+    holder.join()
+    assert seen_409, "run_update on the held session never got a 409"
+    _assert_ok(responses["full"], "the holder")
+    assert "status_code = 200" in _greedy_raw(network, cache, "", "1")

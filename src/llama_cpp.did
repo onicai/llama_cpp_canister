@@ -27,7 +27,10 @@ type RunOutputRecord = record {
   n_prompt_tokens_cached : opt nat64;
   n_prompt_tokens_decoded : opt nat64;
   n_tokens_generated : opt nat64;
-  n_prompt_tokens_remaining : opt nat64
+  n_prompt_tokens_remaining : opt nat64;
+  // run_update_full only: true when the response was cut short (the canister
+  // is stopping, or the chunk cap was reached). Continue it with run_update.
+  partial : opt bool
 };
 type OutputRecordResult = variant {
   Ok : RunOutputRecord;
@@ -388,6 +391,7 @@ service : {
   new_chat : (InputRecord) -> (OutputRecordResult);
   run_query : (InputRecord) -> (OutputRecordResult) query;
   run_update : (InputRecord) -> (OutputRecordResult);
+  run_update_full : (InputRecord) -> (OutputRecordResult); // the whole response in one call (self-call yields)
   run_decision : (DecisionInputRecord) -> (DecisionResult);
   remove_decision_scope : (text) -> (StatusCodeRecordResult); // all of the caller's files of a scope
   pin_decision_state : (DecisionPinInputRecord) -> (StatusCodeRecordResult);
