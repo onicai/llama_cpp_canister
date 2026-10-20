@@ -27,6 +27,7 @@ $ pytest -vv --network local --identity llama-cpp-testing test/test_decision.py
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -232,22 +233,22 @@ DecisionKind = Types.Variant(
     {"choice": Types.Null, "score": Types.Null, "noul": Types.Null}
 )
 DECISION_INPUT_FIELDS = {
-        "state": Types.Variant({"Text": Types.Text, "Json": Types.Text}),
-        "questions": Types.Vec(
-            Types.Record(
-                {"id": Types.Text, "kind": DecisionKind, "instructions": Types.Text}
-            )
-        ),
-        "options": Types.Vec(
-            Types.Record(
-                {
-                    "question_id": Types.Text,
-                    "key": Types.Text,
-                    "description": Types.Text,
-                }
-            )
-        ),
-    }
+    "state": Types.Variant({"Text": Types.Text, "Json": Types.Text}),
+    "questions": Types.Vec(
+        Types.Record(
+            {"id": Types.Text, "kind": DecisionKind, "instructions": Types.Text}
+        )
+    ),
+    "options": Types.Vec(
+        Types.Record(
+            {
+                "question_id": Types.Text,
+                "key": Types.Text,
+                "description": Types.Text,
+            }
+        )
+    ),
+}
 DecisionInput = Types.Record(DECISION_INPUT_FIELDS)
 # with a scope (kev); DecisionInput without one checks that a missing opt field
 # decodes as null, as it does for clients built before scopes existed
@@ -329,17 +330,22 @@ def flat(state: Any, questions: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def decide(
-    network: str, request: Dict[str, Any], identity: Optional[str] = None
+    network: str,
+    request: Dict[str, Any],
+    identity: Optional[str] = None,
+    method: str = "run_decision",
 ) -> Dict[str, Any]:
-    """Calls run_decision; returns {"Ok": ...} or {"Err": ...}."""
+    """Calls run_decision (or `method`); returns {"Ok": ...} or {"Err": ...}."""
     reply = call_canister_api(
         icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
-        canister_method="run_decision",
+        canister_method=method,
         canister_argument=encode(
             [
                 {
-                    "type": DecisionInputScoped if "scope" in request else DecisionInput,
+                    "type": (
+                        DecisionInputScoped if "scope" in request else DecisionInput
+                    ),
                     "value": request,
                 }
             ]
@@ -348,6 +354,8 @@ def decide(
         canister_output="hex",
         network=network,
         identity=identity,
+        # run_decision_full answers the whole request, over many messages
+        timeout_seconds=300 if method == "run_decision_full" else None,
     )
     reply = reply.strip().strip("()").strip().rstrip(",").strip().strip('"')
     try:
@@ -647,3 +655,33 @@ def test__kev_remove_decision_scope(network: str) -> None:
 
 def test__reset_budget(network: str) -> None:
     set_budget(network, 0)
+
+
+def test__run_decision_full_equals_loop(network: str) -> None:
+    """One run_decision_full call answers what the run_decision loop answers.
+
+    A model whose single forward pass does not fit a message after a yield
+    (Laya) gets an error that points to run_decision, not a trap.
+    """
+    m = model()
+    set_budget(network, 0 if is_kev() else m["budget"])
+    request = flat(m["state"], m["questions"])
+    request["scope"] = [f"loop{int(time.time())}"]
+    looped = decide_all(network, request)[-1]
+
+    request["scope"] = [f"full{int(time.time())}"]
+    r = decide(network, request, method="run_decision_full")
+    if os.environ.get("DECISION_MODEL", "julia-1") == "laya":
+        # Laya must get the error, and only Laya: any other model must succeed
+        assert "Err" in r, r
+        assert "run_decision" in str(r["Err"]) and "Reject" not in str(r["Err"]), r
+        return
+    assert "Ok" in r, r
+    ok = r["Ok"]
+    assert ok["pending"] == [], ok
+    assert probabilities(ok) == probabilities(looped)
+    assert [a["choice"] for a in ok["answers"]] == [
+        a["choice"] for a in looped["answers"]
+    ]
+    # the whole call: at least the instructions of its last step
+    assert len(ok["instructions"]) == 1 and ok["instructions"][0] > 0, ok

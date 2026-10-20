@@ -23,6 +23,8 @@ static void print_usage(int argc, char **argv) {
   // do nothing function
 }
 
+// Loads the model of --model, after freeing the loaded one. Refused while a
+// full call is in flight.
 void load_model() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   if (!has_admin_update_role(ic_api)) {
@@ -48,12 +50,7 @@ void load_model() {
   }
 
   if (!params.model.empty()) {
-    if (full_call_running(__func__)) {
-      send_output_record_result_error_to_wire(
-          ic_api, Http::StatusCode::Conflict,
-          "a run_update_full is running: cannot change the model.");
-      return;
-    }
+    if (reject_model_change_if_busy(ic_api, __func__)) return;
     // We're going to load a new model, first free the Orthogonally Persisted memory of a previously loaded model
     icpp_free_model();
   } else {

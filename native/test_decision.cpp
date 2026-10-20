@@ -11,6 +11,7 @@
 // the one of llama.cpp PR #29818 (see README-decision-models.md).
 
 #include "test_decision.h"
+#include "test_run_update_full.h"
 
 #include "../src/cache_cleanup.h"
 #include "../src/decision.h"
@@ -101,11 +102,13 @@ void check(bool ok, const std::string &what) {
   }
 }
 
+// Calls run_decision (or `method`) with a hex request; returns the reply.
 DecisionReply call(MockIC &mockIC, const std::string &name,
-                   const std::string &input, const std::string &caller) {
+                   const std::string &input, const std::string &caller,
+                   void (*method)() = run_decision) {
   std::string out;
-  mockIC.run_test(std::string("test_decision: ") + name, run_decision, input,
-                  "", false, caller, &out);
+  mockIC.run_test(std::string("test_decision: ") + name, method, input, "",
+                  false, caller, &out);
   return decode_reply(out);
 }
 
@@ -627,6 +630,66 @@ void test_decision_kev(MockIC &mockIC) {
   check(last.p_probability == full.p_probability,
         "kev resume: probabilities differ from the one-call run");
   check(last.a_choice == full.a_choice, "kev resume: choices differ");
+
+  // --- the same request in ONE run_decision_full call, from scratch: it
+  //     yields to itself between the steps of 24 tokens
+  remove_stored_states(controller);
+  {
+    const DecisionReply r =
+        call(mockIC, "kev full", KEV_REQUEST, controller, run_decision_full);
+    check(r.label == "Ok" && r.pending.empty() && r.a_ids.size() == 2,
+          "kev full: not complete: " + r.err_text);
+    check(r.state_tokens == full.state_tokens &&
+              r.state_tokens_remaining == std::optional<uint64_t>{0},
+          "kev full: state progress");
+    check(r.p_probability == full.p_probability,
+          "kev full: probabilities differ from the one-call run");
+    check(r.a_choice == full.a_choice, "kev full: choices differ");
+  }
+
+  // --- the model must not change while a run_decision_full is suspended
+  //     between its steps
+  remove_stored_states(controller);
+  {
+    mockIC.set_auto_drain(false);
+    MockIC::CallHandle full_call = mockIC.start_call(
+        "kev full held", run_decision_full, KEV_REQUEST, controller);
+    check(mockIC.pending_calls() == 1, "kev full held: yielded");
+    MockIC::CallHandle reload = mockIC.start_call(
+        "kev full held: load_model", load_model, LOAD_KEV, controller);
+    check(mockIC.call_done(reload) &&
+              status_of(mockIC.reply_hex(reload)) == 409,
+          "load_model while a run_decision_full is running gets 409");
+    mockIC.drain();
+    mockIC.set_auto_drain(true);
+    check(mockIC.call_done(full_call) && !mockIC.was_rejected(full_call),
+          "kev full held: completes");
+  }
+
+  // --- a stopping canister: run_decision_full replies with the answers so far
+  //     and the rest pending; run_decision then completes the request
+  remove_stored_states(controller);
+  {
+    mockIC.set_auto_drain(false);
+    MockIC::CallHandle stopped = mockIC.start_call(
+        "kev full stopped", run_decision_full, KEV_REQUEST, controller);
+    check(mockIC.pending_calls() == 1, "kev full stopped: yielded");
+    mockIC.set_canister_status(MOCKIC_CANISTER_STATUS_STOPPING);
+    mockIC.drain();
+    mockIC.set_canister_status(MOCKIC_CANISTER_STATUS_RUNNING);
+    mockIC.set_auto_drain(true);
+    check(mockIC.call_done(stopped) && !mockIC.was_rejected(stopped),
+          "kev full stopped: a stopping canister replies");
+    const DecisionReply r = decode_reply(mockIC.reply_hex(stopped));
+    check(r.label == "Ok" && !r.pending.empty(),
+          "kev full stopped: the rest of the request is pending");
+    DecisionReply last = r;
+    for (int i = 0; i < 20 && !last.pending.empty(); ++i)
+      last = call(mockIC, "kev full stopped: resume", KEV_REQUEST, controller);
+    check(last.pending.empty() && last.p_probability == full.p_probability &&
+              last.a_choice == full.a_choice,
+          "kev full stopped: run_decision completes it, with the same answers");
+  }
 
   // --- a new request about the stored state: only the question is decoded,
   //     and the stored state is not modified

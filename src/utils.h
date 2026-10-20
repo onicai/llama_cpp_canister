@@ -21,6 +21,16 @@ inline uint64_t instruction_counter() {
 #endif
 }
 
+// The same over the whole call: all its messages, when it yielded. 0 natively.
+inline uint64_t call_instruction_counter() {
+#ifdef __wasm__
+  return IC_API::performance_counter(
+      IC_API::PerformanceCounterType::CallContextInstructions);
+#else
+  return 0;
+#endif
+}
+
 bool open_ifstream(const std::string &f_name,
                    const std::ios_base::openmode &mode,
                    std::ifstream &if_stream, std::string &msg);
