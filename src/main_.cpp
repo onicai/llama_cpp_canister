@@ -1113,10 +1113,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         if (instructions_guard) {
           const uint64_t used = instruction_counter() + ICPP_SAVE_RESERVE;
           const double rate = decode_rate > 0 ? decode_rate : g_decode_rate;
-          int n_fit = rate <= 0 ? 1
-                      : used < max_instructions
-                          ? (int)((max_instructions - used) / rate)
-                          : 0;
+          int n_fit = used >= max_instructions ? 0
+                      : rate <= 0
+                          ? 1
+                          : (int)((max_instructions - used) / rate);
           // After a decode, the check below already found room for a token.
           if (n_eval_total > 0) {
             n_fit = std::max(1, n_fit);
