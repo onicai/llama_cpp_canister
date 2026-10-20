@@ -64,13 +64,6 @@
 #include <string>
 #include <vector>
 
-// The IC's instruction counter, for the canister log. 0 in native builds.
-#ifdef __wasm__
-static uint64_t instruction_counter() { return IC_API::performance_counter(); }
-#else
-static uint64_t instruction_counter() { return 0; }
-#endif
-
 namespace {
 
 void log_line(const std::string &msg) {
@@ -1566,16 +1559,10 @@ bool decision_model_loaded() {
   return g_decision.type != COMMON_DECISION_TYPE_NONE;
 }
 
-void run_decision() {
-  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
-  if (!has_admin_update_or_whitelisted(ic_api)) {
-    send_access_denied_api_error(ic_api);
-    return;
-  }
-  const std::string principal_id = ic_api.get_caller().get_text();
+namespace {
 
-  // --- get the data from the wire
-  decision_request req;
+// Reads a run_decision request from the wire.
+void decision_request_from_wire(IC_API &ic_api, decision_request &req) {
   CandidTypeVariant state{&req.state_label};
   state.append("Text", CandidTypeText{&req.state_text});
   state.append("Json", CandidTypeText{&req.state_json});
@@ -1602,39 +1589,50 @@ void run_decision() {
   r_in.append("options", CandidTypeVecRecord{&r_options});
   r_in.append("scope", CandidTypeOptText{&req.scope});
   ic_api.from_wire(r_in);
+}
 
+// The outcome of one step of a request: the answers so far (of this step and
+// the earlier ones, from the request file), and what is still pending.
+struct decision_step {
+  std::string error;
+  std::vector<decision_question> questions;
+  std::map<std::string, decision_answer> answers;
+  uint64_t input_tokens = 0;
+  std::vector<std::string> pending;
+  kev_progress progress;
+};
+
+// Answers what fits one message of the pending questions of a request. The
+// answers are kept in the request file, so the next step continues from it.
+decision_step run_decision_step(const decision_request &req,
+                                const std::string &principal_id) {
+  decision_step r;
   const std::string scope = req.scope.value_or("");
   if (req.scope.has_value()) {
-    const std::string scope_error = check_scope(scope);
-    if (!scope_error.empty()) {
-      send_error(ic_api, scope_error);
-      return;
-    }
+    r.error = check_scope(scope);
+    if (!r.error.empty()) return r;
   }
 
   // --- the loaded model
   llama_context *ctx = icpp_persisted_ctx();
   if (ctx == nullptr) {
-    send_error(ic_api, "no model loaded");
-    return;
+    r.error = "no model loaded";
+    return r;
   }
   const decision_context &d = g_decision;
   if (d.type == COMMON_DECISION_TYPE_NONE) {
-    send_error(ic_api, "the loaded model is not a decision model");
-    return;
+    r.error = "the loaded model is not a decision model";
+    return r;
   }
   if (!d.error.empty()) {
-    send_error(ic_api, d.error);
-    return;
+    r.error = d.error;
+    return r;
   }
 
   common_json state_json;
-  std::vector<decision_question> questions;
-  const std::string error = parse(d, req, state_json, questions);
-  if (!error.empty()) {
-    send_error(ic_api, error);
-    return;
-  }
+  std::vector<decision_question> &questions = r.questions;
+  r.error = parse(d, req, state_json, questions);
+  if (!r.error.empty()) return r;
 
   // --- answers of earlier calls of this request
   std::string path, path_error;
@@ -1642,10 +1640,11 @@ void run_decision() {
   if (!get_canister_path_session(
           scoped(scope, "decision-" + request_hash(model_id, req) + ".json"),
           principal_id, path, path_error)) {
-    send_error(ic_api, path_error);
-    return;
+    r.error = path_error;
+    return r;
   }
-  std::map<std::string, decision_answer> answers = load_answers(path);
+  std::map<std::string, decision_answer> &answers = r.answers;
+  answers = load_answers(path);
   log_line("request: " + std::to_string(questions.size()) + " question(s), " +
            req.state_label + " state of " +
            std::to_string(req.state_label == "Json" ? req.state_json.size()
@@ -1666,9 +1665,9 @@ void run_decision() {
       kev ? llama_n_ubatch(ctx)
           : std::min(llama_n_ubatch(ctx), llama_n_ctx(ctx));
   if (kev && (llama_n_seq_max(ctx) != 1 || llama_n_rs_seq(ctx) != 0)) {
-    send_error(ic_api, "a kev decision model needs one sequence: load it "
-                       "without --parallel / --kv-unified options");
-    return;
+    r.error = "a kev decision model needs one sequence: load it "
+              "without --parallel / --kv-unified options";
+    return r;
   }
   std::vector<llama_token> state_tokens; // kev
   std::vector<task> tasks;
@@ -1703,42 +1702,40 @@ void run_decision() {
       layout_error = fill_task_laya(d, t.tokens, q, t.markers);
     }
     if (!layout_error.empty()) {
-      send_error(ic_api, "questions." + q.id + ": " + layout_error);
-      return;
+      r.error = "questions." + q.id + ": " + layout_error;
+      return r;
     }
     const uint64_t n = t.tokens.size();
     if (kev && state_tokens.size() + n > llama_n_ctx(ctx)) {
-      send_error(ic_api, "questions." + q.id + ": the state (" +
-                             std::to_string(state_tokens.size()) +
-                             " tokens) and the question (" + std::to_string(n) +
-                             " tokens) are more than the loaded --ctx-size (" +
-                             std::to_string(llama_n_ctx(ctx)) + ")");
-      return;
+      r.error = "questions." + q.id + ": the state (" +
+                std::to_string(state_tokens.size()) +
+                " tokens) and the question (" + std::to_string(n) +
+                " tokens) are more than the loaded --ctx-size (" +
+                std::to_string(llama_n_ctx(ctx)) + ")";
+      return r;
     }
     if (n > n_tokens_max) {
-      send_error(ic_api, "questions." + q.id + ": the prompt has " +
-                             std::to_string(n) +
-                             " tokens, more than the loaded --ubatch-size / "
-                             "--ctx-size allow (" +
-                             std::to_string(n_tokens_max) + ")");
-      return;
+      r.error = "questions." + q.id + ": the prompt has " + std::to_string(n) +
+                " tokens, more than the loaded --ubatch-size / "
+                "--ctx-size allow (" +
+                std::to_string(n_tokens_max) + ")";
+      return r;
     }
     if (budget > 0 && n > budget) {
-      send_error(ic_api, "questions." + q.id + ": the prompt has " +
-                             std::to_string(n) +
-                             " tokens, more than one update call can evaluate "
-                             "(max_tokens_update = " +
-                             std::to_string(budget) + ")");
-      return;
+      r.error = "questions." + q.id + ": the prompt has " + std::to_string(n) +
+                " tokens, more than one update call can evaluate "
+                "(max_tokens_update = " +
+                std::to_string(budget) + ")";
+      return r;
     }
     tasks.push_back(std::move(t));
   }
 
   // --- answer the pending questions, in request order, while they fit this
   //     call's token budget; the rest is answered by the next call
-  uint64_t input_tokens = 0;
-  std::vector<std::string> pending;
-  kev_progress progress;
+  uint64_t &input_tokens = r.input_tokens;
+  std::vector<std::string> &pending = r.pending;
+  kev_progress &progress = r.progress;
   const std::string answer_error =
       !kev ? answer_laya(ctx, d, tasks, budget, answers, pending, input_tokens)
       : tasks.empty()
@@ -1746,8 +1743,8 @@ void run_decision() {
           : answer_kev(ctx, d, principal_id, scope, model_id, state_tokens,
                        tasks, budget, answers, pending, input_tokens, progress);
   if (!answer_error.empty()) {
-    send_error(ic_api, answer_error);
-    return;
+    r.error = answer_error;
+    return r;
   }
 
   // --- keep the answers for the next call, or clean up when complete
@@ -1755,8 +1752,8 @@ void run_decision() {
     std::error_code ec;
     std::filesystem::remove(path, ec);
   } else if (!save_answers(path, answers)) {
-    send_error(ic_api, "failed to save the answers so far to " + path);
-    return;
+    r.error = "failed to save the answers so far to " + path;
+    return r;
   }
 
   {
@@ -1770,7 +1767,29 @@ void run_decision() {
     log_line(summary);
   }
 
-  send_result(ic_api, questions, answers, input_tokens, pending, progress);
+  return r;
+}
+
+void send_step(IC_API &ic_api, const decision_step &r) {
+  if (!r.error.empty()) {
+    send_error(ic_api, r.error);
+    return;
+  }
+  send_result(ic_api, r.questions, r.answers, r.input_tokens, r.pending,
+              r.progress);
+}
+
+} // namespace
+
+void run_decision() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!has_admin_update_or_whitelisted(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
+  decision_request req;
+  decision_request_from_wire(ic_api, req);
+  send_step(ic_api, run_decision_step(req, ic_api.get_caller().get_text()));
 }
 
 //
