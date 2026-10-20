@@ -248,3 +248,57 @@ def test__alternating_sessions_equal_solo(network: str) -> None:
     assert solo["alt-a"] != solo["alt-b"]
     assert alternating["alt-a.cache"] == solo["alt-a"]
     assert alternating["alt-b.cache"] == solo["alt-b"]
+
+
+def _set_max_tokens(network: str, query: int, update: int) -> None:
+    response = _call(
+        network,
+        "set_max_tokens",
+        f"(record {{ max_tokens_query = {query} : nat64; max_tokens_update = {update} : nat64 }})",
+    )
+    assert "(variant { Ok" in response
+
+
+def test__instruction_bounded_chunks(network: str) -> None:
+    """With no max_tokens cap, run_update stops on instructions instead of trapping.
+
+    Batched prompt decoding costs ~1.2B instructions per token, so this prompt
+    of ~110 tokens is far beyond the 40B limit of one call. run_update must
+    split it over several calls at its 36B guard, and every prompt token the
+    guard holds back must come back in a later call: the conversation ends up
+    holding the whole prompt.
+    """
+    sentence = "The quick brown fox jumps over the lazy dog near the river bank. "
+    n_sentences = 8
+    prompt = (
+        "<|im_start|>user\\nSummarize this text in one sentence: "
+        + sentence * n_sentences
+        + "<|im_end|>\\n<|im_start|>assistant\\n<think>\\n\\n</think>\\n\\n"
+    )
+    cache = "instructions.cache"
+    _start(network, cache)
+    _set_max_tokens(network, 0, 0)
+    try:
+        ingest_calls = 0
+        response = ""
+        while ingest_calls < 10:
+            ingest_calls += 1
+            response = _greedy(network, cache, prompt, "1")
+            if 'prompt_remaining = ""' in response:
+                break
+        assert 'prompt_remaining = ""' in response, "the prompt was not ingested"
+        assert ingest_calls > 1, "the instruction guard did not split the prompt"
+        conversation = _field(response, "conversation")
+        assert conversation.count(sentence.strip()) == n_sentences, conversation
+        assert conversation.rstrip("\\n").endswith("</think>"), conversation
+
+        generated_eog = False
+        for _ in range(10):
+            response = _greedy(network, cache, "", "512")
+            assert "n_tokens_generated = opt (0 : nat64)" not in response, response
+            if "generated_eog = true" in response:
+                generated_eog = True
+                break
+        assert generated_eog, "the generation did not end within 10 calls"
+    finally:
+        _set_max_tokens(network, 1, 20)

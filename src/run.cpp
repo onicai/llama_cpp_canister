@@ -202,12 +202,18 @@ struct RunChunk {
   uint64_t n_prompt_tokens_decoded = 0;
   uint64_t n_tokens_generated = 0;
   uint64_t n_prompt_tokens_remaining = 0;
+  bool n_predict_reached = false; // -n ended the call
 };
 
-// Calls main_, just like it is called in the llama-cli app.
+// A run_update call stops decoding before it would use more instructions than
+// this, keeping a margin to the IC's limit of 40B for one update message.
+const uint64_t RUN_UPDATE_INSTRUCTIONS = 36'000'000'000ULL;
+
+// Calls main_, just like it is called in the llama-cli app. max_instructions
+// > 0 stops decoding before that many instructions (see main_).
 static RunChunk run_chunk(int argc, char **argv,
-                          const std::string &principal_id,
-                          uint64_t max_tokens) {
+                          const std::string &principal_id, uint64_t max_tokens,
+                          uint64_t max_instructions) {
   RunChunk c;
   std::ostringstream conversation_ss;
   std::ostringstream output_ss;
@@ -216,7 +222,8 @@ static RunChunk run_chunk(int argc, char **argv,
                    conversation_ss, output_ss, max_tokens, c.prompt_remaining,
                    c.generated_eog, c.n_prompt_tokens, c.n_prompt_tokens_cached,
                    c.n_prompt_tokens_decoded, c.n_tokens_generated,
-                   c.n_prompt_tokens_remaining);
+                   c.n_prompt_tokens_remaining, max_instructions,
+                   &c.n_predict_reached);
   c.conversation = conversation_ss.str();
   c.output = output_ss.str();
   return c;
@@ -284,7 +291,8 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   }
 
   const RunChunk c =
-      run_chunk(req.argc, req.argv.data(), req.principal_id, max_tokens);
+      run_chunk(req.argc, req.argv.data(), req.principal_id, max_tokens,
+                is_query ? 0 : RUN_UPDATE_INSTRUCTIONS);
 
   // ---------------------------------------------------------------------------
   // Make every outgoing Candid `text` valid UTF-8 (see utils.h).

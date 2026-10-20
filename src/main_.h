@@ -19,7 +19,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           std::string &prompt_remaining, bool &generated_eog,
           uint64_t &n_prompt_tokens, uint64_t &n_prompt_tokens_cached,
           uint64_t &n_prompt_tokens_decoded, uint64_t &n_tokens_generated,
-          uint64_t &n_prompt_tokens_remaining);
+          uint64_t &n_prompt_tokens_remaining, uint64_t max_instructions = 0,
+          bool *n_predict_reached = nullptr);
 
 void icpp_free_model();
 void reset_static_memory();
