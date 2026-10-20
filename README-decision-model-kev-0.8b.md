@@ -217,8 +217,10 @@ Every command below was run as shown, on a fresh canister; the outputs are the r
     | `-fa off`, f16 KV               | 1.42 B   | 1.76 B      | -             |
     | flash attention on (default)    | 1.42 B   | 2.05 B      | -             |
 
-    The f32 cache makes the stored state bigger (~24 KB per token), which is cheaper than
-    the attention it saves.
+    f32 doubles the per-token size of the stored state, to ~24 KB per token, so saving
+    and loading it costs a little more. It makes attention much cheaper, though: at ~550
+    state tokens a token costs 1.45 B instructions instead of 1.76 B with f16, so f32 is
+    cheaper overall.
   - `--ctx-size 4096` sets the largest state plus question: ~4,000 state tokens. It is
     required: the default is the model's training context. Kev was trained on states up to
     7,552 tokens, but a larger `--ctx-size` does not help: beyond ~5,000 tokens (estimated)
