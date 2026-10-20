@@ -359,6 +359,12 @@ void remove_prompt_cache() {
     return;
   }
 
+  if (session_busy(utf8_session_key(params.path_prompt_cache, principal_id))) {
+    send_output_record_result_error_to_wire(ic_api, Http::StatusCode::Conflict,
+                                            SESSION_BUSY_ERROR);
+    return;
+  }
+
   // Each principal has their own cache folder
   std::string path_session = params.path_prompt_cache;
   std::string canister_path_session;
@@ -429,6 +435,12 @@ void copy_prompt_cache() {
   r_in.append("from", CandidTypeText{&from});
   r_in.append("to", CandidTypeText{&to});
   ic_api.from_wire(r_in);
+
+  if (session_busy(utf8_session_key(to, principal_id))) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{SESSION_BUSY_ERROR}}});
+    return;
+  }
 
   // Each principal has their own cache folder
   std::string from_path;
@@ -539,6 +551,12 @@ void upload_prompt_cache_chunk() {
   r_in.append("chunksize", CandidTypeNat64{&chunksize});
   r_in.append("offset", CandidTypeNat64{&offset});
   ic_api.from_wire(r_in);
+
+  if (session_busy(utf8_session_key(promptcache, principal_id))) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{SESSION_BUSY_ERROR}}});
+    return;
+  }
 
   // Each principal has their own cache folder
   std::string filename;

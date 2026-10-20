@@ -12,6 +12,7 @@
 
 #include "../src/max_tokens.h"
 #include "../src/model.h"
+#include "../src/promptcache.h"
 #include "../src/run.h"
 
 #include "mock_ic.h"
@@ -117,6 +118,17 @@ std::vector<std::string> run_args(const std::string &cache,
           prompt,
           "-n",
           n};
+}
+
+// Whether a reply holds `text`, Candid-encoded as hex.
+bool has_text(const std::string &hex, const std::string &text) {
+  static const char *digits = "0123456789abcdef";
+  std::string text_hex;
+  for (unsigned char ch : text) {
+    text_hex += digits[ch >> 4];
+    text_hex += digits[ch & 0xf];
+  }
+  return hex.find(text_hex) != std::string::npos;
 }
 
 void check(bool ok, const std::string &what) {
@@ -285,6 +297,36 @@ void test_run_update_full(MockIC &mockIC) {
                         run_update, args_hex(model_args), my_principal);
   check(mockIC.call_done(swap) && status_of(mockIC.reply_hex(swap)) == 409,
         "run_update --model while a run_update_full is running gets 409");
+  // Nothing may change the held session's files either.
+  for (auto [name, method] :
+       {std::pair{"new_chat", new_chat},
+        std::pair{"remove_prompt_cache", remove_prompt_cache}}) {
+    MockIC::CallHandle h = mockIC.start_call(
+        std::string("test_run_update_full: busy ") + name, method,
+        args_hex({"--prompt-cache", "busy.cache"}), my_principal);
+    check(mockIC.call_done(h) && status_of(mockIC.reply_hex(h)) == 409,
+          std::string(name) + " on a held session gets 409");
+  }
+  // '(record { from = "busy-src.cache"; to = "busy.cache" })'
+  MockIC::CallHandle copy = mockIC.start_call(
+      "test_run_update_full: busy copy_prompt_cache", copy_prompt_cache,
+      "4449444c016c02fbca0171eaca8a9e047101000a627573792e63616368650e627573"
+      "792d7372632e6361636865",
+      my_principal);
+  check(mockIC.call_done(copy) &&
+            has_text(mockIC.reply_hex(copy), SESSION_BUSY_ERROR),
+        "copy_prompt_cache to a held session is refused");
+  // '(record { promptcache = "busy.cache"; chunk = blob "\00";
+  //            chunksize = 1 : nat64; offset = 0 : nat64 })'
+  MockIC::CallHandle upload = mockIC.start_call(
+      "test_run_update_full: busy upload_prompt_cache_chunk",
+      upload_prompt_cache_chunk,
+      "4449444c026c04ed8c8bae040193affe8106789eacf7bb0a71aec3faa40b786d7b01"
+      "00010000000000000000000a627573792e63616368650100000000000000",
+      my_principal);
+  check(mockIC.call_done(upload) &&
+            has_text(mockIC.reply_hex(upload), SESSION_BUSY_ERROR),
+        "upload_prompt_cache_chunk to a held session is refused");
   mockIC.drain();
   mockIC.set_auto_drain(true);
   check(mockIC.call_done(holder) &&

@@ -101,6 +101,13 @@ void new_chat() {
   }
   path_session = canister_path_session;
 
+  // A new chat would reset what a running run_update_full carries over.
+  if (session_busy(utf8_session_key(params.path_prompt_cache, principal_id))) {
+    send_output_record_result_error_to_wire(ic_api, Http::StatusCode::Conflict,
+                                            SESSION_BUSY_ERROR);
+    return;
+  }
+
   // A new chat starts from a clean slate: drop any half-codepoint left over from
   // a previous conversation on this session. Key it exactly as run() does -
   // path_session here is the CANONICAL path, which is a different string.
@@ -237,8 +244,7 @@ static void expire_busy() {
   });
 }
 
-// Whether a run_update_full holds the session `key`.
-static bool session_busy(const std::string &key) {
+bool session_busy(const std::string &key) {
   expire_busy();
   return g_full_busy.contains(key);
 }
@@ -406,9 +412,8 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
 
   if (!is_query && session_busy(utf8_session_key(req.params.path_prompt_cache,
                                                  req.principal_id))) {
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::Conflict,
-        "a run_update_full is running on this prompt-cache.");
+    send_output_record_result_error_to_wire(ic_api, Http::StatusCode::Conflict,
+                                            SESSION_BUSY_ERROR);
     return;
   }
 
@@ -518,12 +523,23 @@ static IC_Async run_update_full_async() {
     co_return;
   }
   if (session_busy(session_key)) {
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::Conflict,
-        "a run_update_full is already running on this prompt-cache.");
+    send_output_record_result_error_to_wire(ic_api, Http::StatusCode::Conflict,
+                                            SESSION_BUSY_ERROR);
     co_return;
   }
   SessionBusy busy{session_key};
+
+  // The chat to save this conversation in: the latest one now. A new_chat
+  // while this call is suspended starts another chat, which must not get it.
+  std::string chat_file;
+  if (is_db_chats_active()) {
+    std::string chat_error;
+    if (!db_chats_latest_file(req.principal_id, chat_file, chat_error)) {
+      send_output_record_result_error_to_wire(
+          ic_api, Http::StatusCode::InternalServerError, chat_error);
+      co_return;
+    }
+  }
 
   // -n is the total for the whole response; each chunk gets what is left.
   const int64_t n_total = req.params.n_predict; // < 0: until eog
@@ -608,9 +624,9 @@ static IC_Async run_update_full_async() {
   }
 
   std::string icpp_error_msg;
-  if (is_db_chats_active() &&
-      !db_chats_save_conversation(conversation_text, req.principal_id,
-                                  icpp_error_msg)) {
+  if (is_db_chats_active() && !chat_file.empty() &&
+      !db_chats_write_conversation(chat_file, conversation_text,
+                                   req.principal_id, icpp_error_msg)) {
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, icpp_error_msg);
     co_return;
