@@ -43,6 +43,8 @@ static bool reject_if_decision_model(IC_API &ic_api) {
   return true;
 }
 
+// Starts a new chat: a new chat file for the caller, and the prompt cache
+// checked (a stale one is discarded) with its UTF-8 carry cleared.
 void new_chat() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   std::string error_msg;
@@ -357,10 +359,12 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
               c.generated_eog, c);
 }
 
+// run as a query: max_tokens_query tokens, no state kept.
 void run_query() {
   IC_API ic_api(CanisterQuery{std::string(__func__)}, false);
   run(ic_api, max_tokens_query, true);
 }
+// run as an update: max_tokens_update tokens, and the state it changes is kept.
 void run_update() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   run(ic_api, max_tokens_update, false);

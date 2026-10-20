@@ -1555,6 +1555,7 @@ void decision_init(const llama_model *model) { init(g_decision, model); }
 
 void decision_reset() { g_decision = decision_context(); }
 
+// Whether the loaded model is a decision model.
 bool decision_model_loaded() {
   return g_decision.type != COMMON_DECISION_TYPE_NONE;
 }
