@@ -48,7 +48,7 @@ void load_model() {
   }
 
   if (!params.model.empty()) {
-    if (full_call_running()) {
+    if (full_call_running(__func__)) {
       send_output_record_result_error_to_wire(
           ic_api, Http::StatusCode::Conflict,
           "a run_update_full is running: cannot change the model.");

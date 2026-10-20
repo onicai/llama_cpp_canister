@@ -102,7 +102,8 @@ void new_chat() {
   path_session = canister_path_session;
 
   // A new chat would reset what a running run_update_full carries over.
-  if (session_busy(utf8_session_key(params.path_prompt_cache, principal_id))) {
+  if (session_busy(utf8_session_key(params.path_prompt_cache, principal_id),
+                   __func__)) {
     send_output_record_result_error_to_wire(ic_api, Http::StatusCode::Conflict,
                                             SESSION_BUSY_ERROR);
     return;
@@ -241,21 +242,34 @@ static std::map<std::string, BusyEntry> g_full_busy;
 static uint64_t g_full_busy_owner = 0;
 
 // Removes the entries whose call made no progress for FULL_BUSY_TTL_NS.
+// An expiry means a call trapped after a yield, or stalled: it is logged.
 static void expire_busy() {
   const uint64_t now = IC_API::time();
   std::erase_if(g_full_busy, [now](const auto &kv) {
-    return now - kv.second.seen_ns >= FULL_BUSY_TTL_NS;
+    const uint64_t idle_ns = now - kv.second.seen_ns;
+    if (idle_ns < FULL_BUSY_TTL_NS) return false;
+    std::cout << "llama_cpp: busy - expired " << kv.first << " after "
+              << idle_ns / 1'000'000'000ULL << "s without progress"
+              << std::endl;
+    return true;
   });
 }
 
-bool session_busy(const std::string &key) {
+bool session_busy(const std::string &key, const std::string &caller) {
   expire_busy();
-  return g_full_busy.contains(key);
+  if (!g_full_busy.contains(key)) return false;
+  std::cout << "llama_cpp: " << caller << " - refused: a run_update_full holds "
+            << key << std::endl;
+  return true;
 }
 
-bool full_call_running() {
+bool full_call_running(const std::string &caller) {
   expire_busy();
-  return !g_full_busy.empty();
+  if (g_full_busy.empty()) return false;
+  std::cout << "llama_cpp: " << caller
+            << " - refused: cannot change the model, full calls in flight: "
+            << g_full_busy.size() << std::endl;
+  return true;
 }
 
 // Holds the session `key` while it is in scope.
@@ -417,7 +431,8 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   if (!run_request_from_wire(ic_api, is_query, req)) return;
 
   if (!is_query && session_busy(utf8_session_key(req.params.path_prompt_cache,
-                                                 req.principal_id))) {
+                                                 req.principal_id),
+                                "run_update")) {
     send_output_record_result_error_to_wire(ic_api, Http::StatusCode::Conflict,
                                             SESSION_BUSY_ERROR);
     return;
@@ -425,7 +440,7 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
 
   // If we're going to load a new model, first free the Orthogonally Persisted memory of a previously loaded model
   if (!req.params.model.empty()) {
-    if (full_call_running()) {
+    if (full_call_running(is_query ? "run_query" : "run_update")) {
       send_output_record_result_error_to_wire(
           ic_api, Http::StatusCode::Conflict,
           "a run_update_full is running: cannot change the model.");
@@ -528,7 +543,7 @@ static IC_Async run_update_full_async() {
         "run_update_full needs a --prompt-cache.");
     co_return;
   }
-  if (session_busy(session_key)) {
+  if (session_busy(session_key, "run_update_full")) {
     send_output_record_result_error_to_wire(ic_api, Http::StatusCode::Conflict,
                                             SESSION_BUSY_ERROR);
     co_return;
