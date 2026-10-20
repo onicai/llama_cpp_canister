@@ -10,6 +10,7 @@
 
 #include "test_run_update_full.h"
 
+#include "../src/db_chats.h"
 #include "../src/max_tokens.h"
 #include "../src/model.h"
 #include "../src/promptcache.h"
@@ -18,7 +19,10 @@
 #include "ic0.h"
 #include "mock_ic.h"
 
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -119,6 +123,20 @@ std::vector<std::string> run_args(const std::string &cache,
           prompt,
           "-n",
           n};
+}
+
+// The saved chats of a principal: file name -> content.
+std::map<std::string, std::string> saved_chats(const std::string &principal) {
+  std::map<std::string, std::string> chats;
+  std::string dir, error_msg;
+  if (!get_saved_chats_dir(principal, dir, error_msg)) return chats;
+  std::error_code ec;
+  for (const auto &entry : std::filesystem::directory_iterator(dir, ec)) {
+    std::ifstream f(entry.path());
+    chats[entry.path().filename().string()] =
+        std::string(std::istreambuf_iterator<char>(f), {});
+  }
+  return chats;
 }
 
 // Whether a reply holds `text`, Candid-encoded as hex.
@@ -298,15 +316,27 @@ void test_run_update_full(MockIC &mockIC) {
                         run_update, args_hex(model_args), my_principal);
   check(mockIC.call_done(swap) && status_of(mockIC.reply_hex(swap)) == 409,
         "run_update --model while a run_update_full is running gets 409");
-  // Nothing may change the held session's files either.
+  // Nothing may change the held session's files either, nor the saved chats.
+  const bool chats_were_active = is_db_chats_active();
+  mockIC.run_test("test_run_update_full: busy chats_resume", chats_resume,
+                  "4449444c0000", "", silent_on_trap, my_principal);
+  const std::map<std::string, std::string> chats_before =
+      saved_chats(my_principal);
   for (auto [name, method] :
-       {std::pair{"new_chat", new_chat},
-        std::pair{"remove_prompt_cache", remove_prompt_cache}}) {
+       {std::pair<const char *, void (*)()>{"new_chat", new_chat},
+        std::pair<const char *, void (*)()>{"remove_prompt_cache",
+                                            remove_prompt_cache}}) {
     MockIC::CallHandle h = mockIC.start_call(
         std::string("test_run_update_full: busy ") + name, method,
         args_hex({"--prompt-cache", "busy.cache"}), my_principal);
     check(mockIC.call_done(h) && status_of(mockIC.reply_hex(h)) == 409,
           std::string(name) + " on a held session gets 409");
+  }
+  check(saved_chats(my_principal) == chats_before,
+        "a refused new_chat leaves the saved chats as they are");
+  if (!chats_were_active) {
+    mockIC.run_test("test_run_update_full: busy chats_pause", chats_pause,
+                    "4449444c0000", "", silent_on_trap, my_principal);
   }
   // '(record { from = "busy-src.cache"; to = "busy.cache" })'
   MockIC::CallHandle copy = mockIC.start_call(

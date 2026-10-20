@@ -141,12 +141,13 @@ bool db_chats_clean(const std::string &principal_id, std::string &error_msg) {
 
   // If the number of files is more than 'n', delete the older ones
   if (files.size() > max_chats) {
-    // Sort files by their last write time (most recent first)
+    // Sort files by name, most recent first: a name is the time db_chats_new
+    // created it. Not by last write: a run_update_full that saves into its
+    // chat after a new_chat would make an older chat look the most recent.
     std::sort(files.begin(), files.end(),
-              [&ec](const std::filesystem::directory_entry &a,
-                    const std::filesystem::directory_entry &b) {
-                return get_last_write_time(a.path(), ec) >
-                       get_last_write_time(b.path(), ec);
+              [](const std::filesystem::directory_entry &a,
+                 const std::filesystem::directory_entry &b) {
+                return a.path().filename() > b.path().filename();
               });
     // keep only max_chats
     for (std::size_t i = max_chats; i < files.size(); ++i) {
@@ -194,20 +195,13 @@ bool db_chats_latest_file(const std::string &principal_id,
     return false;
   }
 
-  // Find the file with the most recent last write time
+  // The most recent chat has the largest name (see db_chats_clean)
   auto latest_file =
       std::max_element(files.begin(), files.end(),
-                       [&ec](const std::filesystem::directory_entry &a,
-                             const std::filesystem::directory_entry &b) {
-                         return get_last_write_time(a.path(), ec) <
-                                get_last_write_time(b.path(), ec);
+                       [](const std::filesystem::directory_entry &a,
+                          const std::filesystem::directory_entry &b) {
+                         return a.path().filename() < b.path().filename();
                        });
-
-  if (ec) {
-    error_msg = std::string(__func__) +
-                ": Error retrieving last write time: " + ec.message();
-    return false;
-  }
 
   file_path = latest_file->path().string();
   return true;

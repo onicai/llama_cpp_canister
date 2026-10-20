@@ -60,21 +60,6 @@ void new_chat() {
   std::string principal_id = caller.get_text();
 
   // -----------------------------------------------------------
-  // Create a new file to save this chat for this principal
-  if (is_db_chats_active() && !db_chats_new(principal_id, error_msg)) {
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::InternalServerError, error_msg);
-    return;
-  }
-
-  // Each principal can only save N chats
-  if (is_db_chats_active() && !db_chats_clean(principal_id, error_msg)) {
-    send_output_record_result_error_to_wire(
-        ic_api, Http::StatusCode::InternalServerError, error_msg);
-    return;
-  }
-
-  // -----------------------------------------------------------
   // Parse the arguments
   auto [argc, argv, args] = get_args_for_main(ic_api);
 
@@ -84,6 +69,30 @@ void new_chat() {
   if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_COMPLETION,
                            print_usage)) {
     error_msg = "Cannot parse args.";
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
+    return;
+  }
+
+  // A new chat would reset what a running run_update_full carries over. Check
+  // it before anything changes, also the saved chats.
+  if (session_busy(utf8_session_key(params.path_prompt_cache, principal_id),
+                   __func__)) {
+    send_output_record_result_error_to_wire(ic_api, Http::StatusCode::Conflict,
+                                            SESSION_BUSY_ERROR);
+    return;
+  }
+
+  // -----------------------------------------------------------
+  // Create a new file to save this chat for this principal
+  if (is_db_chats_active() && !db_chats_new(principal_id, error_msg)) {
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::InternalServerError, error_msg);
+    return;
+  }
+
+  // Each principal can only save N chats
+  if (is_db_chats_active() && !db_chats_clean(principal_id, error_msg)) {
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, error_msg);
     return;
@@ -100,14 +109,6 @@ void new_chat() {
     return;
   }
   path_session = canister_path_session;
-
-  // A new chat would reset what a running run_update_full carries over.
-  if (session_busy(utf8_session_key(params.path_prompt_cache, principal_id),
-                   __func__)) {
-    send_output_record_result_error_to_wire(ic_api, Http::StatusCode::Conflict,
-                                            SESSION_BUSY_ERROR);
-    return;
-  }
 
   // A new chat starts from a clean slate: drop any half-codepoint left over from
   // a previous conversation on this session. Key it exactly as run() does -
@@ -655,7 +656,14 @@ static IC_Async run_update_full_async() {
   }
 
   std::string icpp_error_msg;
-  if (is_db_chats_active() && !chat_file.empty() &&
+  // A new_chat may have cleaned up this chat while the call was suspended.
+  const bool chat_kept =
+      !chat_file.empty() && std::filesystem::exists(chat_file);
+  if (!chat_file.empty() && !chat_kept) {
+    std::cout << "llama_cpp: run_update_full - not saved: chat " << chat_file
+              << " was cleaned up" << std::endl;
+  }
+  if (is_db_chats_active() && chat_kept &&
       !db_chats_write_conversation(chat_file, conversation_text,
                                    req.principal_id, icpp_error_msg)) {
     send_output_record_result_error_to_wire(
