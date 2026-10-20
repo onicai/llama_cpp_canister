@@ -276,6 +276,7 @@ bool full_call_running(const std::string &caller) {
   return true;
 }
 
+// Replies 409 when a full call is in flight; the caller then returns.
 bool reject_model_change_if_busy(IC_API &ic_api, const std::string &caller) {
   if (!full_call_running(caller)) return false;
   send_output_record_result_error_to_wire(
@@ -291,6 +292,7 @@ SessionBusy::SessionBusy(const std::string &k)
   g_full_busy[key] = {owner, IC_API::time()};
 }
 
+// Marks progress; false when this call no longer holds `key`.
 bool SessionBusy::touch() {
   auto it = g_full_busy.find(key);
   if (it == g_full_busy.end() || it->second.owner != owner) return false;
@@ -298,6 +300,7 @@ bool SessionBusy::touch() {
   return true;
 }
 
+// Releases `key`, unless another call holds it now.
 SessionBusy::~SessionBusy() {
   auto it = g_full_busy.find(key);
   if (it != g_full_busy.end() && it->second.owner == owner)

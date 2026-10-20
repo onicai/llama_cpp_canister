@@ -1032,6 +1032,8 @@ struct kev_progress {
   std::optional<std::string> state_key;
 };
 
+// Replies Ok with the answers so far, what is pending, the progress of a kev
+// state, and the instructions of the whole call.
 void send_result(IC_API &ic_api,
                  const std::vector<decision_question> &questions,
                  const std::map<std::string, decision_answer> &answers,
@@ -1296,6 +1298,8 @@ double kev_rate_estimate(size_t n_kv) {
 const double KEV_SAVE_PER_BYTE = 0.1;
 const double KEV_LOAD_PER_BYTE = 0.05;
 
+// Stops a kev step before `max` instructions: it measures the cost per token
+// and keeps room to save the state.
 struct kev_guard {
   const bool on = instruction_counter() > 0;
   uint64_t max = KEV_INSTRUCTIONS_MAX; // the limit of this call's message

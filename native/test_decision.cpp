@@ -102,6 +102,7 @@ void check(bool ok, const std::string &what) {
   }
 }
 
+// Calls run_decision (or `method`) with a hex request; returns the reply.
 DecisionReply call(MockIC &mockIC, const std::string &name,
                    const std::string &input, const std::string &caller,
                    void (*method)() = run_decision) {

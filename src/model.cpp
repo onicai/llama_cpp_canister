@@ -23,6 +23,8 @@ static void print_usage(int argc, char **argv) {
   // do nothing function
 }
 
+// Loads the model of --model, after freeing the loaded one. Refused while a
+// full call is in flight.
 void load_model() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   if (!has_admin_update_role(ic_api)) {
