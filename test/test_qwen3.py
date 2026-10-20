@@ -58,6 +58,7 @@ PROMPT_MULTITURN = (
 def _call(
     network: str, method: str, arg: str, timeout_seconds: int | None = None
 ) -> str:
+    """Calls a canister method; a full call needs a longer client timeout."""
     response = call_canister_api(
         icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,
@@ -371,6 +372,7 @@ def test__run_update_full_concurrent(network: str) -> None:
     responses: dict = {}
 
     def call(name: str) -> None:
+        """Stores the reply of a full call on its own cache."""
         responses[name] = _full(network, f"{name}.cache", prompts[name])
 
     threads = [threading.Thread(target=call, args=(name,)) for name in prompts]

@@ -52,6 +52,7 @@ REPLACEMENT_CHAR = "�"
 def _call(
     network: str, method: str, arg: str, timeout_seconds: int | None = None
 ) -> str:
+    """Calls a canister method; a full call needs a longer client timeout."""
     response = call_canister_api(
         icp_yaml_path=ICP_YAML_PATH,
         canister_name=CANISTER_NAME,

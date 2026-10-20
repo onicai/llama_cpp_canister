@@ -37,6 +37,7 @@ const std::string PROMPT_B = "Once upon a time, a little cat";
 // The tokens of the response: stories15M rarely ends a story with an eog.
 const uint64_t N = 30;
 
+// An InputRecord with these args, as hex.
 std::string args_hex(const std::vector<std::string> &args) {
   std::vector<std::string> a = args;
   CandidTypeRecord r;
@@ -44,6 +45,7 @@ std::string args_hex(const std::vector<std::string> &args) {
   return CandidSerialize(r).as_hex_string();
 }
 
+// The fields of a reply that the tests compare.
 struct Out {
   std::string conversation;
   std::string output;
@@ -111,6 +113,7 @@ uint16_t status_of(const std::string &hex) {
   return status_code;
 }
 
+// The args of a greedy run on `cache`, with prompt and -n.
 std::vector<std::string> run_args(const std::string &cache,
                                   const std::string &prompt,
                                   const std::string &n) {
@@ -152,6 +155,7 @@ bool has_text(const std::string &hex, const std::string &text) {
   return hex.find(text_hex) != std::string::npos;
 }
 
+// Reports a check, and stops the test run when it failed.
 void check(bool ok, const std::string &what) {
   if (!ok) {
     std::cout << "Test 'test_run_update_full: " << what << "' Failed\n";
@@ -162,6 +166,7 @@ void check(bool ok, const std::string &what) {
 
 } // namespace
 
+// run_update_full against a run_update loop, and with other calls in between.
 void test_run_update_full(MockIC &mockIC) {
   std::string my_principal{MOCKIC_CONTROLLER};
   bool silent_on_trap = true;

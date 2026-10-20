@@ -256,6 +256,7 @@ static void expire_busy() {
   });
 }
 
+// Whether a run_update_full holds `key`; logs the refusal of `caller`.
 bool session_busy(const std::string &key, const std::string &caller) {
   expire_busy();
   if (!g_full_busy.contains(key)) return false;
@@ -264,6 +265,7 @@ bool session_busy(const std::string &key, const std::string &caller) {
   return true;
 }
 
+// Whether any run_update_full is in flight; logs the refusal of `caller`.
 bool full_call_running(const std::string &caller) {
   expire_busy();
   if (g_full_busy.empty()) return false;
@@ -277,6 +279,7 @@ bool full_call_running(const std::string &caller) {
 struct SessionBusy {
   std::string key;
   uint64_t owner;
+  // Holds `key` for a new owner, from now.
   explicit SessionBusy(const std::string &k)
       : key(k), owner(++g_full_busy_owner) {
     g_full_busy[key] = {owner, IC_API::time()};

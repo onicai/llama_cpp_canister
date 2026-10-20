@@ -39,6 +39,7 @@ bool get_saved_chats_dir(const std::string &principal_id,
   return true;
 }
 
+// Writes the conversation to the chat file, after a line with the principal.
 bool db_chats_write_conversation(const std::string &file_path,
                                  const std::string &conversation,
                                  const std::string &principal_id,
@@ -106,6 +107,7 @@ bool db_chats_new(const std::string &principal_id, std::string &error_msg) {
   return true;
 }
 
+// Keeps the principal's max_chats newest chats, and deletes the rest.
 bool db_chats_clean(const std::string &principal_id, std::string &error_msg) {
   if (!DB_CHATS_ACTIVE) {
     error_msg = std::string(__func__) +
@@ -166,6 +168,7 @@ bool db_chats_clean(const std::string &principal_id, std::string &error_msg) {
   return true;
 }
 
+// The principal's newest chat: the one a conversation is saved in.
 bool db_chats_latest_file(const std::string &principal_id,
                           std::string &file_path, std::string &error_msg) {
   std::string saved_chats_dir;
@@ -207,6 +210,7 @@ bool db_chats_latest_file(const std::string &principal_id,
   return true;
 }
 
+// Saves the conversation in the principal's newest chat.
 bool db_chats_save_conversation(const std::string &conversation,
                                 const std::string &principal_id,
                                 std::string &error_msg) {
