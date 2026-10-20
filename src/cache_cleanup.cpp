@@ -27,6 +27,7 @@ constexpr uint64_t DEFAULT_PERIOD_NS = 600ULL * NS_PER_SEC;   // 10 min
 constexpr uint64_t DEFAULT_TTL_NS = 6ULL * 3600 * NS_PER_SEC; // 6 h
 constexpr uint64_t DEFAULT_MAX_FILES_PER_RUN = 256;
 constexpr uint64_t DEFAULT_MAX_DECISION_STATES = 256; // ~20 MB each
+constexpr uint64_t DEFAULT_MAX_DECISION_STATES_PER_SCOPE = 8;
 
 constexpr uint64_t MAX_FILES_PER_RUN_FLOOR = 1;
 constexpr uint64_t MAX_FILES_PER_RUN_CEILING = 10'000;
@@ -56,6 +57,8 @@ uint64_t g_cleanup_ttl_ns = DEFAULT_TTL_NS;
 uint64_t g_cleanup_max_files_per_run = DEFAULT_MAX_FILES_PER_RUN;
 uint64_t g_cleanup_timer_id = 0;
 uint64_t g_max_decision_states = DEFAULT_MAX_DECISION_STATES;
+uint64_t g_max_decision_states_per_scope =
+    DEFAULT_MAX_DECISION_STATES_PER_SCOPE;
 
 namespace {
 
@@ -69,6 +72,10 @@ void arm_timer_() {
 
 std::optional<uint64_t> opt_max_decision_states_() {
   return g_max_decision_states;
+}
+
+std::optional<uint64_t> opt_max_decision_states_per_scope_() {
+  return g_max_decision_states_per_scope;
 }
 
 // Helper: append the current stats to a CandidTypeRecord. Used by the
@@ -87,6 +94,8 @@ CandidTypeRecord build_stats_record_() {
   r.append("is_running", CandidTypeBool{g_cleanup_timer_id != 0});
   r.append("max_decision_states",
            CandidTypeOptNat64{opt_max_decision_states_()});
+  r.append("max_decision_states_per_scope",
+           CandidTypeOptNat64{opt_max_decision_states_per_scope_()});
   return r;
 }
 
@@ -98,6 +107,8 @@ CandidTypeRecord build_config_record_() {
   r.append("is_running", CandidTypeBool{g_cleanup_timer_id != 0});
   r.append("max_decision_states",
            CandidTypeOptNat64{opt_max_decision_states_()});
+  r.append("max_decision_states_per_scope",
+           CandidTypeOptNat64{opt_max_decision_states_per_scope_()});
   return r;
 }
 
@@ -342,6 +353,7 @@ void set_cache_cleanup_config() {
   std::optional<uint64_t> opt_ttl_seconds;
   std::optional<uint64_t> opt_max_files;
   std::optional<uint64_t> opt_max_decision_states;
+  std::optional<uint64_t> opt_max_decision_states_per_scope;
 
   CandidTypeRecord r_in;
   r_in.append("period_seconds", CandidTypeOptNat64{&opt_period_seconds});
@@ -349,6 +361,8 @@ void set_cache_cleanup_config() {
   r_in.append("max_files_per_run", CandidTypeOptNat64{&opt_max_files});
   r_in.append("max_decision_states",
               CandidTypeOptNat64{&opt_max_decision_states});
+  r_in.append("max_decision_states_per_scope",
+              CandidTypeOptNat64{&opt_max_decision_states_per_scope});
   ic_api.from_wire(r_in);
 
   // period_seconds: must be > 0; otherwise silently preserve.
@@ -374,6 +388,10 @@ void set_cache_cleanup_config() {
   if (opt_max_decision_states.has_value()) {
     g_max_decision_states = *opt_max_decision_states;
   }
+  // max_decision_states_per_scope: 0 = no limit
+  if (opt_max_decision_states_per_scope.has_value()) {
+    g_max_decision_states_per_scope = *opt_max_decision_states_per_scope;
+  }
 
   // If currently armed, transparently re-arm with the new period.
   if (g_cleanup_timer_id != 0) {
@@ -387,6 +405,8 @@ void set_cache_cleanup_config() {
       " ttl_seconds=" + std::to_string(g_cleanup_ttl_ns / NS_PER_SEC) +
       " max_files_per_run=" + std::to_string(g_cleanup_max_files_per_run) +
       " max_decision_states=" + std::to_string(g_max_decision_states) +
+      " max_decision_states_per_scope=" +
+      std::to_string(g_max_decision_states_per_scope) +
       " is_running=" + (g_cleanup_timer_id != 0 ? "true" : "false");
   std::cout << "llama_cpp: " << std::string(__func__) << " - " << msg
             << std::endl;

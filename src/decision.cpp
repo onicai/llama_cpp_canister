@@ -1205,12 +1205,12 @@ std::string answer_laya(llama_context *ctx, const decision_context &d,
   return "";
 }
 
-// A stored kev state is ~20 MB. A principal keeps at most this many per
-// scope (and without one), and the canister at most max_decision_states (see
-// cache_cleanup.h) over all principals and scopes. Pinned states count toward
-// neither. The prompt-cache cleanup timer, once an operator starts it, also
-// removes unpinned states whose last ingestion (mtime) is older than its TTL.
-const size_t MAX_DECISION_STATES = 8;
+// A stored kev state is ~20 MB. A principal keeps at most
+// max_decision_states_per_scope per scope (and without one), and the canister
+// at most max_decision_states over all principals and scopes (see
+// cache_cleanup.h). Pinned states count toward neither. The prompt-cache
+// cleanup timer, once an operator starts it, also removes unpinned states
+// whose last ingestion (mtime) is older than its TTL.
 
 bool is_state_file(const std::filesystem::path &p) {
   const std::string name = p.filename().string();
@@ -1258,14 +1258,16 @@ void remove_oldest(
 
 // Makes room for `keep`, a state about to be stored: removes the oldest
 // unpinned states of its directory (by mtime), then the oldest over the whole
-// canister, so that with `keep` at most MAX_DECISION_STATES remain in its
-// directory and max_decision_states in the canister.
+// canister, so that with `keep` at most max_decision_states_per_scope remain
+// in its directory and max_decision_states in the canister (0 = no limit).
 void evict_old_states(const std::string &keep) {
   namespace fs = std::filesystem;
   const uint64_t now_ns = IC_API::time();
   std::vector<std::pair<fs::file_time_type, std::string>> states;
-  collect_unpinned_states(fs::path(keep).parent_path(), keep, now_ns, states);
-  remove_oldest(states, MAX_DECISION_STATES - 1);
+  if (g_max_decision_states_per_scope != 0) {
+    collect_unpinned_states(fs::path(keep).parent_path(), keep, now_ns, states);
+    remove_oldest(states, g_max_decision_states_per_scope - 1);
+  }
 
   if (g_max_decision_states == 0) {
     return; // no limit

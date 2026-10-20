@@ -25,6 +25,7 @@
 #include <fstream>
 #include <iostream>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -862,6 +863,51 @@ void test_decision_kev(MockIC &mockIC) {
           "kev ninth state: expected the oldest of 9 stored states removed, "
           "got " +
               std::to_string(kept.size()) + " stored states");
+  }
+
+  // --- max_decision_states_per_scope sets that cap; 0 means no limit. The
+  //     real state is removed first, so that each call stores it again
+  {
+    const auto remove_real_state = [&]() {
+      for (const auto &path : stored_states(controller)) {
+        if (path.filename().string().find("dummy") == std::string::npos) {
+          std::error_code ec;
+          std::filesystem::remove(path, ec);
+          std::filesystem::remove(path.string() + ".icppfmt", ec);
+        }
+      }
+    };
+    const uint64_t per_scope = g_max_decision_states_per_scope;
+    g_max_decision_states_per_scope = 3;
+    remove_real_state();
+    const DecisionReply r =
+        call(mockIC, "kev per-scope cap 3", KEV_SMALL_STATE_1, controller);
+    check(r.label == "Ok" && r.pending.empty(),
+          "kev per-scope cap 3: not answered: " + r.err_text);
+    std::set<std::string> kept;
+    for (const auto &path : stored_states(controller)) {
+      kept.insert(path.filename().string());
+    }
+    check(kept.size() == 3 && kept.count("decision-state-dummy6.session") &&
+              kept.count("decision-state-dummy7.session"),
+          "kev per-scope cap 3: expected the 2 youngest dummies and the new "
+          "state, got " +
+              std::to_string(kept.size()) + " stored states");
+
+    g_max_decision_states_per_scope = 0;
+    for (int i = 0; i < 10; i++) {
+      dummy_state(".canister_cache/" + controller + "/sessions",
+                  "dummy-nolimit" + std::to_string(i), std::chrono::hours(20));
+    }
+    remove_real_state();
+    const DecisionReply u =
+        call(mockIC, "kev per-scope no limit", KEV_SMALL_STATE_1, controller);
+    check(u.label == "Ok" && u.pending.empty(),
+          "kev per-scope no limit: not answered: " + u.err_text);
+    check(stored_states(controller).size() == 13,
+          "kev per-scope no limit: expected 13 stored states, got " +
+              std::to_string(stored_states(controller).size()));
+    g_max_decision_states_per_scope = per_scope;
   }
 
   // --- scopes: a caller (e.g. a gateway) keeps a separate set of stored

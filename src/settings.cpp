@@ -18,12 +18,15 @@ const char *SETTINGS_PATH = ".canister_settings.json";
 namespace {
 
 const char *CLEANUP_KEYS[] = {"period_ns", "ttl_ns", "max_files_per_run",
-                              "max_decision_states"};
+                              "max_decision_states",
+                              "max_decision_states_per_scope"};
 
 uint64_t *cleanup_value(const std::string &key) {
   if (key == "period_ns") return &g_cleanup_period_ns;
   if (key == "ttl_ns") return &g_cleanup_ttl_ns;
   if (key == "max_files_per_run") return &g_cleanup_max_files_per_run;
+  if (key == "max_decision_states_per_scope")
+    return &g_max_decision_states_per_scope;
   return &g_max_decision_states;
 }
 
@@ -132,7 +135,9 @@ std::string load_settings() {
   return "access level " + std::to_string(get_access_level()) + ", " +
          std::to_string(n_roles) + " admin role(s), cache cleanup " +
          (running ? "running" : "off") + ", max_decision_states " +
-         std::to_string(g_max_decision_states);
+         std::to_string(g_max_decision_states) +
+         ", max_decision_states_per_scope " +
+         std::to_string(g_max_decision_states_per_scope);
 }
 
 void canister_post_upgrade() {

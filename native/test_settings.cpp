@@ -46,8 +46,10 @@ void test_settings(MockIC &mockIC) {
                                    controller, 42, "the gateway"}});
   const uint64_t ttl_ns = g_cleanup_ttl_ns;
   const uint64_t max_states = g_max_decision_states;
+  const uint64_t per_scope = g_max_decision_states_per_scope;
   g_cleanup_ttl_ns = 48ULL * 3600 * 1000000000ULL;
   g_max_decision_states = 99;
+  g_max_decision_states_per_scope = 50;
   cache_cleanup_rearm();
   save_settings();
 
@@ -58,6 +60,7 @@ void test_settings(MockIC &mockIC) {
   restore_admin_role_assignments({});
   g_cleanup_ttl_ns = ttl_ns;
   g_max_decision_states = max_states;
+  g_max_decision_states_per_scope = per_scope;
 
   // --- ... and restored by canister_post_upgrade
   canister_post_upgrade();
@@ -69,7 +72,8 @@ void test_settings(MockIC &mockIC) {
             roles[0].note == "the gateway",
         "admin role restored");
   check(g_cleanup_ttl_ns == 48ULL * 3600 * 1000000000ULL &&
-            g_max_decision_states == 99,
+            g_max_decision_states == 99 &&
+            g_max_decision_states_per_scope == 50,
         "cleanup config restored");
   check(g_cleanup_timer_id != 0 && IcTimers::instance().size() == 1,
         "running cleanup timer re-armed");
@@ -93,6 +97,7 @@ void test_settings(MockIC &mockIC) {
   restore_admin_role_assignments({});
   g_cleanup_ttl_ns = ttl_ns;
   g_max_decision_states = max_states;
+  g_max_decision_states_per_scope = per_scope;
   std::filesystem::remove(SETTINGS_PATH, ec);
 
   std::cout << "test_settings failures: " << g_failures

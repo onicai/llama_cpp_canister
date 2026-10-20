@@ -71,3 +71,7 @@ extern uint64_t g_cleanup_timer_id;
 // scopes (0 = no limit); run_decision removes the oldest unpinned ones.
 // Set with set_cache_cleanup_config.
 extern uint64_t g_max_decision_states;
+
+// The most kev decision states a principal stores per scope, and without a
+// scope (0 = no limit). Set with set_cache_cleanup_config.
+extern uint64_t g_max_decision_states_per_scope;

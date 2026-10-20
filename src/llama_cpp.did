@@ -279,7 +279,8 @@ type CacheCleanupStatsRecord = record {
   ttl_seconds : nat64;
   max_files_per_run : nat64;
   is_running : bool;
-  max_decision_states : opt nat64 // stored kev decision states per canister (0 = no limit)
+  max_decision_states : opt nat64; // stored kev decision states per canister (0 = no limit)
+  max_decision_states_per_scope : opt nat64 // stored kev decision states per principal and scope (0 = no limit)
 };
 
 type CacheCleanupConfigInput = record {
@@ -288,11 +289,13 @@ type CacheCleanupConfigInput = record {
   // ttl_seconds    : opt 0 valid ("delete everything older than 0 ns").
   // max_files_per_run : opt 0 clamped to floor (1).
   // max_decision_states : opt 0 = no limit (default 256, ~20 MB each).
+  // max_decision_states_per_scope : opt 0 = no limit (default 8).
   // The config and whether the timer runs survive an upgrade.
   period_seconds : opt nat64;
   ttl_seconds : opt nat64;
   max_files_per_run : opt nat64;
-  max_decision_states : opt nat64
+  max_decision_states : opt nat64;
+  max_decision_states_per_scope : opt nat64
 };
 type CacheCleanupConfigResult = variant {
   Err : ApiError;
@@ -303,7 +306,8 @@ type CacheCleanupConfigRecord = record {
   ttl_seconds : nat64;
   max_files_per_run : nat64;
   is_running : bool;
-  max_decision_states : opt nat64
+  max_decision_states : opt nat64;
+  max_decision_states_per_scope : opt nat64
 };
 
 // -----------------------------------------------------
