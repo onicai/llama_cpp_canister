@@ -134,10 +134,10 @@ static bool file_is_empty(const std::string &path) {
 // With max_instructions > 0, a call stops decoding before it would exceed it.
 // ICPP_SAVE_RESERVE: room to save the session file (measured: at most 0.32B).
 // g_decode_rate: the instructions per token measured by the last call on the
-// loaded model, assumed until this call measured its own; ICPP_FIRST_RATE
-// before any call measured it.
+// loaded model, assumed until this call measured its own. Before any call
+// measured it, a call decodes 1 token to measure it: the larger models spend
+// 5-9B per token, so no assumed rate is safe for all of them.
 const uint64_t ICPP_SAVE_RESERVE = 1'000'000'000ULL;
-const double ICPP_FIRST_RATE = 2.0e9;
 static double g_decode_rate = 0.0;
 
 int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
@@ -1108,16 +1108,28 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
           n_eval = max_tokens;
         }
         // Or by instructions: decode only what fits before max_instructions,
-        // keeping room to save the session file. At least 1 token.
+        // keeping room to save the session file.
         if (instructions_guard) {
           const uint64_t used = instruction_counter() + ICPP_SAVE_RESERVE;
-          const double rate = decode_rate > 0     ? decode_rate
-                              : g_decode_rate > 0 ? g_decode_rate
-                                                  : ICPP_FIRST_RATE;
-          const int n_fit =
-              used < max_instructions
-                  ? std::max(1, (int)((max_instructions - used) / rate))
-                  : 1;
+          const double rate = decode_rate > 0 ? decode_rate : g_decode_rate;
+          int n_fit = rate <= 0 ? 1
+                      : used < max_instructions
+                          ? (int)((max_instructions - used) / rate)
+                          : 0;
+          // After a decode, the check below already found room for a token.
+          if (n_eval_total > 0) {
+            n_fit = std::max(1, n_fit);
+          }
+          // On the first decode, loading the session left no room. Decoding
+          // anyway would trap; returning without progress would make the
+          // caller repeat this call forever.
+          if (n_fit == 0) {
+            icpp_error_msg = std::format(
+                "{}: error: no token fits in max_instructions {} after {} "
+                "instructions to load the session",
+                __func__, max_instructions, instruction_counter());
+            return 1;
+          }
           // A clamped batch must end the call, like a max_tokens clamp: the
           // rest of embd is not decoded, and is picked up by the next call.
           if (n_fit < n_eval) {
