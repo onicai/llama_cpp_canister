@@ -102,10 +102,11 @@ void check(bool ok, const std::string &what) {
 }
 
 DecisionReply call(MockIC &mockIC, const std::string &name,
-                   const std::string &input, const std::string &caller) {
+                   const std::string &input, const std::string &caller,
+                   void (*method)() = run_decision) {
   std::string out;
-  mockIC.run_test(std::string("test_decision: ") + name, run_decision, input,
-                  "", false, caller, &out);
+  mockIC.run_test(std::string("test_decision: ") + name, method, input, "",
+                  false, caller, &out);
   return decode_reply(out);
 }
 
@@ -627,6 +628,22 @@ void test_decision_kev(MockIC &mockIC) {
   check(last.p_probability == full.p_probability,
         "kev resume: probabilities differ from the one-call run");
   check(last.a_choice == full.a_choice, "kev resume: choices differ");
+
+  // --- the same request in ONE run_decision_full call, from scratch: it
+  //     yields to itself between the steps of 24 tokens
+  remove_stored_states(controller);
+  {
+    const DecisionReply r =
+        call(mockIC, "kev full", KEV_REQUEST, controller, run_decision_full);
+    check(r.label == "Ok" && r.pending.empty() && r.a_ids.size() == 2,
+          "kev full: not complete: " + r.err_text);
+    check(r.state_tokens == full.state_tokens &&
+              r.state_tokens_remaining == std::optional<uint64_t>{0},
+          "kev full: state progress");
+    check(r.p_probability == full.p_probability,
+          "kev full: probabilities differ from the one-call run");
+    check(r.a_choice == full.a_choice, "kev full: choices differ");
+  }
 
   // --- a new request about the stored state: only the question is decoded,
   //     and the stored state is not modified

@@ -1081,8 +1081,9 @@ void send_result(IC_API &ic_api,
   r_out.append("state_tokens_remaining",
                CandidTypeOptNat64{progress.n_remaining});
   r_out.append("state_key", CandidTypeOptText{progress.state_key});
-  // the work done by this call, read last (null in native builds)
-  const uint64_t instructions = instruction_counter();
+  // the work done by this call, over all its messages, read last (null in
+  // native builds)
+  const uint64_t instructions = call_instruction_counter();
   r_out.append("instructions",
                CandidTypeOptNat64{instructions
                                       ? std::optional<uint64_t>(instructions)
@@ -1137,14 +1138,23 @@ std::string scores_note(const decision_context &d, const decision_question &q,
 
 // laya: one forward pass over the whole prompt per question. Returns an error
 // message.
+//
+// max_instructions > 0 leaves a question pending when its pass would not fit,
+// at `rate` instructions per token: the highest measured in this call or an
+// earlier step of it (updated here). 0 runs every pass that fits the budget.
 std::string answer_laya(llama_context *ctx, const decision_context &d,
                         const std::vector<task> &tasks, uint64_t budget,
+                        uint64_t max_instructions, double &rate,
                         std::map<std::string, decision_answer> &answers,
                         std::vector<std::string> &pending,
                         uint64_t &input_tokens) {
+  const bool guard_on = max_instructions > 0 && instruction_counter() > 0;
   for (const auto &t : tasks) {
     const uint64_t n = t.tokens.size();
-    if (!pending.empty() || (budget > 0 && input_tokens + n > budget)) {
+    const bool fits =
+        !guard_on || instruction_counter() + rate * n <= max_instructions;
+    if (!pending.empty() || (budget > 0 && input_tokens + n > budget) ||
+        !fits) {
       pending.push_back(t.q->id);
       continue;
     }
@@ -1159,6 +1169,7 @@ std::string answer_laya(llama_context *ctx, const decision_context &d,
     if (!error.empty()) {
       return "questions." + t.q->id + ": " + error;
     }
+    if (i1 > i0 && n > 0) rate = std::max(rate, double(i1 - i0) / n);
     log_line(t.q->id + ": one forward pass" + instructions_note(i0, i1, 0) +
              scores_note(d, *t.q, scores));
     answers[t.q->id] = format_answer(d, *t.q, scores);
@@ -1286,6 +1297,7 @@ const double KEV_LOAD_PER_BYTE = 0.05;
 
 struct kev_guard {
   const bool on = instruction_counter() > 0;
+  uint64_t max = KEV_INSTRUCTIONS_MAX; // the limit of this call's message
   double rate = 0.0; // the highest instructions per token measured this call
 
   void measured(uint64_t i0, uint64_t i1, size_t n_tokens) {
@@ -1298,7 +1310,7 @@ struct kev_guard {
   }
   // whether `cost` more instructions keep this call within the limit
   bool fits(double cost) const {
-    return !on || instruction_counter() + cost <= KEV_INSTRUCTIONS_MAX;
+    return !on || instruction_counter() + cost <= max;
   }
 };
 
@@ -1362,6 +1374,7 @@ std::string answer_kev(llama_context *ctx, const decision_context &d,
                        const std::string &scope, const std::string &model_id,
                        const std::vector<llama_token> &state,
                        const std::vector<task> &tasks, uint64_t budget,
+                       uint64_t max_instructions,
                        std::map<std::string, decision_answer> &answers,
                        std::vector<std::string> &pending,
                        uint64_t &input_tokens, kev_progress &progress) {
@@ -1375,6 +1388,7 @@ std::string answer_kev(llama_context *ctx, const decision_context &d,
   }
   llama_memory_t mem = llama_get_memory(ctx);
   kev_guard guard;
+  guard.max = max_instructions;
 
   // --- the checkpoint so far. The in-heap memory is never trusted: another
   //     call (or principal) may have used the context since.
@@ -1603,10 +1617,21 @@ struct decision_step {
   kev_progress progress;
 };
 
+// The instruction limits of one step's message. kev_max: the kev guard's.
+// laya_max: 0 runs any pass (a first message has room for one, which a
+// callback after a yield may not). laya_rate: the instructions per token
+// measured by the steps so far, carried to the next.
+struct step_limits {
+  uint64_t kev_max = KEV_INSTRUCTIONS_MAX;
+  uint64_t laya_max = 0;
+  double laya_rate = 0.0;
+};
+
 // Answers what fits one message of the pending questions of a request. The
 // answers are kept in the request file, so the next step continues from it.
 decision_step run_decision_step(const decision_request &req,
-                                const std::string &principal_id) {
+                                const std::string &principal_id,
+                                step_limits &limits) {
   decision_step r;
   const std::string scope = req.scope.value_or("");
   if (req.scope.has_value()) {
@@ -1738,11 +1763,12 @@ decision_step run_decision_step(const decision_request &req,
   std::vector<std::string> &pending = r.pending;
   kev_progress &progress = r.progress;
   const std::string answer_error =
-      !kev ? answer_laya(ctx, d, tasks, budget, answers, pending, input_tokens)
-      : tasks.empty()
-          ? ""
-          : answer_kev(ctx, d, principal_id, scope, model_id, state_tokens,
-                       tasks, budget, answers, pending, input_tokens, progress);
+      !kev            ? answer_laya(ctx, d, tasks, budget, limits.laya_max,
+                                    limits.laya_rate, answers, pending, input_tokens)
+      : tasks.empty() ? ""
+                      : answer_kev(ctx, d, principal_id, scope, model_id,
+                                   state_tokens, tasks, budget, limits.kev_max,
+                                   answers, pending, input_tokens, progress);
   if (!answer_error.empty()) {
     r.error = answer_error;
     return r;
@@ -1793,8 +1819,67 @@ void run_decision() {
   }
   decision_request req;
   decision_request_from_wire(ic_api, req);
-  send_step(ic_api, run_decision_step(req, ic_api.get_caller().get_text()));
+  step_limits limits;
+  send_step(ic_api,
+            run_decision_step(req, ic_api.get_caller().get_text(), limits));
 }
+
+// After a yield the message is a reply callback, with a limit of 38B: the
+// limit of every step of run_decision_full after its first.
+const uint64_t DECISION_CALLBACK_INSTRUCTIONS = 34000000000ULL;
+
+// The step loop of run_decision_full. A coroutine: each co_await is a new
+// message.
+static IC_Async run_decision_full_async() {
+  IC_API ic_api(CanisterUpdate{"run_decision_full"}, false);
+  if (!has_admin_update_or_whitelisted(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    co_return;
+  }
+  decision_request req;
+  decision_request_from_wire(ic_api, req);
+  const std::string principal_id = ic_api.get_caller().get_text();
+
+  step_limits limits;
+  uint64_t input_tokens = 0;
+  uint32_t steps = 0;
+  decision_step r;
+  while (true) {
+    const uint64_t i0 = instruction_counter();
+    r = run_decision_step(req, principal_id, limits);
+    ++steps;
+    input_tokens += r.input_tokens;
+    log_line("full: step " + std::to_string(steps) + ", " +
+             std::to_string(r.input_tokens) + " tokens, " +
+             std::to_string(r.pending.size()) + " pending, " +
+             billions(instruction_counter() - i0) + " instructions");
+    if (!r.error.empty() || r.pending.empty()) break;
+    if (r.input_tokens == 0) {
+      // Nothing fits the message of a step after a yield: a single forward
+      // pass of this model and question is too large for it.
+      r.error = "run_decision_full: question " + r.pending.front() +
+                " needs more instructions than a step after a yield has; "
+                "answer it with run_decision";
+      break;
+    }
+    // Commit this step and continue in a new message. On an error (the
+    // canister is stopping, or the yield was not performed), reply with the
+    // answers so far: the rest is pending.
+    IC_CallResult<void> y = co_await ic_api.yield_fresh_budget();
+    if (!y) {
+      log_line("full: yield failed: " + y.error().to_string());
+      break;
+    }
+    limits.kev_max = DECISION_CALLBACK_INSTRUCTIONS;
+    limits.laya_max = DECISION_CALLBACK_INSTRUCTIONS;
+  }
+  r.input_tokens = input_tokens;
+  send_step(ic_api, r);
+}
+
+// One update call that answers the whole request, yielding to itself between
+// steps.
+void run_decision_full() { run_decision_full_async(); }
 
 //
 // stored states: pins, and removing a scope

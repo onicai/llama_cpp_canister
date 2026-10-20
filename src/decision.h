@@ -11,6 +11,8 @@ struct llama_model;
 // The model answers each question in one forward pass; no token is generated.
 // See README-decision-models.md.
 void run_decision() WASM_SYMBOL_EXPORTED("canister_update run_decision");
+void run_decision_full()
+    WASM_SYMBOL_EXPORTED("canister_update run_decision_full");
 
 // kev stored states, below .canister_cache/<caller>/sessions/<scope>/:
 // remove a scope with all its files, and pin a state so that neither the

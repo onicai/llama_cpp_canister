@@ -357,7 +357,7 @@ type DecisionOutputRecord = record {
   state_tokens : opt nat64;
   state_tokens_remaining : opt nat64;
   state_key : opt text;     // kev: the name of the stored state (pin_decision_state)
-  instructions : opt nat64; // the instructions this call used (performance counter 0)
+  instructions : opt nat64; // the instructions this call used, over all its messages (call context counter)
 };
 type DecisionPinInputRecord = record {
   scope : text;     // "" = the states of requests without a scope
@@ -393,6 +393,7 @@ service : {
   run_update : (InputRecord) -> (OutputRecordResult);
   run_update_full : (InputRecord) -> (OutputRecordResult); // the whole response in one call (self-call yields)
   run_decision : (DecisionInputRecord) -> (DecisionResult);
+  run_decision_full : (DecisionInputRecord) -> (DecisionResult); // the whole request in one call (self-call yields)
   remove_decision_scope : (text) -> (StatusCodeRecordResult); // all of the caller's files of a scope
   pin_decision_state : (DecisionPinInputRecord) -> (StatusCodeRecordResult);
   unpin_decision_state : (DecisionUnpinInputRecord) -> (StatusCodeRecordResult);
