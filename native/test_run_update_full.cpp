@@ -89,30 +89,6 @@ Out decode_out(const std::string &hex, bool full = false) {
   return o;
 }
 
-// The status code of a reply, Ok or Err.
-uint16_t status_of(const std::string &hex) {
-  uint16_t status_code = 0;
-  std::string text;
-  bool eog = false;
-  CandidTypeRecord r;
-  r.append("status_code", CandidTypeNat16{&status_code});
-  r.append("conversation", CandidTypeText{&text});
-  r.append("output", CandidTypeText{&text});
-  r.append("error", CandidTypeText{&text});
-  r.append("prompt_remaining", CandidTypeText{&text});
-  r.append("generated_eog", CandidTypeBool{&eog});
-  std::string label;
-  CandidTypeVariant v{&label};
-  v.append("Ok", r);
-  v.append("Err", r);
-  VecBytes bytes;
-  bytes.store_hex_string(hex);
-  CandidArgs args;
-  args.append(v);
-  CandidDeserialize(bytes, args);
-  return status_code;
-}
-
 // The args of a greedy run on `cache`, with prompt and -n.
 std::vector<std::string> run_args(const std::string &cache,
                                   const std::string &prompt,
@@ -165,6 +141,30 @@ void check(bool ok, const std::string &what) {
 }
 
 } // namespace
+
+// The status code of a reply, Ok or Err.
+uint16_t status_of(const std::string &hex) {
+  uint16_t status_code = 0;
+  std::string text;
+  bool eog = false;
+  CandidTypeRecord r;
+  r.append("status_code", CandidTypeNat16{&status_code});
+  r.append("conversation", CandidTypeText{&text});
+  r.append("output", CandidTypeText{&text});
+  r.append("error", CandidTypeText{&text});
+  r.append("prompt_remaining", CandidTypeText{&text});
+  r.append("generated_eog", CandidTypeBool{&eog});
+  std::string label;
+  CandidTypeVariant v{&label};
+  v.append("Ok", r);
+  v.append("Err", r);
+  VecBytes bytes;
+  bytes.store_hex_string(hex);
+  CandidArgs args;
+  args.append(v);
+  CandidDeserialize(bytes, args);
+  return status_code;
+}
 
 // run_update_full against a run_update loop, and with other calls in between.
 void test_run_update_full(MockIC &mockIC) {

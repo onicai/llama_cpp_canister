@@ -224,9 +224,10 @@ const uint64_t RUN_CALLBACK_INSTRUCTIONS = 34'000'000'000ULL;
 // A runaway guard: a run_update_full never takes more chunks than this.
 const uint32_t FULL_MAX_CHUNKS = 500;
 
-// The sessions with a run_update_full in flight: which call holds each, and
-// when it last made progress. Two generations on one session file overwrite
-// each other's progress (and never finish), so another call on it is refused.
+// The sessions with a run_update_full in flight (and a key of its own for each
+// run_decision_full): which call holds each, and when it last made progress.
+// Two generations on one session file overwrite each other's progress (and
+// never finish), so another call on it is refused.
 // An entry is removed when its generation ends. A trap in the first message
 // rolls the entry back with it, but a trap after a yield leaves it: the
 // cleanup destroys the coroutine without running its destructors (icpp-pro's
@@ -275,30 +276,33 @@ bool full_call_running(const std::string &caller) {
   return true;
 }
 
-// Holds the session `key` while it is in scope.
-struct SessionBusy {
-  std::string key;
-  uint64_t owner;
-  // Holds `key` for a new owner, from now.
-  explicit SessionBusy(const std::string &k)
-      : key(k), owner(++g_full_busy_owner) {
-    g_full_busy[key] = {owner, IC_API::time()};
-  }
-  // Marks progress, so a call that is still running does not expire. False
-  // when the entry expired, and this call no longer holds `key`.
-  bool touch() {
-    auto it = g_full_busy.find(key);
-    if (it == g_full_busy.end() || it->second.owner != owner) return false;
-    it->second.seen_ns = IC_API::time();
-    return true;
-  }
-  // Releases the session, unless it expired and another call holds it now.
-  ~SessionBusy() {
-    auto it = g_full_busy.find(key);
-    if (it != g_full_busy.end() && it->second.owner == owner)
-      g_full_busy.erase(it);
-  }
-};
+bool reject_model_change_if_busy(IC_API &ic_api, const std::string &caller) {
+  if (!full_call_running(caller)) return false;
+  send_output_record_result_error_to_wire(
+      ic_api, Http::StatusCode::Conflict,
+      "a run_update_full or run_decision_full is running: cannot change the "
+      "model.");
+  return true;
+}
+
+// Holds `key` for a new owner, from now.
+SessionBusy::SessionBusy(const std::string &k)
+    : key(k), owner(++g_full_busy_owner) {
+  g_full_busy[key] = {owner, IC_API::time()};
+}
+
+bool SessionBusy::touch() {
+  auto it = g_full_busy.find(key);
+  if (it == g_full_busy.end() || it->second.owner != owner) return false;
+  it->second.seen_ns = IC_API::time();
+  return true;
+}
+
+SessionBusy::~SessionBusy() {
+  auto it = g_full_busy.find(key);
+  if (it != g_full_busy.end() && it->second.owner == owner)
+    g_full_busy.erase(it);
+}
 
 // Calls main_, just like it is called in the llama-cli app. max_instructions
 // > 0 stops decoding before that many instructions (see main_).
@@ -444,12 +448,9 @@ void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
 
   // If we're going to load a new model, first free the Orthogonally Persisted memory of a previously loaded model
   if (!req.params.model.empty()) {
-    if (full_call_running(is_query ? "run_query" : "run_update")) {
-      send_output_record_result_error_to_wire(
-          ic_api, Http::StatusCode::Conflict,
-          "a run_update_full is running: cannot change the model.");
+    if (reject_model_change_if_busy(ic_api,
+                                    is_query ? "run_query" : "run_update"))
       return;
-    }
     icpp_free_model();
   }
 

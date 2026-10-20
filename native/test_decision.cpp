@@ -11,6 +11,7 @@
 // the one of llama.cpp PR #29818 (see README-decision-models.md).
 
 #include "test_decision.h"
+#include "test_run_update_full.h"
 
 #include "../src/cache_cleanup.h"
 #include "../src/decision.h"
@@ -643,6 +644,25 @@ void test_decision_kev(MockIC &mockIC) {
     check(r.p_probability == full.p_probability,
           "kev full: probabilities differ from the one-call run");
     check(r.a_choice == full.a_choice, "kev full: choices differ");
+  }
+
+  // --- the model must not change while a run_decision_full is suspended
+  //     between its steps
+  remove_stored_states(controller);
+  {
+    mockIC.set_auto_drain(false);
+    MockIC::CallHandle full_call = mockIC.start_call(
+        "kev full held", run_decision_full, KEV_REQUEST, controller);
+    check(mockIC.pending_calls() == 1, "kev full held: yielded");
+    MockIC::CallHandle reload = mockIC.start_call(
+        "kev full held: load_model", load_model, LOAD_KEV, controller);
+    check(mockIC.call_done(reload) &&
+              status_of(mockIC.reply_hex(reload)) == 409,
+          "load_model while a run_decision_full is running gets 409");
+    mockIC.drain();
+    mockIC.set_auto_drain(true);
+    check(mockIC.call_done(full_call) && !mockIC.was_rejected(full_call),
+          "kev full held: completes");
   }
 
   // --- a new request about the stored state: only the question is decoded,

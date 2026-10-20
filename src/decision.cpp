@@ -39,6 +39,7 @@
 #include "main_.h"
 #include "max_tokens.h"
 #include "promptcache.h"
+#include "run.h"
 #include "utils.h"
 
 // "common/" prefix: a bare "common.h" resolves to ggml/src/ggml-cpu/common.h,
@@ -1839,6 +1840,10 @@ static IC_Async run_decision_full_async() {
   decision_request req;
   decision_request_from_wire(ic_api, req);
   const std::string principal_id = ic_api.get_caller().get_text();
+  // Keeps the model from changing while this call is suspended between steps.
+  // Answers need no lock: each step reloads them, and they are deterministic.
+  static uint64_t n_calls = 0;
+  SessionBusy busy{"run_decision_full#" + std::to_string(++n_calls)};
 
   step_limits limits;
   uint64_t input_tokens = 0;
@@ -1872,6 +1877,7 @@ static IC_Async run_decision_full_async() {
     }
     limits.kev_max = DECISION_CALLBACK_INSTRUCTIONS;
     limits.laya_max = DECISION_CALLBACK_INSTRUCTIONS;
+    busy.touch();
   }
   r.input_tokens = input_tokens;
   send_step(ic_api, r);
