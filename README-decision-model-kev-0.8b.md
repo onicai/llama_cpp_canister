@@ -12,11 +12,11 @@
 >
 > It runs on the **same `llama_cpp` canister** as the chat models.
 
-![Kev-0.8B in a canister: a DEXSwapper support ticket is stored over several calls, five questions are answered from it, then a follow-up message is appended and only the new tokens are ingested](images/kev-0.8b-decision.gif)
+![Kev-0.8B in a canister: one run_decision_full call stores a DEXSwapper support ticket and answers five questions about it; a second call appends a follow-up message, ingests only the new tokens and answers two questions; a third call answers one more question from the stored ticket](images/kev-0.8b-decision.gif)
 
-_The demo below with the `run_decision` loop, recorded on a local network: top, the
-calls; bottom, the canister log. The storing calls are shown at 4x speed. The walkthrough
-below does the same with one `run_decision_full` call per request._
+_The walkthrough below, recorded on a local network: top, one `run_decision_full` call per
+request; bottom, the canister log, with a line per step. The two longer calls are shown at
+4x speed._
 
 # Ingest once, ask many
 
