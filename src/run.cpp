@@ -270,6 +270,8 @@ static void send_run_ok(IC_API &ic_api, const std::string &conversation_text,
   ic_api.to_wire(CandidTypeVariant{"Ok", r_out});
 }
 
+// One run_query or run_update call: read the request, run one chunk of at most
+// max_tokens, and reply.
 void run(IC_API &ic_api, const uint64_t &max_tokens, bool is_query) {
   RunRequest req;
   if (!run_request_from_wire(ic_api, is_query, req)) return;

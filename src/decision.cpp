@@ -1770,6 +1770,7 @@ decision_step run_decision_step(const decision_request &req,
   return r;
 }
 
+// Replies with the outcome of a step: its error, or the answers so far.
 void send_step(IC_API &ic_api, const decision_step &r) {
   if (!r.error.empty()) {
     send_error(ic_api, r.error);
@@ -1781,6 +1782,8 @@ void send_step(IC_API &ic_api, const decision_step &r) {
 
 } // namespace
 
+// One run_decision call: answers what fits one message, and replies with the
+// answers so far and what is still pending.
 void run_decision() {
   IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
   if (!has_admin_update_or_whitelisted(ic_api)) {
