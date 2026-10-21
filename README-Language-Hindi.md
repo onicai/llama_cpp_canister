@@ -162,10 +162,11 @@ length.
 ## Recommendation
 
 Use **Gemma-3-1B-it** for Hindi, with `max_tokens_update = 0` (no cap) and one
-`run_update_full` call per quote. Each chunk then does as many tokens as fit (~11, the
-ceiling below), and the 11 calls of the table become 11 chunks of that one call. The
-`max_tokens` values in the tables above are what those measurements used with the
-`run_update` loop.
+`run_update_full` call per quote. Each chunk then does as many tokens as fit (up to the
+ceiling of 11 below), so the calls of the table become chunks of that one call. On a
+local network, a short Hindi quote request (23 prompt tokens) took one call of 43s: 12
+chunks, 87 tokens of valid Hindi, ending on EOG. The `max_tokens` values in the tables
+above are what those measurements used with the `run_update` loop.
 
 | fact                        | value                                                              |
 | --------------------------- | ------------------------------------------------------------------ |
