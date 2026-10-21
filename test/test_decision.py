@@ -706,6 +706,12 @@ def test__no_budget_never_traps(network: str) -> None:
     r = decide(network, request, method="run_decision_full")
     if os.environ.get("DECISION_MODEL", "julia-1") == "laya":
         assert "Err" in r and "Reject" not in str(r["Err"]), r
+        # a single pass known to need more than one update call is an error,
+        # not a trap (the rate is measured by the calls above)
+        long_q = {"intent": dict(m["questions"]["intent"])}
+        long_q["intent"]["instructions"] = " ".join(["Read the message carefully."] * 12)
+        r = decide(network, flat(m["state"], long_q))
+        assert "Err" in r and "more than one update call has" in str(r["Err"]), r
         return
     assert "Ok" in r, r
     assert probabilities(r["Ok"]) == probabilities(budgeted)
