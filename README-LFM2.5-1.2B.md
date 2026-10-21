@@ -78,16 +78,18 @@ Measured on mainnet at `-c 4096` by walking `max_tokens_update` until `IC0522`:
 | **9** | **ok — the ceiling** |
 | 10    | rejected, `IC0522` instruction limit |
 
+Set `max_tokens_update = 0` (no cap), and every update call, and every chunk of a
+`run_update_full`, stops by itself before the instruction limit, at whatever the
+ceiling is for the conversation so far:
+
 ```bash
 icp canister call llama_cpp_qwen3_17b set_max_tokens \
-  '(record { max_tokens_query = 1 : nat64; max_tokens_update = 8 : nat64 })' -e production
+  '(record { max_tokens_query = 1 : nat64; max_tokens_update = 0 : nat64 })' -e production
 ```
 
-Use **8**, not 9, in production: the ceiling shrinks as a conversation grows, and
-a larger `--ctx-size` lowers it too — see
-[Appendix A: max_tokens](README.md#appendix-a-max_tokens) for why the context you
-allocate is a flat tax on every call. Overshooting is safe to recover from: the
-call is rejected with `IC0522` and rolled back, leaving the prompt cache intact.
+The ceiling shrinks as a conversation grows, and a larger `--ctx-size` lowers it too —
+see [Appendix A: max_tokens](README.md#appendix-a-max_tokens) for why the context you
+allocate is a flat tax on every call.
 
 ## The prompt — read this before judging quality
 
@@ -146,8 +148,11 @@ No leaks, every one terminated on its own, and the prompt-cache round trip works
 across calls. (COFFEE is worth noting: Granite-4.0-1B leaks it deterministically
 — `"made from roasted coffee beans"` — which is why Granite was rejected.)
 
-The ingest call counts above were taken at `max_tokens_update = 4`. At the
-measured ceiling of 8 they drop by half.
+The ingest call counts above were taken with the `run_update` loop at
+`max_tokens_update = 4`. With `max_tokens_update = 0`, one `run_update_full` call does
+the whole flow: on a local network, DOG took 38s (14 chunks, the 100-token prompt and a
+14-token answer) and returned the same hint, `A loyal companion with a wagging tail and
+playful spirit.`
 
 ### Two output details for the app
 

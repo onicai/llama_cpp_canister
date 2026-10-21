@@ -146,13 +146,15 @@ warmup peak.)
 ```bash
 icp canister call llama_cpp -e local set_max_tokens '(record {
   max_tokens_query = 1 : nat64;
-  max_tokens_update = 4 : nat64
+  max_tokens_update = 0 : nat64
 })'
 ```
 
-`max_tokens_update = 4` is the recommended value for this model (see limit #2
-above). Ingestion and generation both advance 4 tokens per `run_update` call, so
-your app must loop `run_update` more times per response than with the 0.6B.
+`0` means no cap: every update call, and every chunk of a `run_update_full`, stops by
+itself before it would use more than 36B instructions (the IC's limit is 40B). It
+adapts as the conversation grows, so you no longer need to pick a value that holds for
+the whole conversation. For this model that is ~6 tokens per call or chunk, so a response
+takes more chunks than with the 0.6B.
 
 ### Measured ceilings
 
@@ -195,24 +197,9 @@ make them shrink:
   > longer does. See [Appendix A: max_tokens](README.md#appendix-a-max_tokens)
   > for the per-context instruction budget.
 
-That is why **4** — not the measured maximum — is the recommended setting: it has to
-hold for the whole conversation, at whatever context you loaded.
-
-If you want the extra throughput, `max_tokens_update` is a normal setting you can
-change between phases. Ingesting a long system prompt at 8 halves the round-trips:
-
-```bash
-# ingest at 8 ...
-icp canister call llama_cpp -e local set_max_tokens '(record { max_tokens_query = 1 : nat64; max_tokens_update = 8 : nat64 })'
-#   ... loop run_update with -p "<prompt>" until prompt_remaining is empty ...
-# ... then generate at 4
-icp canister call llama_cpp -e local set_max_tokens '(record { max_tokens_query = 1 : nat64; max_tokens_update = 4 : nat64 })'
-```
-
-Overshooting is now **safe to recover from**: since the batch fix in limit #2, a value
-that is too large is rejected with `IC0522` and the message is rolled back, leaving the
-prompt cache intact — so an app may probe upward and fall back on rejection. Before
-that fix, any value above the loaded `--batch-size` trapped and corrupted the cache.
+With `max_tokens_update = 0` you do not need to pick a value from this table: each call
+and chunk measures its own cost and stops in time. The table tells how many tokens a call
+or chunk does.
 
 ## Chat — word-guessing game example
 
@@ -245,43 +232,36 @@ icp canister call llama_cpp -e local new_chat '(record {
 })'
 ```
 
-Ingest the prompt — repeat until `prompt_remaining` is empty (keep sending the full
-prompt):
+Ingest the prompt and generate the whole response, in one call:
 
 ```bash
-icp canister call llama_cpp -e local run_update '(record {
+icp canister call llama_cpp -e local run_update_full '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
     "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
     "--temp"; "0.5"; "--top-p"; "0.8"; "--top-k"; "20"; "--repeat-penalty"; "1.1";
     "-sp";
     "-p"; "<|im_start|>system\nYou support a word-guessing game. When asked for a hint about a word, give ONE short clue that describes what the thing IS or DOES, using other words, without writing the word itself.\nExample:\nRequest: Provide a hint about CAT. Do not mention CAT.\nHint: A small furry pet that purrs and loves to chase mice.<|im_end|>\n<|im_start|>user\nProvide a hint about DOG. Do not mention DOG.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
-    "-n"; "1"
+    "-n"; "512"
   }
 })'
 ```
 
-Generate — repeat with an empty prompt until `generated_eog=true`:
+On a local network this took 71s: 27 chunks, for the 101-token prompt and the 11-token
+answer. The `output`:
 
-```bash
-icp canister call llama_cpp -e local run_update '(record {
-  args = vec {
-    "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
-    "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
-    "--temp"; "0.5"; "--top-p"; "0.8"; "--top-k"; "20"; "--repeat-penalty"; "1.1";
-    "-sp";
-    "-p"; "";
-    "-n"; "4"
-  }
-})'
+```
+A loyal companion that barks and plays fetch.<|im_end|>
 ```
 
-### Concatenating generation calls — drop the boundary-repeat token
+To show the text while it is being generated, use the `run_update` loop instead (see the
+[main README](README.md#set-up)).
 
-Because generation is split across many small `run_update` calls, **each generation
-call after the first repeats the previous call's last token as its own first
-token**. For example, generating "A loyal companion that barks and plays fetch."
-comes back as:
+### Concatenating `run_update` calls — check for a boundary-repeat token
+
+Earlier builds, at 4 tokens per call, repeated the previous call's last token as the first
+token of each generation call after the first. For example, "A loyal companion that barks
+and plays fetch." came back as:
 
 ```
 gen 0: "A loyal companion that"
@@ -290,12 +270,10 @@ gen 2: " and plays fetch."     <- repeats "and"
 gen 3: ".<|im_end|>"           <- repeats "."
 ```
 
-When your app stitches the pieces together, drop the leading duplicate token of each
-call after the first (or collapse adjacent identical tokens). That yields the clean
-output. `--repeat-penalty` does **not** remove this — each `run_update` uses a fresh
-sampler that cannot see the prior call's last token, so it is a mechanical
-call-boundary artifact, not a sampling problem. (The 0.6B rarely shows it because it
-emits ~20–28 tokens per call; the 1.7B, capped at 4, crosses many more boundaries.)
+The one `run_update_full` call above returns its chunks' outputs joined, and they did not
+repeat a token. If your app joins the outputs of a `run_update` loop, still check for it:
+drop the leading token of a call that repeats the previous call's last one.
+`--repeat-penalty` does not remove it, because each call uses a fresh sampler.
 
 Remove the prompt cache when done:
 
