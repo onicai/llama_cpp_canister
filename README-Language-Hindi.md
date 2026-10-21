@@ -171,14 +171,14 @@ local network, a short Hindi quote request (23 prompt tokens) took one call of 4
 chunks, 87 tokens of valid Hindi, ending on EOG. The `max_tokens` values in the tables
 above are what those measurements used with the `run_update` loop.
 
-| fact                        | value                                                              |
-| --------------------------- | ------------------------------------------------------------------ |
-| gguf (Q4_K_M)               | 806,058,240 B                                                        |
-| gguf sha256                 | `8ccc5cd1f1b3602548715ae25a66ed73fd5dc68a210412eea643eb20eb75a135`   |
-| wasm heap after load        | 911,736,832 B (869 MiB)                                              |
-| load args                   | `-c 4096 --batch-size 8 --ubatch-size 8 --cache-type-k q8_0 --cache-type-v q8_0` |
-| generation ceiling          | 11 tokens/call (12 → `IC0522`), same for Hindi and English           |
-| Hindi quote                 | 11 calls or chunks, terminates with EOG                              |
+| fact                 | value                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| gguf (Q4_K_M)        | 806,058,240 B                                                                            |
+| gguf sha256          | `8ccc5cd1f1b3602548715ae25a66ed73fd5dc68a210412eea643eb20eb75a135`                       |
+| wasm heap after load | 911,736,832 B (869 MiB)                                                                  |
+| load args            | `-c 4096 --batch-size 8 --ubatch-size 8 --cache-type-k q8_0 --cache-type-v q8_0`         |
+| generation ceiling   | 11 tokens/call (12 → `IC0522`), same for Hindi and English                               |
+| Hindi quote          | 11 calls of the `run_update` loop, or 12 chunks of one `run_update_full`; ends with EOG  |
 
 ```bash
 mkdir -p models/google/gemma-3-1b-it-GGUF
