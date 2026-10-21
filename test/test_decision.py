@@ -695,14 +695,17 @@ def test__no_budget_never_traps(network: str) -> None:
     """
     m = model()
     request = flat(m["state"], m["questions"])
-    set_budget(network, 0 if is_kev() else m["budget"])
-    request["scope"] = [f"budget{int(time.time())}"]
-    budgeted = decide_all(network, request)[-1]
-
+    # the request without a cap goes first: a trap there must not be missed
     set_budget(network, 0)
     request["scope"] = [f"nocap{int(time.time())}"]
     looped = decide_all(network, request)[-1]
+
+    set_budget(network, 0 if is_kev() else m["budget"])
+    request["scope"] = [f"budget{int(time.time())}"]
+    budgeted = decide_all(network, request)[-1]
     assert probabilities(looped) == probabilities(budgeted)
+
+    set_budget(network, 0)
 
     request["scope"] = [f"nocapfull{int(time.time())}"]
     r = decide(network, request, method="run_decision_full")
