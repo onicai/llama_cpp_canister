@@ -685,3 +685,43 @@ def test__run_decision_full_equals_loop(network: str) -> None:
     ]
     # the whole call: at least the instructions of its last step
     assert len(ok["instructions"]) == 1 and ok["instructions"][0] > 0, ok
+
+
+def test__no_budget_never_traps(network: str) -> None:
+    """max_tokens_update = 0 (no cap): each call stops before the instruction
+    limit, so the loop and run_decision_full answer what the budgeted loop does.
+    A laya pass too large for one message is an Err once the model's rate is
+    measured; the first pass after load_model is not checked (it can trap).
+    """
+    m = model()
+    request = flat(m["state"], m["questions"])
+    # the request without a cap goes first: a trap there must not be missed
+    set_budget(network, 0)
+    request["scope"] = [f"nocap{int(time.time())}"]
+    looped = decide_all(network, request)[-1]
+
+    set_budget(network, 0 if is_kev() else m["budget"])
+    request["scope"] = [f"budget{int(time.time())}"]
+    budgeted = decide_all(network, request)[-1]
+    assert probabilities(looped) == probabilities(budgeted)
+
+    set_budget(network, 0)
+
+    request["scope"] = [f"nocapfull{int(time.time())}"]
+    r = decide(network, request, method="run_decision_full")
+    if os.environ.get("DECISION_MODEL", "julia-1") == "laya":
+        # the first step answers a question; the callback after the yield
+        # cannot fit the next one
+        assert "Err" in r and "Reject" not in str(r["Err"]), r
+        assert "needs more instructions than a step after a yield has" in str(
+            r["Err"]
+        ), r
+        # a single pass known to need more than one update call is an error,
+        # not a trap (the rate is measured by the calls above)
+        long_q = {"intent": dict(m["questions"]["intent"])}
+        long_q["intent"]["instructions"] = " ".join(["Read the message carefully."] * 12)
+        r = decide(network, flat(m["state"], long_q))
+        assert "Err" in r and "more than one update call has" in str(r["Err"]), r
+        return
+    assert "Ok" in r, r
+    assert probabilities(r["Ok"]) == probabilities(budgeted)
