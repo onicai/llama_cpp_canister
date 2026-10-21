@@ -12,8 +12,8 @@ lines and appends them to:
 Each line starts with the index and time of its first record. A restart resumes after
 the last saved record (kept in scripts/logs-<network>/<canister>.next, with the canister
 id). It starts over when the id changed, or when the log no longer reaches that record
-(a recreated local network). It warns when records were lost between two polls; then
-lower --interval.
+(a recreated local network). It warns when records were lost between two polls, and
+marks the next line "[may be truncated]"; then lower --interval.
 
 Run with:
 
@@ -102,6 +102,7 @@ class Lines:  # pylint: disable=too-few-public-methods
     def __init__(self) -> None:
         self.first: Optional[Dict[str, Any]] = None  # first record of `text`
         self.text = ""
+        self.after_loss = False  # records were lost before `text`
 
     def add(self, record: Dict[str, Any]) -> List[str]:
         """Adds a record; returns the lines it completes."""
@@ -112,7 +113,9 @@ class Lines:  # pylint: disable=too-few-public-methods
         while "\n" in self.text:
             line, self.text = self.text.split("\n", 1)
             if line:  # a blank line carries nothing
-                lines.append(f"{stamp(self.first)}: {line}")
+                marker = "[may be truncated] " if self.after_loss else ""
+                lines.append(f"{stamp(self.first)}: {marker}{line}")
+                self.after_loss = False
             self.first = record
         if not self.text:
             self.first = None
@@ -148,6 +151,14 @@ def retry(fetch: Callable[[], Optional[T]], interval: float) -> T:
         if result is not None:
             return result
         time.sleep(interval)
+
+
+def positive(value: str) -> float:
+    """An argparse type: a number of seconds greater than 0."""
+    seconds = float(value)
+    if seconds <= 0:
+        raise argparse.ArgumentTypeError(f"{value} is not greater than 0")
+    return seconds
 
 
 def read_next_index(path: Path, cid: str) -> Optional[int]:
@@ -200,7 +211,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--interval",
-        type=float,
+        type=positive,
         default=1.0,
         help="seconds between polls (default: 1)",
     )
@@ -261,6 +272,7 @@ def main() -> int:
                         "records were lost between two polls; lower --interval",
                         file=sys.stderr,
                     )
+                    lines[canister].after_loss = True
                 done: List[str] = []
                 for record in records:
                     done += lines[canister].add(record)
