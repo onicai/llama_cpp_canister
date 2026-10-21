@@ -232,7 +232,8 @@ call.
   returns an `Err` that names it and points to `run_decision` (see the Laya limit
   below). Continue that request with `run_decision`.
 - **`pending`:** an `Ok` with a non-empty `pending` means the call stopped early,
-  because the canister is stopping. Re-send the request with `run_decision` (or
+  because its next self-call could not be made, for example when the canister is
+  stopping. Re-send the request with `run_decision` (or
   `run_decision_full`) to continue from the answers so far.
 - **The model stays loaded:** while a `run_decision_full` runs, `load_model` gets
   status 409.
