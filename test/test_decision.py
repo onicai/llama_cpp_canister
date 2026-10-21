@@ -690,6 +690,8 @@ def test__run_decision_full_equals_loop(network: str) -> None:
 def test__no_budget_never_traps(network: str) -> None:
     """max_tokens_update = 0 (no cap): each call stops before the instruction
     limit, so the loop and run_decision_full answer what the budgeted loop does.
+    A laya pass too large for one message is an Err once the model's rate is
+    measured; the first pass after load_model is not checked (it can trap).
     """
     m = model()
     request = flat(m["state"], m["questions"])
