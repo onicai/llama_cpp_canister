@@ -13,7 +13,7 @@ Each line starts with the index and time of its first record. A restart resumes 
 the last saved record (kept in scripts/logs-<network>/<canister>.next, with the canister
 id). It starts over when the id changed, or when the log no longer reaches that record
 (a recreated local network). It warns when records were lost between two polls, and
-marks the next line "[may be truncated]"; then lower --interval.
+marks the next line "[may be truncated]", also after a restart; then lower --interval.
 
 Run with:
 
@@ -24,6 +24,7 @@ Run with:
 import argparse
 import datetime
 import json
+import math
 import os
 import signal
 import subprocess
@@ -32,7 +33,7 @@ import time
 from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, TypeVar
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, TypeVar
 
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent
@@ -154,26 +155,29 @@ def retry(fetch: Callable[[], Optional[T]], interval: float) -> T:
 
 
 def positive(value: str) -> float:
-    """An argparse type: a number of seconds greater than 0."""
+    """An argparse type: a finite number of seconds greater than 0."""
     seconds = float(value)
-    if seconds <= 0:
-        raise argparse.ArgumentTypeError(f"{value} is not greater than 0")
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError(f"{value} is not a number greater than 0")
     return seconds
 
 
-def read_next_index(path: Path, cid: str) -> Optional[int]:
-    """The index to resume from, saved by an earlier run for canister `cid`."""
+def read_next_index(path: Path, cid: str) -> Tuple[Optional[int], bool]:
+    """The index to resume from, saved by an earlier run for canister `cid`, and
+    whether records were lost before it."""
     try:
-        saved_id, index = path.read_text(encoding="utf-8").split()
-        return int(index) if saved_id == cid else None
+        saved_id, index, *lost = path.read_text(encoding="utf-8").split()
+        if saved_id == cid:
+            return int(index), lost == ["lost"]
     except (OSError, ValueError):
-        return None
+        pass
+    return None, False
 
 
-def save_next_index(path: Path, cid: str, index: int) -> None:
+def save_next_index(path: Path, cid: str, index: int, lost: bool) -> None:
     """Saves the index to resume from, replacing the file in one step."""
     tmp = path.with_suffix(".next.tmp")
-    tmp.write_text(f"{cid} {index}", encoding="utf-8")
+    tmp.write_text(f"{cid} {index}" + (" lost" if lost else ""), encoding="utf-8")
     tmp.replace(path)
 
 
@@ -245,7 +249,9 @@ def main() -> int:
         c: retry(partial(canister_id, c, args.network, identity), args.interval)
         for c in canisters
     }
-    next_index = {c: read_next_index(next_file[c], cid[c]) for c in canisters}
+    saved = {c: read_next_index(next_file[c], cid[c]) for c in canisters}
+    next_index = {c: saved[c][0] for c in canisters}
+    lines = {c: Lines() for c in canisters}
     for c in canisters:
         # a log that no longer reaches the saved index belongs to a new canister
         last = retry(
@@ -256,7 +262,8 @@ def main() -> int:
         ):
             print(f"[monitor] {c}: a new log, starting from its first record")
             next_index[c] = None
-    lines = {c: Lines() for c in canisters}
+        else:
+            lines[c].after_loss = saved[c][1]
     try:
         while True:
             for canister in canisters:
@@ -282,9 +289,16 @@ def main() -> int:
                 next_index[canister] = resume
                 with uninterrupted():
                     write(canister, done)
-                    save_next_index(next_file[canister], cid[canister], resume)
+                    save_next_index(
+                        next_file[canister],
+                        cid[canister],
+                        resume,
+                        lines[canister].after_loss,
+                    )
                 if pending:  # fetched again from there on the next poll
+                    after_loss = lines[canister].after_loss
                     lines[canister] = Lines()
+                    lines[canister].after_loss = after_loss
             time.sleep(args.interval)
     except KeyboardInterrupt:
         print("\n[monitor] stopped")
