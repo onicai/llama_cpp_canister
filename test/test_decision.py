@@ -710,7 +710,12 @@ def test__no_budget_never_traps(network: str) -> None:
     request["scope"] = [f"nocapfull{int(time.time())}"]
     r = decide(network, request, method="run_decision_full")
     if os.environ.get("DECISION_MODEL", "julia-1") == "laya":
+        # the first step answers a question; the callback after the yield
+        # cannot fit the next one
         assert "Err" in r and "Reject" not in str(r["Err"]), r
+        assert "needs more instructions than a step after a yield has" in str(
+            r["Err"]
+        ), r
         # a single pass known to need more than one update call is an error,
         # not a trap (the rate is measured by the calls above)
         long_q = {"intent": dict(m["questions"]["intent"])}
