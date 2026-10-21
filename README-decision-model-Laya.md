@@ -88,16 +88,17 @@ returns an `Err` for a question that would not fit. The first question after `lo
 is not checked: if it is too long, the IC rejects the call (`IC0522`). To always get a
 clear `Err` with the question's token count, set `max_tokens_update` to 32.
 
-**Use `run_decision`, not `run_decision_full`, for Laya.** A message after a yield has a
-limit of 38B instructions, and one Laya question of ~30 tokens needs ~35B, more than a
-step after a yield may use. `run_decision_full` answers the first question, then returns
-an error that points to `run_decision`. Each `run_decision` call runs in a first message,
-which fits one question.
+**Send one question per request.** `run_decision_full` answers the first question of a
+request in the call's first message, which has room for any one Laya question (up to 33
+tokens, ~39B instructions). Further questions would run after a yield, in a message with
+a limit of 38B, where a Laya question of ~30 tokens (~35B) does not fit:
+`run_decision_full` then returns an error for the second question. So send each question
+in its own request.
 
 ## Ask a question
 
 ```bash
-icp canister call llama_cpp run_decision '(record { state = variant { Text = "Charged twice for order 4471, refund please!" }; questions = vec { record { id = "intent"; kind = variant { choice }; instructions = "Intent?" } }; options = vec { record { question_id = "intent"; key = "refund"; description = "" }; record { question_id = "intent"; key = "cancel"; description = "" }; record { question_id = "intent"; key = "track"; description = "" }; record { question_id = "intent"; key = "other"; description = "" } } })' -e local
+icp canister call llama_cpp run_decision_full '(record { state = variant { Text = "Charged twice for order 4471, refund please!" }; questions = vec { record { id = "intent"; kind = variant { choice }; instructions = "Intent?" } }; options = vec { record { question_id = "intent"; key = "refund"; description = "" }; record { question_id = "intent"; key = "cancel"; description = "" }; record { question_id = "intent"; key = "track"; description = "" }; record { question_id = "intent"; key = "other"; description = "" } } })' -e local
 ```
 
 Verified on-chain output (local replica), and the canister log:
@@ -107,10 +108,12 @@ answers = vec { record { id = "intent"; kind = variant { choice }; choice = "ref
 input_tokens = 29; pending = vec {};
 
 llama_cpp: run_decision - intent (choice, 29 tokens) -> refund (p=0.95, confidence=0.93)
+llama_cpp: run_decision - full: step 1, 29 tokens, 0 pending, 34.50 B instructions
 ```
 
-The three compact questions above, sent as one request, are answered in 3 `run_decision`
-calls (29 + 32 + 31 tokens):
+The three compact questions of `test/test_decision.py`, sent as three one-question
+requests to `run_decision_full`, are each answered in one call of ~4 s (29, 32 and 31
+tokens, 34.5B to 38.4B instructions):
 
 | Question    | Canister     | llama-server (CPU) |
 |-------------|--------------|--------------------|

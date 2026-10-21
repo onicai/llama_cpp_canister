@@ -196,8 +196,8 @@ question must fit within **one update call's instruction limit** (40 B
 instructions). This sets the maximum size of a question (instructions + options +
 state): measured ~210 tokens for Julia-1 and 33 tokens for Laya.
 
-A request with several questions is still fine: `run_decision` answers as many as fit in
-one call and returns the rest as `pending` (see below).
+A request with several questions is still fine: `run_decision_full` answers all of them
+in one call, one step per message (see below).
 
 **Kev-0.8B lifts this constraint for the state.** Kev is causal (Qwen3.5) and its prompt
 starts with the state, so the state is a prefix that does not depend on the question.
@@ -229,8 +229,8 @@ call.
 - **`input_tokens` and `instructions`** cover the whole call. `instructions` counts
   over all the messages of a call, for `run_decision` too.
 - **Check for `Err` first:** a question that does not fit in a step after a yield
-  returns an `Err` that names it and points to `run_decision` (see the Laya limit
-  below). Continue that request with `run_decision`.
+  returns an `Err` that names it (see the Laya limit below). Send that question in a
+  request of its own: its first message fits it.
 - **`pending`:** an `Ok` with a non-empty `pending` means the call stopped early,
   because its next self-call could not be made, for example when the canister is
   stopping. Re-send the request with `run_decision` (or
@@ -241,8 +241,8 @@ call.
 **The Laya limit:** a message after a yield has a limit of 38B instructions, not
 40B, and every step after the first keeps under 34B. One Laya forward pass
 of ~32 tokens (~38B) does not fit there. `run_decision_full` then stops with an
-error that names the question and points to `run_decision`, which runs every
-question in a first message. Julia-1 and Kev-0.8B fit.
+error that names the question. So with Laya, send one question per request: the first
+message of a call fits any one question. Julia-1 and Kev-0.8B fit.
 
 Measured on a local replica, with the 4-question request of `test/test_decision.py`:
 
@@ -284,8 +284,9 @@ calls the Jinja runtime directly and does not use that flag.
 - **Load** with the existing `load_model`. The GGUF metadata switches the context to
   embedding mode; no extra flags are needed. On a decision model, `run_update`,
   `run_query` and `new_chat` return `Err` ("use run_decision").
-- **Ask** with the update endpoint `run_decision`. Access rules are the same as
-  `run_update`.
+- **Ask** with the update endpoint `run_decision_full`: the whole request in one call.
+  `run_decision` answers one step per call, for a client that drives the steps itself.
+  Access rules are the same as `run_update`.
 - **Interface: flat typed Candid.** icpp-pro decodes a `vec record` as a record of flat
   vectors (no nested `vec record`, no `vec opt`, only unit variants inside a `vec`), so
   questions, options, answers and probabilities are flat tables linked by question id:
