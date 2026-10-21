@@ -68,11 +68,11 @@ Read the current version from two sources and cross-check:
 
 ```bash
 cat version.txt
-gh release list --repo onicai/llama_cpp_canister --limit 1 --json tagName --jq '.[0].tagName' | sed 's/^v//'
+gh release list --repo onicai/llama_cpp_canister --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName' | sed 's/^v//'
 ```
 
 - `version.txt` is the local source of truth
-- The newest GitHub release tag, prereleases included, is the remote source of truth
+- The newest published GitHub release tag, prereleases included and drafts excluded, is the remote source of truth
 - If they don't match, warn the user and ask how to proceed before continuing. Suggest updating `version.txt` to match the newest release tag.
 
 A version is `X.Y.Z`, or `X.Y.ZrcN` for a release candidate (the form icpp-pro uses,
@@ -80,7 +80,8 @@ e.g. `7.0.0rc2`). Parse the confirmed current version into major.minor.patch, an
 if present.
 
 Ask the user: "Current version is <current>. Increment major, minor, or patch, or make
-a release candidate (rc), or the final release (final)?"
+a release candidate (rc)?" When the current version is a release candidate, also offer
+the final release (final).
 
 Compute the new version based on their choice:
 - **major**: X+1.0.0
@@ -89,7 +90,8 @@ Compute the new version based on their choice:
 - **rc**: the next release candidate. From `X.Y.ZrcN` it is `X.Y.Zrc(N+1)`. From a
   final `X.Y.Z`, ask whether the candidate is for the next major, minor or patch, and
   add `rc1` (e.g. `0.22.0` -> minor -> `0.23.0rc1`).
-- **final**: from `X.Y.ZrcN`, drop the suffix: `X.Y.Z`.
+- **final**: from `X.Y.ZrcN`, drop the suffix: `X.Y.Z`. Only offered from a release
+  candidate: `X.Y.Z` is already final.
 
 From a release candidate, major, minor and patch count from `X.Y.Z`, as if it were final.
 
