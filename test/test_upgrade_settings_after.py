@@ -29,6 +29,7 @@ def test__the_settings_survived_the_upgrade(
     assert "is_running = true" in stats, stats  # re-armed by canister_post_upgrade
     assert f"ttl_seconds = {TTL_48H:_}" in stats or f"ttl_seconds = {TTL_48H}" in stats, stats
     assert "max_decision_states = opt (99" in stats, stats
+    assert "max_decision_states_per_scope = opt (50" in stats, stats
 
 
 def test__reset_the_settings(
@@ -40,6 +41,6 @@ def test__reset_the_settings(
     response = call(
         network,
         "set_cache_cleanup_config",
-        "(record { ttl_seconds = opt (21600 : nat64); max_decision_states = opt (256 : nat64) })",
+        "(record { ttl_seconds = opt (21600 : nat64); max_decision_states = opt (256 : nat64); max_decision_states_per_scope = opt (8 : nat64) })",
     )
     assert "Ok" in response, response

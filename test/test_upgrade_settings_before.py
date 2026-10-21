@@ -46,7 +46,7 @@ def test__set_the_settings(
     response = call(
         network,
         "set_cache_cleanup_config",
-        f"(record {{ ttl_seconds = opt ({TTL_48H} : nat64); max_decision_states = opt (99 : nat64) }})",
+        f"(record {{ ttl_seconds = opt ({TTL_48H} : nat64); max_decision_states = opt (99 : nat64); max_decision_states_per_scope = opt (50 : nat64) }})",
     )
     assert "Ok" in response, response
     assert "is_running = true" in call(network, "cache_cleanup_start_timer", "()")

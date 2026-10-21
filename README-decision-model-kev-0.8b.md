@@ -622,8 +622,9 @@ llama_cpp: run_decision - full: step 5, 18 tokens, 0 pending, 26.68 B instructio
 
 ## Optional: expire stored states by age
 
-A caller keeps at most 8 stored states (the oldest is removed first); each is ~20 MB +
-~24 KB per state token. Stored states are prompt-cache files, so the
+A caller keeps at most 8 stored states per scope (the oldest is removed first; see
+[A cap per scope](#serving-many-users-through-one-caller)); each is ~20 MB + ~24 KB per
+state token. Stored states are prompt-cache files, so the
 [prompt-cache cleanup timer](README.md#prompt-cache-cleanup-timer) can also remove them.
 It is **off by default**. To use it, start it once, and optionally set its TTL (default
 6 h). Both survive upgrades:
@@ -644,8 +645,8 @@ A service in front of the canister (a gateway) calls `run_decision_full` (or
 
 **A scope per user.** Pass `scope = opt "<user>"` (1-63 characters of `a-z`, `0-9` and
 `-`) in the request. The states of each scope are stored apart, in
-`.canister_cache/<caller>/sessions/<scope>/`, with their own cap of 8. Without a scope,
-nothing changes. With several canisters, send all requests of a scope to the same canister:
+`.canister_cache/<caller>/sessions/<scope>/`, with their own cap (see below). Without a
+scope, nothing changes. With several canisters, send all requests of a scope to the same canister:
 that is where its states are stored.
 
 ```bash
@@ -672,9 +673,18 @@ icp canister call llama_cpp -e local unpin_decision_state '(record { scope = "u-
 Pinned states do not count toward the caps. For a state stored without a scope, pass
 `scope = ""`.
 
+**A cap per scope.** A caller stores at most 8 states per scope, and 8 without a scope;
+storing one more removes the oldest unpinned one of that scope. For a user who asks about
+more documents at once, raise it, or set 0 for no limit:
+
+```bash
+icp canister call llama_cpp -e local set_cache_cleanup_config '(record { max_decision_states_per_scope = opt (32 : nat64) })'
+```
+
 **A cap per canister.** The canister stores at most 256 states over all callers and
 scopes (~5 GB); storing one more removes the oldest unpinned one. Change it with
-`set_cache_cleanup_config '(record { max_decision_states = opt (<n> : nat64) })'`.
+`set_cache_cleanup_config '(record { max_decision_states = opt (<n> : nat64) })'`, or
+set 0 for no limit. Both caps survive upgrades.
 
 **Access for the gateway.** Keep access level 0 and give the gateway the `AdminUpdate`
 role. The role, the access level and the cleanup settings survive upgrades:

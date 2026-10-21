@@ -335,7 +335,9 @@ run_decision_full : (DecisionInputRecord) -> (DecisionResult); // the whole requ
   stored state with the longest token list it starts with (a grown state). Each call measures its own instructions and stops before
   the IC limit, leaving the rest `pending`. A file is ~20 MB + ~24 KB per state token
   (f32 KV cache, recommended with `-fa off`, which keeps the cost per token almost flat
-  as the state grows). A principal keeps at most 8 stored states. Optionally, the
+  as the state grows). A principal keeps at most 8 stored states per scope
+  (`max_decision_states_per_scope`, set with `set_cache_cleanup_config`; 0 = no limit),
+  and the canister at most 256 (`max_decision_states`). Optionally, the
   operator can start the prompt-cache cleanup timer (`cache_cleanup_start_timer`; off by
   default) to also remove states whose last ingestion is older than its TTL (default
   6 h, `set_cache_cleanup_config`).
