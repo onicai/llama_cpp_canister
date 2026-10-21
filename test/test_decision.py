@@ -685,3 +685,27 @@ def test__run_decision_full_equals_loop(network: str) -> None:
     ]
     # the whole call: at least the instructions of its last step
     assert len(ok["instructions"]) == 1 and ok["instructions"][0] > 0, ok
+
+
+def test__no_budget_never_traps(network: str) -> None:
+    """max_tokens_update = 0 (no cap): each call stops before the instruction
+    limit, so the loop and run_decision_full answer what the budgeted loop does.
+    """
+    m = model()
+    request = flat(m["state"], m["questions"])
+    set_budget(network, 0 if is_kev() else m["budget"])
+    request["scope"] = [f"budget{int(time.time())}"]
+    budgeted = decide_all(network, request)[-1]
+
+    set_budget(network, 0)
+    request["scope"] = [f"nocap{int(time.time())}"]
+    looped = decide_all(network, request)[-1]
+    assert probabilities(looped) == probabilities(budgeted)
+
+    request["scope"] = [f"nocapfull{int(time.time())}"]
+    r = decide(network, request, method="run_decision_full")
+    if os.environ.get("DECISION_MODEL", "julia-1") == "laya":
+        assert "Err" in r and "Reject" not in str(r["Err"]), r
+        return
+    assert "Ok" in r, r
+    assert probabilities(r["Ok"]) == probabilities(budgeted)

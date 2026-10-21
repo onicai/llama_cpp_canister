@@ -1145,17 +1145,21 @@ std::string scores_note(const decision_context &d, const decision_question &q,
 // max_instructions > 0 leaves a question pending when its pass would not fit,
 // at `rate` instructions per token: the highest measured in this call or an
 // earlier step of it (updated here). 0 runs every pass that fits the budget.
+// first_free runs the first pass of the message anyway: a first message has
+// room for any one pass, which a callback after a yield may not.
 std::string answer_laya(llama_context *ctx, const decision_context &d,
                         const std::vector<task> &tasks, uint64_t budget,
-                        uint64_t max_instructions, double &rate,
+                        uint64_t max_instructions, bool first_free,
+                        double &rate,
                         std::map<std::string, decision_answer> &answers,
                         std::vector<std::string> &pending,
                         uint64_t &input_tokens) {
   const bool guard_on = max_instructions > 0 && instruction_counter() > 0;
+  bool ran = false;
   for (const auto &t : tasks) {
     const uint64_t n = t.tokens.size();
-    const bool fits =
-        !guard_on || instruction_counter() + rate * n <= max_instructions;
+    const bool fits = !guard_on || (first_free && !ran) ||
+                      instruction_counter() + rate * n <= max_instructions;
     if (!pending.empty() || (budget > 0 && input_tokens + n > budget) ||
         !fits) {
       pending.push_back(t.q->id);
@@ -1177,6 +1181,7 @@ std::string answer_laya(llama_context *ctx, const decision_context &d,
              scores_note(d, *t.q, scores));
     answers[t.q->id] = format_answer(d, *t.q, scores);
     input_tokens += n;
+    ran = true;
     log_line(describe(answers[t.q->id], n));
   }
   return "";
@@ -1268,8 +1273,9 @@ void evict_old_states(const std::string &keep) {
 
 // The IC ends an update call at 40 B instructions, and a trap loses all of its
 // work: a state that does not fit would then be retried forever. answer_kev
-// stops before it would pass this, and leaves the rest pending. Native builds
-// count no instructions, so there is no guard there.
+// stops before it would pass this, and leaves the rest pending; so does
+// answer_laya in a first message, after its first pass. Native builds count no
+// instructions, so there is no guard there.
 const uint64_t KEV_INSTRUCTIONS_MAX = 36000000000ULL;
 
 // The state is decoded in steps of this many tokens, aligned to multiples of
@@ -1623,12 +1629,14 @@ struct decision_step {
 };
 
 // The instruction limits of one step's message. kev_max: the kev guard's.
-// laya_max: 0 runs any pass (a first message has room for one, which a
-// callback after a yield may not). laya_rate: the instructions per token
-// measured by the steps so far, carried to the next.
+// laya_max: the laya guard's; laya_first_free runs the first pass of a first
+// message anyway (it has room for any one pass, which a callback after a
+// yield may not). laya_rate: the instructions per token measured by the steps
+// so far, carried to the next.
 struct step_limits {
   uint64_t kev_max = KEV_INSTRUCTIONS_MAX;
-  uint64_t laya_max = 0;
+  uint64_t laya_max = KEV_INSTRUCTIONS_MAX;
+  bool laya_first_free = true;
   double laya_rate = 0.0;
 };
 
@@ -1769,7 +1777,8 @@ decision_step run_decision_step(const decision_request &req,
   kev_progress &progress = r.progress;
   const std::string answer_error =
       !kev            ? answer_laya(ctx, d, tasks, budget, limits.laya_max,
-                                    limits.laya_rate, answers, pending, input_tokens)
+                                    limits.laya_first_free, limits.laya_rate, answers,
+                                    pending, input_tokens)
       : tasks.empty() ? ""
                       : answer_kev(ctx, d, principal_id, scope, model_id,
                                    state_tokens, tasks, budget, limits.kev_max,
@@ -1881,6 +1890,7 @@ static IC_Async run_decision_full_async() {
     }
     limits.kev_max = DECISION_CALLBACK_INSTRUCTIONS;
     limits.laya_max = DECISION_CALLBACK_INSTRUCTIONS;
+    limits.laya_first_free = false;
     busy.touch();
   }
   r.input_tokens = input_tokens;
