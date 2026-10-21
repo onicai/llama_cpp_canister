@@ -10,8 +10,10 @@ lines and appends them to:
   scripts/logs-<network>/combined.log     all canisters
 
 Each line starts with the index and time of its first record. A restart resumes after
-the last saved record (kept in scripts/logs-<network>/<canister>.next). It warns when
-records were lost between two polls; then lower --interval.
+the last saved record (kept in scripts/logs-<network>/<canister>.next, with the canister
+id). It starts over when the id changed, or when the log no longer reaches that record
+(a recreated local network). It warns when records were lost between two polls; then
+lower --interval.
 
 Run with:
 
@@ -23,11 +25,13 @@ import argparse
 import datetime
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent
@@ -114,12 +118,49 @@ class Lines:  # pylint: disable=too-few-public-methods
         return lines
 
 
-def read_next_index(path: Path) -> Optional[int]:
-    """The index to resume from, saved by an earlier run."""
+def canister_id(canister: str, network: str, identity: str) -> str:
+    """The id of a canister name (a canister id is returned as is)."""
+    cmd = ["icp", "canister", "status", canister, "-e", network]
+    cmd += ["--identity", identity, "--id-only"]
     try:
-        return int(path.read_text(encoding="utf-8").strip())
+        return subprocess.run(
+            cmd,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=FETCH_TIMEOUT_SECONDS,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return canister
+
+
+def read_next_index(path: Path, cid: str) -> Optional[int]:
+    """The index to resume from, saved by an earlier run for canister `cid`."""
+    try:
+        saved_id, index = path.read_text(encoding="utf-8").split()
+        return int(index) if saved_id == cid else None
     except (OSError, ValueError):
         return None
+
+
+def save_next_index(path: Path, cid: str, index: int) -> None:
+    """Saves the index to resume from, replacing the file in one step."""
+    tmp = path.with_suffix(".next.tmp")
+    tmp.write_text(f"{cid} {index}", encoding="utf-8")
+    tmp.replace(path)
+
+
+@contextmanager
+def uninterrupted() -> Iterator[None]:
+    """Holds off Ctrl+C and SIGTERM until the block is done, so the lines written
+    and the saved index always match."""
+    signals = {signal.SIGINT, signal.SIGTERM}
+    signal.pthread_sigmask(signal.SIG_BLOCK, signals)
+    try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, signals)
 
 
 def main() -> int:
@@ -174,7 +215,16 @@ def main() -> int:
                 print(prefix + line, flush=True)
 
     next_file = {c: log_dir / f"{c}.next" for c in canisters}
-    next_index = {c: read_next_index(next_file[c]) for c in canisters}
+    cid = {c: canister_id(c, args.network, identity) for c in canisters}
+    next_index = {c: read_next_index(next_file[c], cid[c]) for c in canisters}
+    for c in canisters:
+        # a log that no longer reaches the saved index belongs to a new canister
+        last = get_records(c, args.network, identity, None)
+        if next_index[c] is not None and (
+            not last or next_index[c] > last[-1]["index"] + 1
+        ):
+            print(f"[monitor] {c}: a new log, starting from its first record")
+            next_index[c] = None
     lines = {c: Lines() for c in canisters}
     try:
         while True:
@@ -194,15 +244,13 @@ def main() -> int:
                 done: List[str] = []
                 for record in records:
                     done += lines[canister].add(record)
-                write(canister, done)
                 # resume at the first record of an unfinished line
                 pending = lines[canister].first
-                next_index[canister] = (
-                    pending["index"] if pending else records[-1]["index"] + 1
-                )
-                next_file[canister].write_text(
-                    str(next_index[canister]), encoding="utf-8"
-                )
+                resume: int = pending["index"] if pending else records[-1]["index"] + 1
+                next_index[canister] = resume
+                with uninterrupted():
+                    write(canister, done)
+                    save_next_index(next_file[canister], cid[canister], resume)
                 if pending:  # fetched again from there on the next poll
                     lines[canister] = Lines()
             time.sleep(args.interval)
