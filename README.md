@@ -492,7 +492,77 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     ```
 
     Note: The sequence of update calls to the canister is required because the Internet Computer has a limitation
-    on the number of instructions it allows per call. For Qwen3-0.6B, ~20 tokens are generated per update call (first-call ceiling ~25-29 before a call traps).
+    on the number of instructions it allows per call. For Qwen3-0.6B, ~20 tokens are generated per update call.
+    Each `run_update` call also stops by itself before it would use more than 36B instructions (the
+    limit is 40B), so a long context never traps; `max_tokens_update` is then only a ceiling.
+
+    ***
+
+    **One call: `run_update_full`.** Instead of the loop above, one update call can ingest
+    the prompt and generate the whole response. It takes the same `InputRecord` and
+    returns the same `OutputRecordResult`:
+
+    ```bash
+    icp canister call llama_cpp -e local run_update_full '(record {
+      args = vec {
+        "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
+        "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
+        "--repeat-penalty"; "1.1";
+        "--temp"; "0.6";
+        "-sp";
+        "-p"; "<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
+        "-n"; "512"
+      }
+    })'
+    ```
+
+    How it works and what to expect:
+
+    - **Chunks:** it works in chunks, like the loop. After each chunk it yields to
+      itself (a self-call), which commits the chunk, session file included, and
+      continues in a new message with a fresh instruction limit. Other calls can run
+      between two chunks; every chunk reloads the caller's session file.
+    - **Same output, same cost:** it gives the same output as the loop at the same
+      chunk size and uses the same cycles. Each chunk is one consensus round, so a
+      response takes about as long as the loop: ~16s per 64 tokens on a local
+      replica, ~60s per 64 tokens on mainnet. The reply only comes when the whole
+      response is done, so give the client a timeout that covers all of it: several
+      minutes for `-n 512` on mainnet.
+    - **`-n`** is the total for the whole response.
+    - **`n_*` counts** cover the whole call. A response that ends on `-n` counts its
+      last sampled token.
+    - **409:** a prompt cache is held while its `run_update_full` runs. On that prompt
+      cache, another `run_update_full`, `run_update`, `new_chat` or `remove_prompt_cache`
+      gets status 409, and `copy_prompt_cache` (to it) and `upload_prompt_cache_chunk`
+      return an error. While any `run_update_full` or `run_decision_full` runs,
+      `load_model` and a call with `--model` also get 409: the model cannot change
+      under it.
+    - **A trapped call:** if a chunk traps after a yield, its prompt cache stays held
+      until 10 minutes without progress have passed. The canister log then shows
+      `busy - expired <session> after <n>s without progress`, and every refused call
+      logs `<endpoint> - refused: ...`.
+    - **`partial = opt true`:** the call stopped early, because the canister is
+      stopping (`icp canister stop`, or an upgrade) or a runaway cap of 500 chunks was
+      reached. The reply holds what was generated; continue it with `run_update` and
+      an empty prompt. A complete reply has `partial = opt false`; other replies have
+      `partial = null`.
+    - **When to keep the loop:** keep the multi-call loop when the client shows text
+      while it is being generated: `run_update_full` replies once, at the end.
+
+    **Query or update?**
+
+    | Use case                              | Call                                   | Why                                          |
+    |---------------------------------------|----------------------------------------|----------------------------------------------|
+    | A whole response                      | `run_update_full`                      | many chunks of up to ~34-36B each            |
+    | Show text while it is being generated | `run_update` loop                      | the client gets text between calls           |
+    | A decision request                    | `run_decision_full`                    | 3-9 steps of ~20-37B each                    |
+    | A resumable, client-driven decision   | `run_decision` loop                    | each call returns the answers so far         |
+    | `run_query` on an LLM                 | only for tiny models without a session | clear + load of a session is ~4.5B (mainnet) |
+    | A decision question as a query        | not viable                             | every model needs more than 5B per question  |
+
+    A query has a limit of 5B instructions, and a composite query shares 5B with
+    every query it calls. A query answer comes from one replica and is not
+    certified: where the answer must be trusted, use an update.
 
     This sequence of update calls is equivalent to using the [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
     repo directly and running the `llama-cli` locally, with the command:

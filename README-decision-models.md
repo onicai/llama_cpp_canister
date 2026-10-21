@@ -211,6 +211,50 @@ instruction limit, so a long state never traps.
 The batch and micro-batch size (`--batch-size`, `--ubatch-size`) must be at
 least the length of the longest question's sequence.
 
+### One call: `run_decision_full`
+
+`run_decision_full` takes the same `DecisionInputRecord` and returns the same
+`DecisionResult` as `run_decision`, but it answers the whole request in one update
+call.
+
+**How it works:**
+
+- **Steps:** it runs the steps that a client would otherwise drive with repeated
+  `run_decision` calls. After each step it yields to itself (a self-call), which
+  commits the step (its answers and the stored state are in files) and continues
+  in a new message with a fresh instruction limit.
+- **Same answers, about the same cost:** a successful call gives the same answers as
+  the `run_decision` loop. Its cycles are within a few percent of the loop's: on day 1
+  of the Kev walkthrough, 392.9 B cycles for one call against 383.6 B for 12 calls.
+- **`input_tokens` and `instructions`** cover the whole call. `instructions` counts
+  over all the messages of a call, for `run_decision` too.
+- **Check for `Err` first:** a question that does not fit in a step after a yield
+  returns an `Err` that names it and points to `run_decision` (see the Laya limit
+  below). Continue that request with `run_decision`.
+- **`pending`:** an `Ok` with a non-empty `pending` means the call stopped early,
+  because its next self-call could not be made, for example when the canister is
+  stopping. Re-send the request with `run_decision` (or
+  `run_decision_full`) to continue from the answers so far.
+- **The model stays loaded:** while a `run_decision_full` runs, `load_model` gets
+  status 409.
+
+**The Laya limit:** a message after a yield has a limit of 38B instructions, not
+40B, and every step after the first keeps under 34B. One Laya forward pass
+of ~32 tokens (~38B) does not fit there. `run_decision_full` then stops with an
+error that names the question and points to `run_decision`, which runs every
+question in a first message. Julia-1 and Kev-0.8B fit.
+
+Measured on a local replica, with the 4-question request of `test/test_decision.py`:
+
+| Model    | `run_decision` loop         | `run_decision_full`              |
+|----------|-----------------------------|----------------------------------|
+| Julia-1  | 7.7s, 3 calls, 68.2B cycles | 7.6s, 3 steps, 68.1B cycles      |
+| Kev-0.8B | 26.1s, 8 calls, 231B cycles | 25.4s, 8-9 steps, 231B cycles    |
+| Laya     | 12.2s, 3 calls              | error after step 1: use the loop |
+
+**No queries:** a decision question cannot be a query. A query has 5B instructions,
+and every model needs more for one question.
+
 ## Jinja is not a blocker
 
 The canister build used to exclude `common/jinja/*` and `common/chat*.cpp`
@@ -252,6 +296,7 @@ type DecisionInputRecord = record {
   state : variant { Text : text; Json : text };
   questions : vec record { id : text; kind : DecisionKind; instructions : text };
   options : vec record { question_id : text; key : text; description : text };
+  scope : opt text;                    // kev only: store the caller's states below this sub-directory
 };
 type DecisionOutputRecord = record {
   answers : vec record { id : text; kind : DecisionKind; choice : text;
@@ -261,9 +306,12 @@ type DecisionOutputRecord = record {
   pending : vec text;
   state_tokens : opt nat64;            // kev only: the state's size in tokens
   state_tokens_remaining : opt nat64;  // kev only: not stored yet (0 = stored)
+  state_key : opt text;                // kev only: the name of the stored state (pin_decision_state)
+  instructions : opt nat64;            // the instructions this call used, over all its messages
 };
 type DecisionResult = variant { Err : ApiError; Ok : DecisionOutputRecord };
 run_decision : (DecisionInputRecord) -> (DecisionResult);
+run_decision_full : (DecisionInputRecord) -> (DecisionResult); // the whole request in one call
 ```
 
   - `choice`: one option row per option (key + optional description).
