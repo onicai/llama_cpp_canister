@@ -80,12 +80,13 @@ icp canister call llama_cpp_qwen25 -e local load_model '(record {
 ```bash
 icp canister call llama_cpp_qwen25 -e local set_max_tokens '(record {
   max_tokens_query = 1 : nat64;
-  max_tokens_update = 25 : nat64
+  max_tokens_update = 0 : nat64
 })'
 ```
 
-For this model, ~25 tokens can be generated per update call (measured on the b10076
-build; the hard first-call ceiling is 28 before a call traps).
+`0` means no cap: every update call, and every chunk of a `run_update_full`, stops by
+itself before the IC's instruction limit. For this model that is ~25 tokens per call
+(measured on the b10076 build; the hard first-call ceiling is 28).
 
 ## Chat
 
@@ -100,11 +101,10 @@ icp canister call llama_cpp_qwen25 -e local new_chat '(record {
 })'
 ```
 
-Ingest the prompt — repeat until `prompt_remaining` is empty (`-n 1`, keep sending
-the full prompt):
+Ingest the prompt and generate the whole response, in one call:
 
 ```bash
-icp canister call llama_cpp_qwen25 -e local run_update '(record {
+icp canister call llama_cpp_qwen25 -e local run_update_full '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
     "--cache-type-k"; "q8_0";
@@ -112,26 +112,15 @@ icp canister call llama_cpp_qwen25 -e local run_update '(record {
     "--temp"; "0.6";
     "-sp";
     "-p"; "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n";
-    "-n"; "1"
-  }
-})'
-```
-
-Generate new tokens — repeat with an empty prompt until `generated_eog=true`:
-
-```bash
-icp canister call llama_cpp_qwen25 -e local run_update '(record {
-  args = vec {
-    "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
-    "--cache-type-k"; "q8_0";
-    "--repeat-penalty"; "1.1";
-    "--temp"; "0.6";
-    "-sp";
-    "-p"; "";
     "-n"; "512"
   }
 })'
 ```
+
+On a local network, this returned a 299-token answer in one call of 61s (17 chunks),
+with `generated_eog = true` and `partial = opt false`. To show the text while it is being
+generated, use the `run_update` loop instead (see the
+[main README](README.md#set-up)).
 
 Remove the prompt cache when done:
 
