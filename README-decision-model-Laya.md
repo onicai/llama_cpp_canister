@@ -82,9 +82,11 @@ icp canister call llama_cpp set_max_tokens '(record { max_tokens_query = 0 : nat
 ```
 
 `0` means no cap: a call answers one question, then stops before the IC's instruction
-limit. A question fits up to 33 tokens. A longer one does not fit one message, and with no
-cap the IC rejects the call (`IC0522`). To get a clear `Err` with the question's token
-count instead, set `max_tokens_update` to 32.
+limit. A question fits up to 33 tokens. A longer one does not fit one message. Once the
+canister has answered a question since `load_model`, it knows Laya's cost per token, and
+returns an `Err` for a question that would not fit. The first question after `load_model`
+is not checked: if it is too long, the IC rejects the call (`IC0522`). To always get a
+clear `Err` with the question's token count, set `max_tokens_update` to 32.
 
 **Use `run_decision`, not `run_decision_full`, for Laya.** A message after a yield has a
 limit of 38B instructions, and one Laya question of ~30 tokens needs ~35B, more than a
