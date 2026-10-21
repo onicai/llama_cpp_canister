@@ -116,18 +116,25 @@ than generation and its ceiling is higher.
 | 5     | rejected, `IC0522` instruction limit | rejected, `IC0522` instruction limit |
 | 6     | rejected, `IC0522` instruction limit | —                                    |
 
-Set `max_tokens_update = 0` (no cap), and every update call, and every chunk of a
-`run_update_full`, stops by itself before the instruction limit, at whatever the
-ceiling is for the conversation so far:
+The setting verified on mainnet, with the `run_update` loop:
 
 ```bash
 icp canister call llama_cpp_qwen3_17b set_max_tokens \
-  '(record { max_tokens_query = 1 : nat64; max_tokens_update = 0 : nat64 })' -e production
+  '(record { max_tokens_query = 1 : nat64; max_tokens_update = 3 : nat64 })' -e production
 ```
 
-The ceiling shrinks as a conversation grows, and a larger `--ctx-size` lowers it too —
-see [Appendix A: max_tokens](README.md#appendix-a-max_tokens) for why the context you
-allocate is a flat tax on every call.
+Use **3**, not 4, in production: the ceiling shrinks as a conversation grows,
+and a larger `--ctx-size` lowers it too — see
+[Appendix A: max_tokens](README.md#appendix-a-max_tokens) for why the context
+you allocate is a flat tax on every call. Overshooting is safe to recover from:
+the call is rejected with `IC0522` and rolled back, leaving the prompt cache
+intact.
+
+Since v0.23.0rc1, `max_tokens_update = 0` (no cap) makes every update call, and every
+chunk of a `run_update_full`, stop by itself before the instruction limit. That is the
+recommended setting for the other models, but it is **not verified on this model yet**:
+the current file does not load with v0.23.0rc1 (see
+[Status and what is not verified](#status-and-what-is-not-verified)).
 
 ## Non-thinking mode — the one thing you must get right
 

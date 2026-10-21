@@ -147,7 +147,10 @@ this model class exactly (LFM2.5 English: 9 ok, 10 → `IC0522`):
 
 **Language does not lower the instruction-limit ceiling** — for either model the
 Hindi and English ceilings are identical. Gemma-3-1B's ceiling is *higher* than
-LFM2.5-1.2B's despite comparable size, so use **10**.
+LFM2.5-1.2B's despite comparable size. These ceilings were measured with the
+`run_update` loop and a fixed `max_tokens_update` (10 was the safe value for Gemma-3-1B).
+With `max_tokens_update = 0`, as recommended below, each chunk stops by itself before the
+limit, so you no longer pick a value.
 
 **Language does not lower the instruction-limit ceiling.** The ceiling is set by
 model size and context length. What Hindi changes is the *number of calls*, via

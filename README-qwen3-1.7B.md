@@ -21,11 +21,13 @@ These are not tuning preferences — get them wrong and the canister traps:
    cleanly. (Heap after load ≈ 2.07 GiB, leaving ~1.68 GiB headroom under the
    3.75 GiB limit.)
 
-2. **Set `max_tokens_update` to 4.** A message may execute at most 40 B
+2. **Set `max_tokens_update` to 0.** A message may execute at most 40 B
    instructions (`IC0522`). The 1.7B is ~2.8× the compute of the 0.6B, so decoding
-   the 0.6B's ~8–20 tokens per call is rejected. Decoding **4 tokens per call**
-   stays safely under the limit — for both prompt ingestion and generation. The
-   trade-off is more `run_update` round-trips per response.
+   the 0.6B's ~8–20 tokens per call is rejected. With `max_tokens_update = 0` (no cap),
+   each call and each chunk of a `run_update_full` stops by itself before the limit
+   (see [Set max_tokens](#set-max_tokens)). Before v0.23.0rc1 there was no such guard,
+   and the fixed value was **4 tokens per call**, which stays safely under the limit
+   for both prompt ingestion and generation.
 
    > **Note (fixed):** there used to be a *second*, undocumented ceiling here.
    > `run_update` sized its decode batches from the per-call `--batch-size`
