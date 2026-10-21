@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag for the release (e.g., v0.16.5)"
+        description: "Tag for the release (e.g., v0.16.5, or v0.23.0rc1 for a prerelease)"
         required: true
 
 permissions:
@@ -211,6 +211,8 @@ jobs:
           name: "${{ github.event.inputs.tag }} — wasm ${{ steps.hashes.outputs.wasm_sha256 }}"
           body_path: RELEASE_NOTES.md
           draft: false
-          prerelease: false
+          # A release candidate (a tag like v0.23.0rc1) is a prerelease, so it does
+          # not become "Latest" and `gh release view` without a tag skips it.
+          prerelease: ${{ contains(github.event.inputs.tag, 'rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

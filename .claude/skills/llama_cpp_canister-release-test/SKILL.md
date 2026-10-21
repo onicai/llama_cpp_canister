@@ -21,6 +21,9 @@ Ask the user which release tag to test. If they say "latest":
 gh release view --repo onicai/llama_cpp_canister --json tagName --jq '.tagName'
 ```
 
+"Latest" skips prereleases, so a release candidate (e.g. `v0.23.0rc1`) is tested by its
+tag.
+
 Download and unzip:
 
 ```bash

@@ -3,7 +3,7 @@ name: llama_cpp_canister-release
 description: Create a new GitHub release for llama_cpp_canister
 disable-model-invocation: false
 user-invocable: true
-argument-hint: <new-version> [major|minor|patch]
+argument-hint: <new-version> [major|minor|patch|rc|final]
 allowed-tools: Bash, Read, Edit, Write, AskUserQuestion
 ---
 
@@ -53,9 +53,12 @@ exact-token tests on x86_64 macOS, the baseline CI enforces.
 
 ```bash
 for wf in cicd-linux.yml cicd-mac.yml; do
-  echo "$wf: $(gh run list --repo onicai/llama_cpp_canister --workflow=$wf --limit 1 --json conclusion --jq '.[0].conclusion')"
+  echo "$wf: $(gh run list --repo onicai/llama_cpp_canister --workflow=$wf --branch main --status completed --limit 1 --json conclusion --jq '.[0].conclusion')"
 done
 ```
+
+`--branch main --status completed` matches the gate in `release.yml`: without them, the
+newest run on any branch, or one still in progress, decides.
 
 If either result is not `success`, abort immediately with: "CI is not green. Latest <workflow> conclusion: <result>. Fix CI before releasing."
 
@@ -65,23 +68,34 @@ Read the current version from two sources and cross-check:
 
 ```bash
 cat version.txt
-gh release view --repo onicai/llama_cpp_canister --json tagName --jq '.tagName' | sed 's/^v//'
+gh release list --repo onicai/llama_cpp_canister --limit 1 --json tagName --jq '.[0].tagName' | sed 's/^v//'
 ```
 
 - `version.txt` is the local source of truth
-- The latest GitHub release tag is the remote source of truth
-- If they don't match, warn the user and ask how to proceed before continuing. Suggest updating `version.txt` to match the latest release tag.
+- The newest GitHub release tag, prereleases included, is the remote source of truth
+- If they don't match, warn the user and ask how to proceed before continuing. Suggest updating `version.txt` to match the newest release tag.
 
-Parse the confirmed current version into major.minor.patch components.
+A version is `X.Y.Z`, or `X.Y.ZrcN` for a release candidate (the form icpp-pro uses,
+e.g. `7.0.0rc2`). Parse the confirmed current version into major.minor.patch, and rcN
+if present.
 
-Ask the user: "Current version is X.Y.Z. Increment major, minor, or patch?"
+Ask the user: "Current version is <current>. Increment major, minor, or patch, or make
+a release candidate (rc), or the final release (final)?"
 
 Compute the new version based on their choice:
 - **major**: X+1.0.0
 - **minor**: X.Y+1.0
 - **patch**: X.Y.Z+1
+- **rc**: the next release candidate. From `X.Y.ZrcN` it is `X.Y.Zrc(N+1)`. From a
+  final `X.Y.Z`, ask whether the candidate is for the next major, minor or patch, and
+  add `rc1` (e.g. `0.22.0` -> minor -> `0.23.0rc1`).
+- **final**: from `X.Y.ZrcN`, drop the suffix: `X.Y.Z`.
 
-Show the computed version and tag (e.g., `v0.8.1`) and ask the user to confirm before proceeding.
+From a release candidate, major, minor and patch count from `X.Y.Z`, as if it were final.
+
+Show the computed version and tag (e.g., `v0.8.1`, or `v0.23.0rc1`) and ask the user to
+confirm before proceeding. A tag with `rc` is published as a prerelease: it does not
+become "Latest" on GitHub.
 
 ## 4. Bump version
 
@@ -148,7 +162,7 @@ abort and report -- the release is not trustworthy.
 
 Print a summary of what was done:
 - Version bumped from OLD to NEW
-- Tag: v<NEW_VERSION>
+- Tag: v<NEW_VERSION>, and whether it is a prerelease
 - Release URL
 - Zip download URL
 - wasm sha256, the commit it was built from, and the pinned fork commit
