@@ -30,8 +30,9 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
+from functools import partial
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional, TypeVar
 
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent
@@ -56,9 +57,9 @@ def default_identity(network: str) -> str:
 
 def get_records(
     canister: str, network: str, identity: str, since_index: Optional[int]
-) -> List[Dict[str, Any]]:
+) -> Optional[List[Dict[str, Any]]]:
     """Fetches the canister's log records ({index, timestamp, content}), from
-    since_index on if given."""
+    since_index on if given. None when the fetch failed."""
     cmd = ["icp", "canister", "logs", canister, "-e", network]
     cmd += ["--identity", identity, "--json"]
     if since_index is not None:
@@ -74,14 +75,14 @@ def get_records(
         ).stdout
     except subprocess.CalledProcessError as e:
         print(f"[monitor] {canister}: {e.stderr.strip()[:300]}", file=sys.stderr)
-        return []
+        return None
     except subprocess.TimeoutExpired:
         print(
             f"[monitor] {canister}: no logs after {FETCH_TIMEOUT_SECONDS}s, "
             "trying again",
             file=sys.stderr,
         )
-        return []
+        return None
     records: List[Dict[str, Any]] = json.loads(output).get("log_records", [])
     return records
 
@@ -118,8 +119,9 @@ class Lines:  # pylint: disable=too-few-public-methods
         return lines
 
 
-def canister_id(canister: str, network: str, identity: str) -> str:
-    """The id of a canister name (a canister id is returned as is)."""
+def canister_id(canister: str, network: str, identity: str) -> Optional[str]:
+    """The id of a canister name (a canister id is returned as is). None when
+    the lookup failed."""
     cmd = ["icp", "canister", "status", canister, "-e", network]
     cmd += ["--identity", identity, "--id-only"]
     try:
@@ -131,8 +133,21 @@ def canister_id(canister: str, network: str, identity: str) -> str:
             check=True,
             timeout=FETCH_TIMEOUT_SECONDS,
         ).stdout.strip()
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return canister
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        print(f"[monitor] {canister}: no canister id ({e})", file=sys.stderr)
+        return None
+
+
+T = TypeVar("T")
+
+
+def retry(fetch: Callable[[], Optional[T]], interval: float) -> T:
+    """Calls fetch until it succeeds: a failure tells nothing about the log."""
+    while True:
+        result = fetch()
+        if result is not None:
+            return result
+        time.sleep(interval)
 
 
 def read_next_index(path: Path, cid: str) -> Optional[int]:
@@ -215,11 +230,16 @@ def main() -> int:
                 print(prefix + line, flush=True)
 
     next_file = {c: log_dir / f"{c}.next" for c in canisters}
-    cid = {c: canister_id(c, args.network, identity) for c in canisters}
+    cid = {
+        c: retry(partial(canister_id, c, args.network, identity), args.interval)
+        for c in canisters
+    }
     next_index = {c: read_next_index(next_file[c], cid[c]) for c in canisters}
     for c in canisters:
         # a log that no longer reaches the saved index belongs to a new canister
-        last = get_records(c, args.network, identity, None)
+        last = retry(
+            partial(get_records, c, args.network, identity, None), args.interval
+        )
         if next_index[c] is not None and (
             not last or next_index[c] > last[-1]["index"] + 1
         ):
