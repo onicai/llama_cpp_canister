@@ -915,6 +915,9 @@ start the timer, the canister handles prompt-cache hygiene on its own.
 - max_decision_states: 256 stored decision states (Kev-0.8B, ~20 MB each)
   over all callers and scopes; storing one more removes the oldest unpinned
   one. 0 = no limit.
+- max_decision_states_per_scope: 8 stored decision states per caller and
+  scope (and 8 without a scope); storing one more removes the oldest unpinned
+  one of that scope. 0 = no limit.
 
 **Operator-driven lifecycle.** The timer is off until you call
 `cache_cleanup_start_timer`. The config and whether the timer runs are saved
@@ -945,7 +948,8 @@ icp canister call llama_cpp -e local cache_cleanup_now '()'
 #                             ttl_seconds = 21_600;
 #                             max_files_per_run = 256;
 #                             is_running = ...;
-#                             max_decision_states = opt 256 } })
+#                             max_decision_states = opt 256;
+#                             max_decision_states_per_scope = opt 8 } })
 
 # Inspect stats (query, fast). `runs` and `last_run_ns` are lifetime
 # counters; `files_examined`, `files_deleted`, `files_failed` reflect the
@@ -956,7 +960,7 @@ icp canister call llama_cpp -e local get_cache_cleanup_stats '()'
 #   - period_seconds: must be > 0; opt 0 is silently rejected.
 #   - ttl_seconds   : 0 is valid ("delete every file under sessions/").
 #   - max_files_per_run: clamped to [1, 10000].
-#   - max_decision_states: 0 = no limit.
+#   - max_decision_states, max_decision_states_per_scope: 0 = no limit.
 # If the timer is already running, the new period is applied transparently.
 icp canister call llama_cpp -e local set_cache_cleanup_config '(record {
   period_seconds    = opt (300 : nat64);
