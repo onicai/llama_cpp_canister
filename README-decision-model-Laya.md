@@ -21,7 +21,7 @@
 | instructions per token          | ~1.2 B (about 7x Julia-1)                             |
 | max tokens per question         | **33 per update call** (34 exceeds 40 B instructions) |
 | one 29-token question           | ~34.5 B cycles on the local replica                   |
-| recommended `max_tokens_update` | 32 (the per-call token budget of `run_decision`)      |
+| `max_tokens_update`             | 0: each call stops itself before the IC's limit       |
 | accuracy vs llama-server (CPU)  | within 0.011 on every probability                     |
 
 Laya is numerically stable: llama-server reproduces the PR #29818 reference table to
@@ -78,11 +78,19 @@ icp canister call llama_cpp load_model '(record { args = vec {"--model"; "models
 ## Set the per-call token budget
 
 ```bash
-icp canister call llama_cpp set_max_tokens '(record { max_tokens_query = 32 : nat64; max_tokens_update = 32 : nat64 })' -e local
+icp canister call llama_cpp set_max_tokens '(record { max_tokens_query = 0 : nat64; max_tokens_update = 0 : nat64 })' -e local
 ```
 
-With a budget of 32, every call answers one question. A question longer than 32 tokens
-returns `Err` with its token count.
+`0` means no cap: a call answers one question, then stops before the IC's instruction
+limit. A question fits up to 33 tokens. A longer one does not fit one message, and with no
+cap the IC rejects the call (`IC0522`). To get a clear `Err` with the question's token
+count instead, set `max_tokens_update` to 32.
+
+**Use `run_decision`, not `run_decision_full`, for Laya.** A message after a yield has a
+limit of 38B instructions, and one Laya question of ~30 tokens needs ~35B, more than a
+step after a yield may use. `run_decision_full` answers the first question, then returns
+an error that points to `run_decision`. Each `run_decision` call runs in a first message,
+which fits one question.
 
 ## Ask a question
 
@@ -99,8 +107,8 @@ input_tokens = 29; pending = vec {};
 llama_cpp: run_decision - intent (choice, 29 tokens) -> refund (p=0.95, confidence=0.93)
 ```
 
-The three compact questions above, sent as one request, are answered in 3 update calls
-(29 + 32 + 31 tokens):
+The three compact questions above, sent as one request, are answered in 3 `run_decision`
+calls (29 + 32 + 31 tokens):
 
 | Question    | Canister     | llama-server (CPU) |
 |-------------|--------------|--------------------|

@@ -320,9 +320,11 @@ run_decision_full : (DecisionInputRecord) -> (DecisionResult); // the whole requ
   - `noul`: optional rows with key `true` / `false` (descriptions); the answer is `yes`,
     the probability of yes.
 - **Resume across calls**, like `run_update` ingesting a long prompt: each call answers
-  the pending questions that fit in `max_tokens_update` tokens (`set_max_tokens`), in
-  request order, and returns the answers so far plus the `pending` ids. Re-send the same
-  request until `pending` is empty. The answers so far are kept in a per-principal file
+  the pending questions that fit, in request order, and returns the answers so far plus
+  the `pending` ids. With `max_tokens_update = 0` (no cap; `set_max_tokens`) a call
+  answers what fits under the IC's instruction limit; a value above 0 also caps the
+  tokens per call. Re-send the same request until `pending` is empty, or send it once
+  with `run_decision_full`. The answers so far are kept in a per-principal file
   in `.canister_cache/<principal>/sessions/`, keyed by the request AND the loaded model,
   so the optional prompt-cache cleanup timer covers them when it is started, and another
   model never reuses them.
@@ -361,7 +363,7 @@ Measured on a local replica (same 40 B instruction limit per update call as main
 | instructions per token  | ~170-180 M                                                                | ~1.2 B                    | ~1.4 B (1.60 B at 2,000 state tokens)         |
 | max tokens per question | ~210                                                                      | 33                        | ~22, without the state                        |
 | max state size          | within the question                                                       | within the question       | ~4,000 tokens (`-c 4096`), 24 stored per call |
-| `max_tokens_update`     | 200                                                                       | 32                        | 0: each call stops itself before the limit    |
+| `max_tokens_update`     | 0: each call stops itself before the limit                                | 0, the same               | 0, the same                                   |
 | example question        | 87 tokens, ~14.9 B cycles                                                 | 29 tokens, ~34.5 B cycles | 16 tokens on a stored state, ~22.8 B cycles   |
 | vs llama-server (CPU)   | clear decisions agree; close calls can differ (Q8_0 rounding sensitivity) | within 0.011              | within 0.013                                  |
 

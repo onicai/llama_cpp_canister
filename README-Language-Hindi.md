@@ -161,8 +161,11 @@ length.
 
 ## Recommendation
 
-Use **Gemma-3-1B-it at `max_tokens_update = 10`** for Hindi (ceiling 11, one
-below as everywhere else in this repo).
+Use **Gemma-3-1B-it** for Hindi, with `max_tokens_update = 0` (no cap) and one
+`run_update_full` call per quote. Each chunk then does as many tokens as fit (~11, the
+ceiling below), and the 11 calls of the table become 11 chunks of that one call. The
+`max_tokens` values in the tables above are what those measurements used with the
+`run_update` loop.
 
 | fact                        | value                                                              |
 | --------------------------- | ------------------------------------------------------------------ |
@@ -171,7 +174,7 @@ below as everywhere else in this repo).
 | wasm heap after load        | 911,736,832 B (869 MiB)                                              |
 | load args                   | `-c 4096 --batch-size 8 --ubatch-size 8 --cache-type-k q8_0 --cache-type-v q8_0` |
 | generation ceiling          | 11 tokens/call (12 → `IC0522`), same for Hindi and English           |
-| Hindi quote                 | 11 `run_update` calls, terminates with EOG                           |
+| Hindi quote                 | 11 calls or chunks, terminates with EOG                              |
 
 ```bash
 mkdir -p models/google/gemma-3-1b-it-GGUF
