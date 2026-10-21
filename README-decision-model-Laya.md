@@ -21,7 +21,7 @@
 | instructions per token          | ~1.2 B (about 7x Julia-1)                             |
 | max tokens per question         | **33 per update call** (34 exceeds 40 B instructions) |
 | one 29-token question           | ~34.5 B cycles on the local replica                   |
-| recommended `max_tokens_update` | 32 (the per-call token budget of `run_decision`)      |
+| `max_tokens_update`             | 0: each call stops itself before the IC's limit       |
 | accuracy vs llama-server (CPU)  | within 0.011 on every probability                     |
 
 Laya is numerically stable: llama-server reproduces the PR #29818 reference table to
@@ -78,16 +78,27 @@ icp canister call llama_cpp load_model '(record { args = vec {"--model"; "models
 ## Set the per-call token budget
 
 ```bash
-icp canister call llama_cpp set_max_tokens '(record { max_tokens_query = 32 : nat64; max_tokens_update = 32 : nat64 })' -e local
+icp canister call llama_cpp set_max_tokens '(record { max_tokens_query = 0 : nat64; max_tokens_update = 0 : nat64 })' -e local
 ```
 
-With a budget of 32, every call answers one question. A question longer than 32 tokens
-returns `Err` with its token count.
+`0` means no cap: a call answers one question, then stops before the IC's instruction
+limit. A question fits up to 33 tokens. A longer one does not fit one message. Once the
+canister has answered a question since `load_model`, it knows Laya's cost per token, and
+returns an `Err` for a question that would not fit. The first question after `load_model`
+is not checked: if it is too long, the IC rejects the call (`IC0522`). To always get a
+clear `Err` with the question's token count, set `max_tokens_update` to 32.
+
+**Send one question per request.** `run_decision_full` answers the first question of a
+request in the call's first message, which has room for any one Laya question (up to 33
+tokens, ~39B instructions). Further questions would run after a yield, where each step
+keeps under 34B instructions (the IC allows 38B there). The questions measured below take
+29 to 32 tokens and 34.5B to 38.4B, so none of them fits there: `run_decision_full` then
+returns an error for the second question. So send each question in its own request.
 
 ## Ask a question
 
 ```bash
-icp canister call llama_cpp run_decision '(record { state = variant { Text = "Charged twice for order 4471, refund please!" }; questions = vec { record { id = "intent"; kind = variant { choice }; instructions = "Intent?" } }; options = vec { record { question_id = "intent"; key = "refund"; description = "" }; record { question_id = "intent"; key = "cancel"; description = "" }; record { question_id = "intent"; key = "track"; description = "" }; record { question_id = "intent"; key = "other"; description = "" } } })' -e local
+icp canister call llama_cpp run_decision_full '(record { state = variant { Text = "Charged twice for order 4471, refund please!" }; questions = vec { record { id = "intent"; kind = variant { choice }; instructions = "Intent?" } }; options = vec { record { question_id = "intent"; key = "refund"; description = "" }; record { question_id = "intent"; key = "cancel"; description = "" }; record { question_id = "intent"; key = "track"; description = "" }; record { question_id = "intent"; key = "other"; description = "" } } })' -e local
 ```
 
 Verified on-chain output (local replica), and the canister log:
@@ -97,10 +108,12 @@ answers = vec { record { id = "intent"; kind = variant { choice }; choice = "ref
 input_tokens = 29; pending = vec {};
 
 llama_cpp: run_decision - intent (choice, 29 tokens) -> refund (p=0.95, confidence=0.93)
+llama_cpp: run_decision - full: step 1, 29 tokens, 0 pending, 34.50 B instructions
 ```
 
-The three compact questions above, sent as one request, are answered in 3 update calls
-(29 + 32 + 31 tokens):
+The three compact questions of `test/test_decision.py`, sent as three one-question
+requests to `run_decision_full`, are each answered in one call of ~4 s (29, 32 and 31
+tokens, 34.5B to 38.4B instructions):
 
 | Question    | Canister     | llama-server (CPU) |
 |-------------|--------------|--------------------|

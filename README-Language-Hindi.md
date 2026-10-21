@@ -147,7 +147,10 @@ this model class exactly (LFM2.5 English: 9 ok, 10 → `IC0522`):
 
 **Language does not lower the instruction-limit ceiling** — for either model the
 Hindi and English ceilings are identical. Gemma-3-1B's ceiling is *higher* than
-LFM2.5-1.2B's despite comparable size, so use **10**.
+LFM2.5-1.2B's despite comparable size. These ceilings were measured with the
+`run_update` loop and a fixed `max_tokens_update` (10 was the safe value for Gemma-3-1B).
+With `max_tokens_update = 0`, as recommended below, each chunk stops by itself before the
+limit, so you no longer pick a value.
 
 **Language does not lower the instruction-limit ceiling.** The ceiling is set by
 model size and context length. What Hindi changes is the *number of calls*, via
@@ -161,17 +164,21 @@ length.
 
 ## Recommendation
 
-Use **Gemma-3-1B-it at `max_tokens_update = 10`** for Hindi (ceiling 11, one
-below as everywhere else in this repo).
+Use **Gemma-3-1B-it** for Hindi, with `max_tokens_update = 0` (no cap) and one
+`run_update_full` call per quote. Each chunk then does as many tokens as fit (up to the
+ceiling of 11 below), so the calls of the table become chunks of that one call. On a
+local network, a short Hindi quote request (23 prompt tokens) took one call of 43s: 12
+chunks, 87 tokens of valid Hindi, ending on EOG. The `max_tokens` values in the tables
+above are what those measurements used with the `run_update` loop.
 
-| fact                        | value                                                              |
-| --------------------------- | ------------------------------------------------------------------ |
-| gguf (Q4_K_M)               | 806,058,240 B                                                        |
-| gguf sha256                 | `8ccc5cd1f1b3602548715ae25a66ed73fd5dc68a210412eea643eb20eb75a135`   |
-| wasm heap after load        | 911,736,832 B (869 MiB)                                              |
-| load args                   | `-c 4096 --batch-size 8 --ubatch-size 8 --cache-type-k q8_0 --cache-type-v q8_0` |
-| generation ceiling          | 11 tokens/call (12 → `IC0522`), same for Hindi and English           |
-| Hindi quote                 | 11 `run_update` calls, terminates with EOG                           |
+| fact                 | value                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| gguf (Q4_K_M)        | 806,058,240 B                                                                            |
+| gguf sha256          | `8ccc5cd1f1b3602548715ae25a66ed73fd5dc68a210412eea643eb20eb75a135`                       |
+| wasm heap after load | 911,736,832 B (869 MiB)                                                                  |
+| load args            | `-c 4096 --batch-size 8 --ubatch-size 8 --cache-type-k q8_0 --cache-type-v q8_0`         |
+| generation ceiling   | 11 tokens/call (12 → `IC0522`), same for Hindi and English                               |
+| Hindi quote          | 11 calls of the `run_update` loop, or 12 chunks of one `run_update_full`; ends with EOG  |
 
 ```bash
 mkdir -p models/google/gemma-3-1b-it-GGUF

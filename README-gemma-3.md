@@ -96,23 +96,25 @@ Heap after load is ~0.9 GiB (`get_memory_status` reports `wasm_heap_bytes ≈
 
 ## Set max_tokens
 
-With the q8_0 KV cache above, the measured **generation ceiling is ~55 tokens per
-call** at short context (55 OK, 60 traps with `IC0522` — the IC's
-40 B-instruction-per-message limit). Use **44** for a safe margin, and lower it for
-long conversations (the per-token cost rises as the context grows):
-
 ```bash
 icp canister call llama_cpp set_max_tokens '(record {
   max_tokens_query = 1 : nat64;
-  max_tokens_update = 44 : nat64
+  max_tokens_update = 0 : nat64
 })' -e local
 ```
+
+`0` means no cap: every update call, and every chunk of a `run_update_full`, stops by
+itself before the IC's instruction limit.
+
+With the q8_0 KV cache above, the measured **generation ceiling is ~55 tokens per
+call** at short context (55 OK, 60 traps with `IC0522` — the IC's
+40 B-instruction-per-message limit), so a response takes few calls or chunks.
 
 > How this was measured: a fresh `new_chat` → short prefill → one generation call of
 > N tokens, scanning N until it traps. On the local replica (whose limit is the same
 > `40000000000` instructions as mainnet, so the number carries over) the boundary was
 > **55 OK / 60 TRAP** with the q8_0 KV cache (~50 with the default f16 cache; expect
-> ±5 run-to-run). This ~44 tok/call is well above the 0.6B's ~25 — a smaller model
+> ±5 run-to-run). This ~55 tok/call is well above the 0.6B's ~25 — a smaller model
 > buys more tokens per call.
 
 ## Chat
@@ -125,36 +127,28 @@ Gemma 3 uses its own turn template — end the prompt with the model turn opener
 <start_of_turn>model
 ```
 
-Ingest the prompt — repeat until `prompt_remaining` is empty (`--temp 0.7`, keep
-sending the full prompt):
+Start a new chat, then ingest the prompt and generate the whole response in one call
+(`--temp 0.7`):
 
 ```bash
-icp canister call llama_cpp run_update '(record {
+icp canister call llama_cpp new_chat '(record {
+  args = vec { "--prompt-cache"; "prompt.cache"; "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0"; }
+})' -e local
+
+icp canister call llama_cpp run_update_full '(record {
   args = vec {
     "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
     "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
     "--temp"; "0.7";
     "-sp";
     "-p"; "<start_of_turn>user\nWrite a few sentences about why the ocean is important.<end_of_turn>\n<start_of_turn>model\n";
-    "-n"; "1"
+    "-n"; "512"
   }
 })' -e local
 ```
 
-Generate — repeat with an empty prompt until `generated_eog=true`:
-
-```bash
-icp canister call llama_cpp run_update '(record {
-  args = vec {
-    "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
-    "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
-    "--temp"; "0.7";
-    "-sp";
-    "-p"; "";
-    "-n"; "44"
-  }
-})' -e local
-```
+To show the text while it is being generated, use the `run_update` loop instead (see the
+[main README](README.md#set-up)).
 
 Remove the prompt cache when done:
 
@@ -166,12 +160,12 @@ icp canister call llama_cpp remove_prompt_cache '(record {
 
 ### Verified on-chain output (local canister)
 
-For the prompt above, the canister generated:
+For the prompt above, one `run_update_full` call (5.4s, 2 chunks, 58 tokens) returned:
 
-> The ocean is a vital resource, providing essential sustenance for marine life and
-> supporting ecosystems worldwide. Its diverse environments and temperature
-> variations ensure a stable and healthy environment for countless organisms.
-> Furthermore, the ocean's …
+> The ocean is vital to our planet's health and sustains life. It provides essential
+> food sources, regulates climate patterns, and supports a vast array of marine
+> ecosystems. Its deep waters are teeming with life, offering habitats for countless
+> species and contributing to the overall biodiversity of the world.
 
 Coherent and on-topic — good for a 270M model.
 

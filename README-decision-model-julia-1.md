@@ -22,10 +22,11 @@
 | instructions per token          | ~170-180 M                                                |
 | max tokens per question         | ~210 per update call (209 tokens = 37.6 B instructions)   |
 | one 87-token question           | ~14.9 B instructions, ~14.9 B cycles on the local replica |
-| recommended `max_tokens_update` | 200 (the per-call token budget of `run_decision`)         |
+| `max_tokens_update`             | 0: each call stops itself before the IC's limit           |
 
-The 5-question request of llama.cpp PR #29818 (396 tokens) is answered in 3 update
-calls (161 + 152 + 83 tokens) with a budget of 200.
+The 5-question request of llama.cpp PR #29818 (396 tokens) is answered by one
+`run_decision_full` call. The `run_decision` loop answers it in 3 update calls (161 + 152
++ 83 tokens with a budget of 200).
 
 ## Get the gguf
 
@@ -67,23 +68,25 @@ laya`) and switches the context to embedding mode. On a decision model, `run_upd
 
 ## Set the per-call token budget
 
-`run_decision` answers the questions of a request in order, as long as they fit in
-`max_tokens_update` tokens per update call; the rest is reported as `pending` and answered
-when you re-send the same request. With ~180 M instructions per token, **200** keeps a
-call under the 40 B instruction limit:
-
 ```bash
-icp canister call llama_cpp set_max_tokens '(record { max_tokens_query = 200 : nat64; max_tokens_update = 200 : nat64 })' -e local
+icp canister call llama_cpp set_max_tokens '(record { max_tokens_query = 0 : nat64; max_tokens_update = 0 : nat64 })' -e local
 ```
 
-A single question longer than the budget returns `Err` (its token count and the budget).
+`0` means no cap: each message answers the questions that fit, and stops before the IC's
+instruction limit; the rest is answered in the next step of a `run_decision_full`, or the
+next `run_decision` call. With ~180 M instructions per token, one question fits up to
+~210 tokens.
+
+A question longer than that does not fit one message. With no cap, the IC then rejects the
+call (`IC0522`). To get a clear `Err` with the question's token count instead, set
+`max_tokens_update` to 200: a question longer than the budget returns `Err`.
 
 ## Ask a question
 
 The `intent` question of llama.cpp PR #29818, with the customer data as a JSON state:
 
 ```bash
-icp canister call llama_cpp run_decision '(record { state = variant { Json = "{\"message\": \"Hi, I was charged twice for my order #4471 and I want a refund.\", \"plan\": \"pro\", \"order\": {\"id\": 4471, \"items\": [\"phone case\", \"charger\"]}}" }; questions = vec { record { id = "intent"; kind = variant { choice }; instructions = "What does the customer want?" } }; options = vec { record { question_id = "intent"; key = "refund"; description = "wants money back" }; record { question_id = "intent"; key = "cancel"; description = "wants to cancel an order" }; record { question_id = "intent"; key = "track"; description = "wants to know where an order is" }; record { question_id = "intent"; key = "other"; description = "anything else" } } })' -e local
+icp canister call llama_cpp run_decision_full '(record { state = variant { Json = "{\"message\": \"Hi, I was charged twice for my order #4471 and I want a refund.\", \"plan\": \"pro\", \"order\": {\"id\": 4471, \"items\": [\"phone case\", \"charger\"]}}" }; questions = vec { record { id = "intent"; kind = variant { choice }; instructions = "What does the customer want?" } }; options = vec { record { question_id = "intent"; key = "refund"; description = "wants money back" }; record { question_id = "intent"; key = "cancel"; description = "wants to cancel an order" }; record { question_id = "intent"; key = "track"; description = "wants to know where an order is" }; record { question_id = "intent"; key = "other"; description = "anything else" } } })' -e local
 ```
 
 Verified on-chain output (local replica):
@@ -99,12 +102,14 @@ and the canister log (`icp canister logs llama_cpp -e local`):
 ```
 llama_cpp: run_decision - intent (choice, 87 tokens) -> refund (p=0.98, confidence=0.98)
 llama_cpp: run_decision - 87 tokens this call, 1/1 questions answered
+llama_cpp: run_decision - full: step 1, 87 tokens, 0 pending, 14.92 B instructions
 ```
 
 Several questions about the same state go in one request; each gets its own forward pass
-(the state is part of every question's prompt). Re-send the identical request while
-`pending` is not empty: answers of earlier calls are kept in a per-principal file and
-returned with the new ones.
+(the state is part of every question's prompt). `run_decision_full` answers all of them
+in one call. With `run_decision`, re-send the identical request while `pending` is not
+empty: answers of earlier calls are kept in a per-principal file and returned with the
+new ones.
 
 ## Compared with llama-server
 

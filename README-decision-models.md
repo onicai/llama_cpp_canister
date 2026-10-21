@@ -196,8 +196,8 @@ question must fit within **one update call's instruction limit** (40 B
 instructions). This sets the maximum size of a question (instructions + options +
 state): measured ~210 tokens for Julia-1 and 33 tokens for Laya.
 
-A request with several questions is still fine: `run_decision` answers as many as fit in
-one call and returns the rest as `pending` (see below).
+A request with several questions is still fine: `run_decision_full` answers all of them
+in one call, one step per message (see below).
 
 **Kev-0.8B lifts this constraint for the state.** Kev is causal (Qwen3.5) and its prompt
 starts with the state, so the state is a prefix that does not depend on the question.
@@ -229,8 +229,8 @@ call.
 - **`input_tokens` and `instructions`** cover the whole call. `instructions` counts
   over all the messages of a call, for `run_decision` too.
 - **Check for `Err` first:** a question that does not fit in a step after a yield
-  returns an `Err` that names it and points to `run_decision` (see the Laya limit
-  below). Continue that request with `run_decision`.
+  returns an `Err` that names it (see the Laya limit below). Send that question in a
+  request of its own: its first message fits it.
 - **`pending`:** an `Ok` with a non-empty `pending` means the call stopped early,
   because its next self-call could not be made, for example when the canister is
   stopping. Re-send the request with `run_decision` (or
@@ -239,10 +239,12 @@ call.
   status 409.
 
 **The Laya limit:** a message after a yield has a limit of 38B instructions, not
-40B, and every step after the first keeps under 34B. One Laya forward pass
-of ~32 tokens (~38B) does not fit there. `run_decision_full` then stops with an
-error that names the question and points to `run_decision`, which runs every
-question in a first message. Julia-1 and Kev-0.8B fit.
+40B, and every step after the first keeps under 34B. A typical Laya question does
+not fit there: the questions measured in
+[README-decision-model-Laya.md](README-decision-model-Laya.md) take 29 to 32 tokens
+and 34.5B to 38.4B. `run_decision_full` then stops with an
+error that names the question. So with Laya, send one question per request: the first
+message of a call fits any one question. Julia-1 and Kev-0.8B fit.
 
 Measured on a local replica, with the 4-question request of `test/test_decision.py`:
 
@@ -284,8 +286,9 @@ calls the Jinja runtime directly and does not use that flag.
 - **Load** with the existing `load_model`. The GGUF metadata switches the context to
   embedding mode; no extra flags are needed. On a decision model, `run_update`,
   `run_query` and `new_chat` return `Err` ("use run_decision").
-- **Ask** with the update endpoint `run_decision`. Access rules are the same as
-  `run_update`.
+- **Ask** with the update endpoint `run_decision_full`: the whole request in one call.
+  `run_decision` answers one step per call, for a client that drives the steps itself.
+  Access rules are the same as `run_update`.
 - **Interface: flat typed Candid.** icpp-pro decodes a `vec record` as a record of flat
   vectors (no nested `vec record`, no `vec opt`, only unit variants inside a `vec`), so
   questions, options, answers and probabilities are flat tables linked by question id:
@@ -320,9 +323,11 @@ run_decision_full : (DecisionInputRecord) -> (DecisionResult); // the whole requ
   - `noul`: optional rows with key `true` / `false` (descriptions); the answer is `yes`,
     the probability of yes.
 - **Resume across calls**, like `run_update` ingesting a long prompt: each call answers
-  the pending questions that fit in `max_tokens_update` tokens (`set_max_tokens`), in
-  request order, and returns the answers so far plus the `pending` ids. Re-send the same
-  request until `pending` is empty. The answers so far are kept in a per-principal file
+  the pending questions that fit, in request order, and returns the answers so far plus
+  the `pending` ids. With `max_tokens_update = 0` (no cap; `set_max_tokens`) a call
+  answers what fits under the IC's instruction limit; a value above 0 also caps the
+  tokens per call. Re-send the same request until `pending` is empty, or send it once
+  with `run_decision_full`. The answers so far are kept in a per-principal file
   in `.canister_cache/<principal>/sessions/`, keyed by the request AND the loaded model,
   so the optional prompt-cache cleanup timer covers them when it is started, and another
   model never reuses them.
@@ -361,7 +366,7 @@ Measured on a local replica (same 40 B instruction limit per update call as main
 | instructions per token  | ~170-180 M                                                                | ~1.2 B                    | ~1.4 B (1.60 B at 2,000 state tokens)         |
 | max tokens per question | ~210                                                                      | 33                        | ~22, without the state                        |
 | max state size          | within the question                                                       | within the question       | ~4,000 tokens (`-c 4096`), 24 stored per call |
-| `max_tokens_update`     | 200                                                                       | 32                        | 0: each call stops itself before the limit    |
+| `max_tokens_update`     | 0: each call stops itself before the limit                                | 0, the same               | 0, the same                                   |
 | example question        | 87 tokens, ~14.9 B cycles                                                 | 29 tokens, ~34.5 B cycles | 16 tokens on a stored state, ~22.8 B cycles   |
 | vs llama-server (CPU)   | clear decisions agree; close calls can differ (Q8_0 rounding sensitivity) | within 0.011              | within 0.013                                  |
 

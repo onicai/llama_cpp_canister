@@ -491,7 +491,7 @@ With `run_decision`, the same request takes 5 calls:
 ## Ask one question at a time
 
 A later request about the same state does not ingest it again: it only decodes its own
-question. So a client can ask its questions one call at a time, with either endpoint:
+question. So a client can ask its questions one call at a time:
 
 - Send the **whole state** every time. The canister tokenizes it and finds the stored copy
   by its tokens; there is no field to name a stored state.
@@ -540,10 +540,10 @@ icp canister call llama_cpp -e local run_decision_full '(record {
 )
 ```
 
-With `run_decision`: a question about a stored state fits one call (~3 s):
+Another question about the same stored state (~3 s):
 
 ```bash
-icp canister call llama_cpp -e local run_decision '(record {
+icp canister call llama_cpp -e local run_decision_full '(record {
   state = variant { Text = "DEXSwapper support ticket 7741. Wallet: 3vx2k-...-cae, user since 2024, 312 swaps, no open tickets.\nSwap, March 3, 14:02 UTC: 500 ICP -> ckUSDC on the ICP/ckUSDC pool, quote 4,180 ckUSDC, slippage 0.5%. 500 ICP left the wallet; the swap status shows failed, price moved; 0 ckUSDC received.\nUser message, March 3: My swap failed but the 500 ICP is gone from my wallet and I got no ckUSDC. Please refund the 500 ICP to my wallet.\nUser message, March 5: Still nothing!! This is the second time I report this swap and nobody answers. This is unacceptable. Give me back my 500 ICP today or I post the transaction on X." };
   questions = vec {
     record { id = "answered"; kind = variant { noul }; instructions = "Has support answered the user?" };
@@ -570,7 +570,7 @@ icp canister call llama_cpp -e local run_decision '(record {
           confidence = 0.0 : float64;
         };
       };
-      instructions = opt (21_064_978_122 : nat64);
+      instructions = opt (21_011_922_257 : nat64);
       input_tokens = 14 : nat64;
       state_tokens = opt (214 : nat64);
     }

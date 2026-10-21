@@ -314,21 +314,21 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   **risks**. This assumes you raised the `wasm_memory_limit` to 3.75 GiB (see the
   `update-settings` step above); watch live usage with the `get_memory_status` query.
 
-- Set the max_tokens for this model, to avoid it hits the IC's instruction limit
-
-  _(See Appendix A for values of others models.)_
+- Set the max_tokens for this model: `0` means no cap
 
   ```bash
   icp canister call llama_cpp -e local set_max_tokens '(record {
     max_tokens_query = 1 : nat64;
-    max_tokens_update = 20 : nat64
+    max_tokens_update = 0 : nat64
   })'
 
   icp canister call llama_cpp -e local get_max_tokens '()'
   ```
 
-  For Qwen3-0.6B the first-call ceiling is ~25–29 tokens; we use **20** to leave
-  headroom as the context grows across a multi-turn conversation.
+  With `max_tokens_update = 0`, every update call, and every chunk of a
+  `run_update_full`, does as many tokens as fit: it stops by itself before it would use
+  more than 36B instructions (the IC's limit is 40B). For Qwen3-0.6B that is ~20 tokens
+  per call. _(See Appendix A for other models.)_
 
 - Chat with the LLM
 
@@ -364,143 +364,11 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
     ***
 
-    Ingest the prompt:
+    Ingest the prompt and generate the whole response, in one call:
 
-    Repeat this call until `prompt_remaining` in the response is empty.
-    This ingests the prompt into the prompt-cache, using multiple update calls:
-    (-) Keep sending the full prompt
-    (-) Use `"-n"; "1"`, so it does not generate new tokens
     (-) The assistant turn ends with the empty `<think>\n\n</think>\n\n` block, so
         Qwen3 runs in non-thinking mode
-
-    ```bash
-    icp canister call llama_cpp -e local run_update '(record {
-      args = vec {
-        "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
-        "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
-        "--repeat-penalty"; "1.1";
-        "--temp"; "0.6";
-        "-sp";
-        "-p"; "<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
-        "-n"; "1"
-      }
-    })'
-    ```
-
-    ***
-
-    Generate new tokens:
-
-    Once `prompt_remaining` in the response is empty.
-    (-) repeat this call, until `generated_eog=true`
-    (-) Use an empty prompt: `"-p"; "";`
-    (-) Use `"-n"; "512"`, so it will now generate new tokens
-
-    ```bash
-    icp canister call llama_cpp -e local run_update '(record {
-      args = vec {
-        "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
-        "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
-        "--repeat-penalty"; "1.1";
-        "--temp"; "0.6";
-        "-sp";
-        "-p"; "";
-        "-n"; "512"
-      }
-    })'
-    ```
-
-    ***
-
-    Once `generated_eog` in the response is `true`, the LLM is done generating.
-    The generated `output` contains **no `<think>` tokens** — a clean, direct answer:
-
-    ```bash
-    (
-      variant {
-        Ok = record {
-          output = " from answering questions to generating creative content.<|im_end|>";
-          conversation = "<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\nA Large Language Model (LLM) is a type of artificial intelligence model that can understand and generate human-like text. These models are trained on vast amounts of text data and are capable of understanding and responding to natural language in a variety of ways, from answering questions to generating creative content.<|im_end|>";
-          error = "";
-          status_code = 200 : nat16;
-          prompt_remaining = "";
-          generated_eog = true;
-        }
-      },
-    )
-    ```
-
-    ***
-
-    **Exact token accounting.** Every `run_update` / `run_query` **success** record
-    also carries five `opt nat64` fields with the exact token counts for that call
-    (they decode to `null` on non-run records such as `new_chat` / `load_model`):
-
-    | Field                       | Meaning                                                    |
-    | --------------------------- | ---------------------------------------------------------- |
-    | `n_prompt_tokens`           | total prompt tokens presented this call                    |
-    | `n_prompt_tokens_cached`    | prompt-cache prefix reused for free (the cache-break offset)|
-    | `n_prompt_tokens_decoded`   | prompt tokens actually decoded this call                   |
-    | `n_tokens_generated`        | tokens generated this call                                 |
-    | `n_prompt_tokens_remaining` | prompt suffix left for the next call                       |
-
-    They always reconcile: `cached + decoded + remaining == n_prompt_tokens`, and
-    `n_tokens_generated` is `0` until the prompt is fully ingested
-    (`n_prompt_tokens_remaining == 0`). This lets a caller measure the exact
-    ingest-vs-generate split and the prompt-cache break offset per call. Being
-    `opt`, they are upgrade-safe: a client built against the older `.did` simply
-    ignores them.
-
-    ***
-
-    **Multi-turn conversation.** Qwen3 handles back-and-forth conversations well. To
-    continue a chat, send the **full accumulated conversation** as the prompt each
-    turn — the prompt-cache reuses the shared prefix, so only the new turn is
-    processed. Here, turn 2 asks the model to recall facts stated in turn 1
-    (`new_chat` first, then ingest with `-n 1` until `prompt_remaining` is empty,
-    then generate with an empty `-p` until `generated_eog=true`):
-
-    ```bash
-    icp canister call llama_cpp -e local run_update '(record {
-      args = vec {
-        "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
-        "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
-        "--temp"; "0.6"; "-sp";
-        "-p"; "<|im_start|>user\nMy name is Sam and I have 3 cats named Milo, Coco, and Ziggy.<|im_end|>\n<|im_start|>assistant\nNice to meet you, Sam! You have three cats: Milo, Coco, and Ziggy.<|im_end|>\n<|im_start|>user\nHow many cats do I have, what are their names, and what is my name?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
-        "-n"; "1"
-      }
-    })'
-    ```
-
-    The assistant correctly recalls turn 1:
-
-    ```
-    You have 3 cats: Milo, Coco, and Ziggy.
-    Your name is Sam.
-    ```
-
-    ***
-
-    Remove the prompt cache when done - this keeps stable memory usage at a minimum
-
-    ```bash
-    icp canister call llama_cpp -e local remove_prompt_cache '(record {
-      args = vec {
-        "--prompt-cache"; "prompt.cache"
-      }
-    })'
-    ```
-
-    Note: The sequence of update calls to the canister is required because the Internet Computer has a limitation
-    on the number of instructions it allows per call. For Qwen3-0.6B, ~20 tokens are generated per update call.
-    Each `run_update` call also stops by itself before it would use more than 36B instructions (the
-    limit is 40B), so a long context never traps; `max_tokens_update` is then only a ceiling.
-
-    ***
-
-    **One call: `run_update_full`.** Instead of the loop above, one update call can ingest
-    the prompt and generate the whole response. It takes the same `InputRecord` and
-    returns the same `OutputRecordResult`:
+    (-) `"-n"; "512"` is the most tokens the whole response may have
 
     ```bash
     icp canister call llama_cpp -e local run_update_full '(record {
@@ -516,18 +384,43 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     })'
     ```
 
+    It returns after ~15s on a local network (5 chunks). The `output` is the whole
+    response, with **no `<think>` tokens**:
+
+    ```bash
+    (
+      variant {
+        Ok = record {
+          n_prompt_tokens = opt (22 : nat64);
+          output = "LLMs (Large Language Models) are advanced artificial intelligence systems designed to understand, generate, and interact with text in a human-like way. They can analyze language patterns, perform tasks like summarization, translation, or answering questions, making them versatile for various applications across different industries.<|im_end|>";
+          n_tokens_generated = opt (57 : nat64);
+          conversation = "<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\nLLMs (Large Language Models) are advanced artificial intelligence systems designed to understand, generate, and interact with text in a human-like way. They can analyze language patterns, perform tasks like summarization, translation, or answering questions, making them versatile for various applications across different industries.<|im_end|>";
+          error = "";
+          n_prompt_tokens_remaining = opt (0 : nat64);
+          n_prompt_tokens_cached = opt (0 : nat64);
+          status_code = 200 : nat16;
+          prompt_remaining = "";
+          generated_eog = true;
+          partial = opt false;
+          n_prompt_tokens_decoded = opt (22 : nat64);
+        }
+      },
+    )
+    ```
+
     How it works and what to expect:
 
-    - **Chunks:** it works in chunks, like the loop. After each chunk it yields to
-      itself (a self-call), which commits the chunk, session file included, and
-      continues in a new message with a fresh instruction limit. Other calls can run
-      between two chunks; every chunk reloads the caller's session file.
-    - **Same output, same cost:** it gives the same output as the loop at the same
-      chunk size and uses the same cycles. Each chunk is one consensus round, so a
-      response takes about as long as the loop: ~16s per 64 tokens on a local
-      replica, ~60s per 64 tokens on mainnet. The reply only comes when the whole
-      response is done, so give the client a timeout that covers all of it: several
-      minutes for `-n 512` on mainnet.
+    - **Chunks:** the IC limits the instructions of one message, so the call works in
+      chunks. After each chunk it yields to itself (a self-call), which commits the
+      chunk, session file included, and continues in a new message with a fresh
+      instruction limit. Other calls can run between two chunks; every chunk reloads
+      the caller's session file.
+    - **Same output, same cost:** it gives the same output as the `run_update` loop
+      below at the same chunk size, and uses the same cycles. Each chunk is one
+      consensus round, so a response takes about as long as the loop: ~16s per 64
+      tokens on a local replica, ~60s per 64 tokens on mainnet. The reply only comes
+      when the whole response is done, so give the client a timeout that covers all of
+      it: several minutes for `-n 512` on mainnet.
     - **`-n`** is the total for the whole response.
     - **`n_*` counts** cover the whole call. A response that ends on `-n` counts its
       last sampled token.
@@ -546,8 +439,108 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
       reached. The reply holds what was generated; continue it with `run_update` and
       an empty prompt. A complete reply has `partial = opt false`; other replies have
       `partial = null`.
-    - **When to keep the loop:** keep the multi-call loop when the client shows text
-      while it is being generated: `run_update_full` replies once, at the end.
+
+    ***
+
+    **Exact token accounting.** Every `run_update` / `run_update_full` / `run_query`
+    **success** record also carries five `opt nat64` fields with the exact token counts
+    (they decode to `null` on non-run records such as `new_chat` / `load_model`):
+
+    | Field                       | Meaning                                                      |
+    | --------------------------- | ------------------------------------------------------------ |
+    | `n_prompt_tokens`           | total prompt tokens presented                                |
+    | `n_prompt_tokens_cached`    | prompt-cache prefix reused for free (the cache-break offset) |
+    | `n_prompt_tokens_decoded`   | prompt tokens actually decoded                               |
+    | `n_tokens_generated`        | tokens generated                                             |
+    | `n_prompt_tokens_remaining` | prompt suffix left for the next call                         |
+
+    They always reconcile: `cached + decoded + remaining == n_prompt_tokens`, and
+    `n_tokens_generated` is `0` until the prompt is fully ingested
+    (`n_prompt_tokens_remaining == 0`). This lets a caller measure the exact
+    ingest-vs-generate split and the prompt-cache break offset. Being `opt`, they are
+    upgrade-safe: a client built against the older `.did` simply ignores them.
+
+    ***
+
+    **Multi-turn conversation.** Qwen3 handles back-and-forth conversations well. To
+    continue a chat, send the **full accumulated conversation** as the prompt each
+    turn — the prompt-cache reuses the shared prefix, so only the new turn is
+    processed. Here, turn 2 asks the model to recall facts stated in turn 1:
+
+    ```bash
+    icp canister call llama_cpp -e local run_update_full '(record {
+      args = vec {
+        "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
+        "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
+        "--temp"; "0.6"; "-sp";
+        "-p"; "<|im_start|>user\nMy name is Sam and I have 3 cats named Milo, Coco, and Ziggy.<|im_end|>\n<|im_start|>assistant\nNice to meet you, Sam! You have three cats: Milo, Coco, and Ziggy.<|im_end|>\n<|im_start|>user\nHow many cats do I have, what are their names, and what is my name?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
+        "-n"; "512"
+      }
+    })'
+    ```
+
+    The assistant correctly recalls turn 1:
+
+    ```
+    - **Number of cats**: 3
+    - **Names**: Milo, Coco, and Ziggy
+    - **Your name**: Sam
+    ```
+
+    ***
+
+    Remove the prompt cache when done - this keeps stable memory usage at a minimum
+
+    ```bash
+    icp canister call llama_cpp -e local remove_prompt_cache '(record {
+      args = vec {
+        "--prompt-cache"; "prompt.cache"
+      }
+    })'
+    ```
+
+    ***
+
+    **Show text while it is being generated: the `run_update` loop.** `run_update_full`
+    replies once, at the end. To show the text as it is generated, drive the chunks
+    yourself with `run_update`, one update call per chunk:
+
+    1. Ingest the prompt: repeat this call, with the full prompt and `"-n"; "1"`, until
+       `prompt_remaining` in the response is empty.
+
+       ```bash
+       icp canister call llama_cpp -e local run_update '(record {
+         args = vec {
+           "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
+           "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
+           "--repeat-penalty"; "1.1";
+           "--temp"; "0.6";
+           "-sp";
+           "-p"; "<|im_start|>user\ngive me a short introduction to LLMs.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
+           "-n"; "1"
+         }
+       })'
+       ```
+
+    2. Generate: repeat this call, with an empty prompt and `"-n"; "512"`, until
+       `generated_eog` is `true`. Each call returns the next ~20 tokens in `output`.
+
+       ```bash
+       icp canister call llama_cpp -e local run_update '(record {
+         args = vec {
+           "--prompt-cache"; "prompt.cache"; "--prompt-cache-all";
+           "--cache-type-k"; "q8_0"; "--cache-type-v"; "q8_0";
+           "--repeat-penalty"; "1.1";
+           "--temp"; "0.6";
+           "-sp";
+           "-p"; "";
+           "-n"; "512"
+         }
+       })'
+       ```
+
+    In the loop, `-n` is the most tokens per call, and `max_tokens_update` (0 = no cap)
+    can lower it further.
 
     **Query or update?**
 
@@ -564,7 +557,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     every query it calls. A query answer comes from one replica and is not
     certified: where the answer must be trusted, use an update.
 
-    This sequence of update calls is equivalent to using the [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
+    This is equivalent to using the [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
     repo directly and running the `llama-cli` locally, with the command:
 
     ```bash
@@ -1048,6 +1041,11 @@ controller-only management call and fails with `IC0542` for anyone else. Use the
 
 # Appendix A: max_tokens
 
+With `max_tokens_update = 0` (no cap), you do not need these numbers: every update call,
+and every chunk of a `run_update_full`, stops by itself before the instruction limit.
+They tell how many tokens fit in one call or chunk, and so how many calls or chunks a
+response takes.
+
 The size and settings for models impact the number of tokens that can be generated
 in 1 update call before hitting the instruction limit of the Internet Computer.
 
@@ -1099,7 +1097,7 @@ NOTEs:
 - **`Qwen3-0.6B-Q8_0`**: ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --batch-size 64 --ubatch-size 64 --ctx-size 16384` and a `wasm_memory_limit` of 3.75 GiB; the small batch shrinks the compute buffers so a 16K context fits with ~2 GiB headroom — see [Context size & memory](#appendix-b-context-size--memory) for the mechanism, levers, and risks.
 - **`LFM2.5-1.2B-Instruct-Q4_K_M` is the fastest model that still passes our word-guessing quality gate** — Liquid AI's hybrid architecture (only 6 of 16 blocks are attention; the other 10 are short convolutions). Measured on mainnet at `-c 4096`: **9 tokens/call generation, 11 ingestion**, and **12.4 B cycles per `run_update` versus Qwen3-1.7B's 26.8 B — 2.16x cheaper per call** at 34 % less disk. Note it needs one word ("small") removed from the word-game example prompt, or it copies it into its hints. See [README-LFM2.5-1.2B.md](README-LFM2.5-1.2B.md).
 - **`Qwen3-1.7B-Q4_K_M` is the largest model we tested on-chain so far.** Use Q4_K_M, not Q8_0: a single message can read at most ~2 GiB from stable memory and the Q8_0 gguf (~1.83 GB) trips `IC0524` on load. It needs `--batch-size 8 --ubatch-size 8` and a 3.75 GiB `wasm_memory_limit`, and `--ctx-size 16384` requires v0.16.4 or later. See [README-qwen3-1.7B.md](README-qwen3-1.7B.md).
-- **Decision models (System One)**: `run_decision` answers typed `choice` / `score` / yes-no questions about a state with probabilities, in one forward pass, instead of generating text. **Julia-1** (144M, 50+ languages) fits ~210 tokens per question per update call (~14.9 B instructions for an 87-token question); **Laya** (421M, English, more precise) fits 33. **Kev-0.8B** (causal, English) stores the state once per caller, ingesting it over as many calls as needed (and only the new part when the state grows), and then answers each question from it at up to ~22 tokens per question: ingest once, ask many. Multi-question requests resume across calls. A caller that serves many users (a gateway) passes a `scope` per user, and each reply reports the instructions it used. See [README-decision-models.md](README-decision-models.md), [README-decision-model-julia-1.md](README-decision-model-julia-1.md), [README-decision-model-Laya.md](README-decision-model-Laya.md) and [README-decision-model-kev-0.8b.md](README-decision-model-kev-0.8b.md).
+- **Decision models (System One)**: `run_decision_full` answers typed `choice` / `score` / yes-no questions about a state with probabilities, instead of generating text, in one update call that yields to itself between its steps. **Julia-1** (144M, 50+ languages) fits ~210 tokens per question per update call (~14.9 B instructions for an 87-token question); **Laya** (421M, English, more precise) fits 33. **Kev-0.8B** (causal, English) stores the state once per caller, ingesting it over as many calls as needed (and only the new part when the state grows), and then answers each question from it at up to ~22 tokens per question: ingest once, ask many. A request with several questions continues over the steps of that one call (for Laya, send one question per request). A caller that serves many users (a gateway) passes a `scope` per user, and each reply reports the instructions it used. See [README-decision-models.md](README-decision-models.md), [README-decision-model-julia-1.md](README-decision-model-julia-1.md), [README-decision-model-Laya.md](README-decision-model-Laya.md) and [README-decision-model-kev-0.8b.md](README-decision-model-kev-0.8b.md).
 - During prompt ingestion phase, the max_tokens before hitting the instruction limit is higher as during the generation phase.
 - We use `"--temp"; "0.6"; "--repeat-penalty"; "1.1";`, as recommended on several model cards
 - For each model, we selected a `--cache-type-k` that gives the highest max_tokens while still providing good results.

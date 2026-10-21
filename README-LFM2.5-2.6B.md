@@ -116,6 +116,8 @@ than generation and its ceiling is higher.
 | 5     | rejected, `IC0522` instruction limit | rejected, `IC0522` instruction limit |
 | 6     | rejected, `IC0522` instruction limit | —                                    |
 
+The setting verified on mainnet, with the `run_update` loop:
+
 ```bash
 icp canister call llama_cpp_qwen3_17b set_max_tokens \
   '(record { max_tokens_query = 1 : nat64; max_tokens_update = 3 : nat64 })' -e production
@@ -127,6 +129,12 @@ and a larger `--ctx-size` lowers it too — see
 you allocate is a flat tax on every call. Overshooting is safe to recover from:
 the call is rejected with `IC0522` and rolled back, leaving the prompt cache
 intact.
+
+Since v0.23.0rc1, `max_tokens_update = 0` (no cap) makes every update call, and every
+chunk of a `run_update_full`, stop by itself before the instruction limit. That is the
+recommended setting for the other models, but it is **not verified on this model yet**:
+the current file does not load with v0.23.0rc1 (see
+[Status and what is not verified](#status-and-what-is-not-verified)).
 
 ## Non-thinking mode — the one thing you must get right
 
@@ -264,6 +272,12 @@ round trip across calls, wasm heap after load.
 
 Not verified:
 
+- **Loading the current file with v0.23.0rc1.** The file on Hugging Face has changed
+  since these measurements: its sha256 is now `02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed`
+  (same size). With v0.23.0rc1, on a fresh canister on a local network, `load_model` on
+  it exceeds the IC's limit of 2 GiB of stable memory read per message. This is under
+  investigation; `run_update_full` and `max_tokens_update = 0` are not verified on this
+  model yet.
 - **Only `-c 4096`.** Larger contexts are untested; the ceiling is already 4, so
   a bigger context may push generation below one token per call.
 - **Tool calling / agentic use**, which is the model's actual selling point and
