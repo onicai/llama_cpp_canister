@@ -168,14 +168,19 @@ def positive(value: str) -> float:
 def read_next_index(path: Path, cid: str) -> Tuple[Optional[int], int, bool]:
     """Where to resume, saved by an earlier run for canister `cid`: the index, the
     characters of that record already written, and whether records were lost
-    before it."""
+    before it. Stops on a checkpoint it cannot read: starting over would write the
+    saved lines again."""
+    if not path.exists():
+        return None, 0, False
     try:
         saved_id, index, skip, *lost = path.read_text(encoding="utf-8").split()
-        if saved_id == cid:
+        if saved_id != cid:
+            return None, 0, False
+        if int(index) >= 0 and int(skip) >= 0 and lost in ([], ["lost"]):
             return int(index), int(skip), lost == ["lost"]
     except (OSError, ValueError):
         pass
-    return None, 0, False
+    sys.exit(f"ERROR: {path} is not a checkpoint; delete it to start over.")
 
 
 def save_next_index(path: Path, cid: str, lines: Lines, next_index: int) -> None:
