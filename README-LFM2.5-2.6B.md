@@ -116,17 +116,18 @@ than generation and its ceiling is higher.
 | 5     | rejected, `IC0522` instruction limit | rejected, `IC0522` instruction limit |
 | 6     | rejected, `IC0522` instruction limit | —                                    |
 
+Set `max_tokens_update = 0` (no cap), and every update call, and every chunk of a
+`run_update_full`, stops by itself before the instruction limit, at whatever the
+ceiling is for the conversation so far:
+
 ```bash
 icp canister call llama_cpp_qwen3_17b set_max_tokens \
-  '(record { max_tokens_query = 1 : nat64; max_tokens_update = 3 : nat64 })' -e production
+  '(record { max_tokens_query = 1 : nat64; max_tokens_update = 0 : nat64 })' -e production
 ```
 
-Use **3**, not 4, in production: the ceiling shrinks as a conversation grows,
-and a larger `--ctx-size` lowers it too — see
-[Appendix A: max_tokens](README.md#appendix-a-max_tokens) for why the context
-you allocate is a flat tax on every call. Overshooting is safe to recover from:
-the call is rejected with `IC0522` and rolled back, leaving the prompt cache
-intact.
+The ceiling shrinks as a conversation grows, and a larger `--ctx-size` lowers it too —
+see [Appendix A: max_tokens](README.md#appendix-a-max_tokens) for why the context you
+allocate is a flat tax on every call.
 
 ## Non-thinking mode — the one thing you must get right
 
@@ -264,6 +265,12 @@ round trip across calls, wasm heap after load.
 
 Not verified:
 
+- **Loading the current file with v0.23.0rc1.** The file on Hugging Face has changed
+  since these measurements: its sha256 is now `02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed`
+  (same size). With v0.23.0rc1, on a fresh canister on a local network, `load_model` on
+  it exceeds the IC's limit of 2 GiB of stable memory read per message. This is under
+  investigation; `run_update_full` and `max_tokens_update = 0` are not verified on this
+  model yet.
 - **Only `-c 4096`.** Larger contexts are untested; the ceiling is already 4, so
   a bigger context may push generation below one token per call.
 - **Tool calling / agentic use**, which is the model's actual selling point and
