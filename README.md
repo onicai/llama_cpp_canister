@@ -540,10 +540,16 @@ icp canister call llama_cpp -e local log_resume '()'
 
 # Monitoring the canister log
 
-The canister log (`icp canister logs llama_cpp`) is a small ring buffer: it keeps ~50
-records, and every logged line takes two. During a `run_update_full` or
-`run_decision_full`, each chunk or step logs a few lines, so a busy refusal, an expiry or
-a trap rotates out within seconds.
+The canister log (`icp canister logs llama_cpp`) is a ring buffer of 4096 bytes by
+default: ~50 records, and every logged line takes at least two. During a
+`run_update_full` or `run_decision_full`, each chunk or step logs a few lines (and
+llama.cpp many more), so a busy refusal, an expiry or a trap rotates out within seconds.
+
+Raise the log memory to its maximum of 2 MiB:
+
+```bash
+icp canister settings update llama_cpp --log-memory-limit 2mib -e local
+```
 
 To keep the log, capture it from outside with `scripts/monitor_logs.sh`:
 
@@ -555,16 +561,18 @@ scripts/monitor_logs.sh --network local
 scripts/monitor_logs.sh --network production
 ```
 
-- **What it does:** it polls the log every second, prints the new records, and appends
-  them to `scripts/logs-<network>/<canister>.log` and `scripts/logs-<network>/combined.log`.
-  Ctrl+C stops it.
+- **What it does:** it polls the log every second, joins the new records into lines (a
+  line can span several records), prints them, and appends them to
+  `scripts/logs-<network>/<canister>.log` and `scripts/logs-<network>/combined.log`.
+  Each line starts with the index and time of its first record. Ctrl+C stops it; a
+  restart resumes after the last saved record, without duplicates.
 - **Lost records:** when the buffer wrapped between two polls, it prints how many records
-  were lost. Lower `--interval` then.
+  were lost. At the default 4096 bytes, llama.cpp's own logging during a full call loses
+  records even at 1s; with 2 MiB, none were lost. Otherwise, lower `--interval`.
 - **Options:**
   - `--canister <name or id>`, repeated for several canisters (default `llama_cpp`);
   - `--identity <name>`, which must be a controller unless the log visibility is public;
-  - `--interval <seconds>` (default 1);
-  - `--keep-empty`, to keep the empty record that follows every logged line.
+  - `--interval <seconds>` (default 1).
 
 # Logging to a file
 
