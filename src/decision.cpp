@@ -1241,16 +1241,17 @@ void collect_unpinned_states(
   }
 }
 
-// Removes the oldest of `states` until at most `n_keep` remain.
+// Removes the oldest of `states` until at most `n_keep` remain. n_keep is a
+// nat64 setting, compared before it is narrowed to the (wasm32) size_t.
 void remove_oldest(
     std::vector<std::pair<std::filesystem::file_time_type, std::string>>
         &states,
-    size_t n_keep) {
+    uint64_t n_keep) {
   if (states.size() <= n_keep) {
     return;
   }
   std::sort(states.begin(), states.end());
-  for (size_t i = 0; i + n_keep < states.size(); i++) {
+  for (size_t i = 0; i + size_t(n_keep) < states.size(); i++) {
     remove_decision_state(states[i].second);
     log_line("state: removed the older stored state " + states[i].second);
   }

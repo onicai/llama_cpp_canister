@@ -907,6 +907,17 @@ void test_decision_kev(MockIC &mockIC) {
     check(stored_states(controller).size() == 13,
           "kev per-scope no limit: expected 13 stored states, got " +
               std::to_string(stored_states(controller).size()));
+
+    // a cap above 2^32 keeps them all too (wasm32 must not narrow it first)
+    g_max_decision_states_per_scope = 4294967297ULL;
+    remove_real_state();
+    const DecisionReply w =
+        call(mockIC, "kev per-scope cap 2^32+1", KEV_SMALL_STATE_1, controller);
+    check(w.label == "Ok" && w.pending.empty(),
+          "kev per-scope cap 2^32+1: not answered: " + w.err_text);
+    check(stored_states(controller).size() == 13,
+          "kev per-scope cap 2^32+1: expected 13 stored states, got " +
+              std::to_string(stored_states(controller).size()));
     g_max_decision_states_per_scope = per_scope;
   }
 

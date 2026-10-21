@@ -595,7 +595,7 @@ def test__max_decision_states_config(network: str, field: str, default: int) -> 
         return match.group(1).replace("_", "")
 
     assert cap() == str(default)
-    for value in (100, 0, default):  # 0 = no limit
+    for value in (100, 0, 4_294_967_297, default):  # 0 = no limit; above 2^32
         response = _call(
             "set_cache_cleanup_config",
             f"(record {{ {field} = opt ({value} : nat64) }})",
