@@ -90,10 +90,10 @@ clear `Err` with the question's token count, set `max_tokens_update` to 32.
 
 **Send one question per request.** `run_decision_full` answers the first question of a
 request in the call's first message, which has room for any one Laya question (up to 33
-tokens, ~39B instructions). Further questions would run after a yield, in a message with
-a limit of 38B, where a Laya question of ~30 tokens (~35B) does not fit:
-`run_decision_full` then returns an error for the second question. So send each question
-in its own request.
+tokens, ~39B instructions). Further questions would run after a yield, where each step
+keeps under 34B instructions (the IC allows 38B there). The questions measured below take
+29 to 32 tokens and 34.5B to 38.4B, so none of them fits there: `run_decision_full` then
+returns an error for the second question. So send each question in its own request.
 
 ## Ask a question
 

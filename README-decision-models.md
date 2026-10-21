@@ -239,8 +239,10 @@ call.
   status 409.
 
 **The Laya limit:** a message after a yield has a limit of 38B instructions, not
-40B, and every step after the first keeps under 34B. One Laya forward pass
-of ~32 tokens (~38B) does not fit there. `run_decision_full` then stops with an
+40B, and every step after the first keeps under 34B. A typical Laya question does
+not fit there: the questions measured in
+[README-decision-model-Laya.md](README-decision-model-Laya.md) take 29 to 32 tokens
+and 34.5B to 38.4B. `run_decision_full` then stops with an
 error that names the question. So with Laya, send one question per request: the first
 message of a call fits any one question. Julia-1 and Kev-0.8B fit.
 
