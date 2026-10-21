@@ -10,7 +10,7 @@ lines and appends them to:
   scripts/logs-<network>/combined.log     all canisters
 
 Each line starts with the index and time of its first record. A restart resumes after
-the last saved record (kept in scripts/logs-<network>/<canister>.next, with the canister
+the last written line (kept in scripts/logs-<network>/<canister>.next, with the canister
 id). It starts over when the id changed, or when the log no longer reaches that record
 (a recreated local network). It warns when records were lost between two polls, and
 marks the next line "[may be truncated]", also after a restart; then lower --interval.
@@ -102,14 +102,16 @@ class Lines:  # pylint: disable=too-few-public-methods
 
     def __init__(self) -> None:
         self.first: Optional[Dict[str, Any]] = None  # first record of `text`
+        self.written = 0  # characters of first's content already in written lines
         self.text = ""
         self.after_loss = False  # records were lost before `text`
 
-    def add(self, record: Dict[str, Any]) -> List[str]:
-        """Adds a record; returns the lines it completes."""
+    def add(self, record: Dict[str, Any], skip: int = 0) -> List[str]:
+        """Adds a record, without its first `skip` characters (written before a
+        restart); returns the lines it completes."""
         if self.first is None:
-            self.first = record
-        self.text += record["content"]
+            self.first, self.written = record, skip
+        self.text += record["content"][skip:]
         lines: List[str] = []
         while "\n" in self.text:
             line, self.text = self.text.split("\n", 1)
@@ -118,6 +120,7 @@ class Lines:  # pylint: disable=too-few-public-methods
                 lines.append(f"{stamp(self.first)}: {marker}{line}")
                 self.after_loss = False
             self.first = record
+            self.written = len(record["content"]) - len(self.text)
         if not self.text:
             self.first = None
         return lines
@@ -162,22 +165,29 @@ def positive(value: str) -> float:
     return seconds
 
 
-def read_next_index(path: Path, cid: str) -> Tuple[Optional[int], bool]:
-    """The index to resume from, saved by an earlier run for canister `cid`, and
-    whether records were lost before it."""
+def read_next_index(path: Path, cid: str) -> Tuple[Optional[int], int, bool]:
+    """Where to resume, saved by an earlier run for canister `cid`: the index, the
+    characters of that record already written, and whether records were lost
+    before it."""
     try:
-        saved_id, index, *lost = path.read_text(encoding="utf-8").split()
+        saved_id, index, skip, *lost = path.read_text(encoding="utf-8").split()
         if saved_id == cid:
-            return int(index), lost == ["lost"]
+            return int(index), int(skip), lost == ["lost"]
     except (OSError, ValueError):
         pass
-    return None, False
+    return None, 0, False
 
 
-def save_next_index(path: Path, cid: str, index: int, lost: bool) -> None:
-    """Saves the index to resume from, replacing the file in one step."""
+def save_next_index(path: Path, cid: str, lines: Lines, next_index: int) -> None:
+    """Saves where to resume, replacing the file in one step: at the first record of
+    an unfinished line, else at next_index."""
+    if lines.first:
+        index, skip = lines.first["index"], lines.written
+    else:
+        index, skip = next_index, 0
+    lost = " lost" if lines.after_loss else ""
     tmp = path.with_suffix(".next.tmp")
-    tmp.write_text(f"{cid} {index}" + (" lost" if lost else ""), encoding="utf-8")
+    tmp.write_text(f"{cid} {index} {skip}{lost}", encoding="utf-8")
     tmp.replace(path)
 
 
@@ -251,6 +261,7 @@ def main() -> int:
     }
     saved = {c: read_next_index(next_file[c], cid[c]) for c in canisters}
     next_index = {c: saved[c][0] for c in canisters}
+    skip = {c: saved[c][1] for c in canisters}
     lines = {c: Lines() for c in canisters}
     for c in canisters:
         # a log that no longer reaches the saved index belongs to a new canister
@@ -263,7 +274,7 @@ def main() -> int:
             print(f"[monitor] {c}: a new log, starting from its first record")
             next_index[c] = None
         else:
-            lines[c].after_loss = saved[c][1]
+            lines[c].after_loss = saved[c][2]
     try:
         while True:
             for canister in canisters:
@@ -282,23 +293,17 @@ def main() -> int:
                     lines[canister].after_loss = True
                 done: List[str] = []
                 for record in records:
-                    done += lines[canister].add(record)
-                # resume at the first record of an unfinished line
-                pending = lines[canister].first
-                resume: int = pending["index"] if pending else records[-1]["index"] + 1
+                    # a restart skips what it wrote of its first record
+                    n = skip[canister] if record["index"] == expected else 0
+                    done += lines[canister].add(record, n)
+                skip[canister] = 0
+                resume: int = records[-1]["index"] + 1
                 next_index[canister] = resume
                 with uninterrupted():
                     write(canister, done)
                     save_next_index(
-                        next_file[canister],
-                        cid[canister],
-                        resume,
-                        lines[canister].after_loss,
+                        next_file[canister], cid[canister], lines[canister], resume
                     )
-                if pending:  # fetched again from there on the next poll
-                    after_loss = lines[canister].after_loss
-                    lines[canister] = Lines()
-                    lines[canister].after_loss = after_loss
             time.sleep(args.interval)
     except KeyboardInterrupt:
         print("\n[monitor] stopped")
