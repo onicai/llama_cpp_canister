@@ -347,6 +347,35 @@ void test_files(MockIC &mockIC) {
       silent_on_trap, my_principal);
 
   // -----------------------------------------------------------------------------
+  // file_upload_chunk in two chunks, then read back: the second chunk must not
+  // empty the file (an ofstream opened with `out` alone truncates)
+  // '(record { filename = "Work/test_files_qa/two_chunks.bin"; chunk = blob "abc"; chunksize = 3 : nat64; offset = 0 : nat64 })'
+  mockIC.run_test(
+      std::string(__func__) + ": " + "file_upload_chunk - first of two chunks",
+      file_upload_chunk,
+      "4449444c026c04ed8c8bae040193affe810678c7dda8bb0771aec3faa40b786d7b010003616263000000000000000021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e0300000000000000",
+      "4449444c026c03c7dda8bb0771bdbaf9d50778e3efa9c70c716b01bc8a010001010021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e03000000000000004062613738313662663866303163666561343134313430646535646165323232336230303336316133393631373761396362343130666636316632303031356164",
+      silent_on_trap, my_principal);
+
+  // '(record { filename = "Work/test_files_qa/two_chunks.bin"; chunk = blob "def"; chunksize = 3 : nat64; offset = 3 : nat64 })'
+  mockIC.run_test(
+      std::string(__func__) + ": " + "file_upload_chunk - second of two chunks",
+      file_upload_chunk,
+      "4449444c026c04ed8c8bae040193affe810678c7dda8bb0771aec3faa40b786d7b010003646566030000000000000021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e0300000000000000",
+      "4449444c026c03c7dda8bb0771bdbaf9d50778e3efa9c70c716b01bc8a010001010021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e06000000000000004062656635376563376635336136643430626562363430613738306136333963383362633239616338613938313666316663366335633664636439336334373231",
+      silent_on_trap, my_principal);
+
+  // '(record { filename = "Work/test_files_qa/two_chunks.bin"; chunksize = 6 : nat64; offset = 0 : nat64 })'
+  // -> '(variant { Ok = record { chunk = blob "abcdef"; chunksize = 6 : nat64; filesize = 6 : nat64; offset = 0 : nat64; done = true } })'
+  mockIC.run_test(
+      std::string(__func__) + ": " +
+          "file_download_chunk - both uploaded chunks are kept",
+      file_download_chunk,
+      "4449444c016c0393affe810678c7dda8bb0771aec3faa40b780100000000000000000021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e0600000000000000",
+      "4449444c036c0582e1b793047eed8c8bae040193affe810678bdbaf9d50778aec3faa40b786d7b6b01bc8a01000102000106616263646566000000000000000006000000000000000600000000000000",
+      silent_on_trap, my_principal);
+
+  // -----------------------------------------------------------------------------
   // file_download_chunk test: chunksize exceeds MAX_CHUNK_SIZE (security test)
   // '(record { filename = "Work/test_files_qa/random_data_1.bin"; chunksize = 3145728 : nat64; offset = 0 : nat64 })'
   // -> '(variant { Err = variant { Other = "file_download_chunk_: chunksize 3145728 exceeds limit 2097152" } })'
