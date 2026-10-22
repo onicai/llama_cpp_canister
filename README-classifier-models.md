@@ -18,62 +18,130 @@ its labels into the GGUF (`<arch>.classifier.output_labels`).
 
 To train your own, see [README-classifier-training.md](README-classifier-training.md).
 
-## The model we tested: Ettin-encoder-17M
+## The example model: DAO-channel moderation
 
-The guard model of an onicai game, a fine-tuned
-`ModernBertForSequenceClassification` (Ettin-encoder-17M, 7 layers x 256, mean
-pooling) with 18 labels: `intent:gift|bribe|threat|trick|plea|chat`,
-`respect:0..4`, `humor:0..4`, `icp` and `steal`.
+[onicai/dao-moderation-classifier](https://huggingface.co/onicai/dao-moderation-classifier)
+reads one chat message from the public channel of a DAO and scores 6 facts at once, as
+15 scores of one classification head:
 
-## Headline results (local replica, llama_cpp_canister with llama.cpp b11476)
+| Scores | Labels                                                                       | Read as                       |
+|--------|------------------------------------------------------------------------------|-------------------------------|
+| 0-4    | `kind:question` `kind:discussion` `kind:support` `kind:troll` `kind:spam`    | softmax: the kind of message  |
+| 5-7    | `toxicity:0` `toxicity:1` `toxicity:2` (civil, rude, abusive)                | softmax: the level            |
+| 8      | `scam`                                                                       | sigmoid: P(scam)              |
+| 9      | `misleading`                                                                 | sigmoid: P(misleading)        |
+| 10     | `respectful`                                                                 | sigmoid: P(respectful)        |
+| 11-14  | `action:none` `action:warn` `action:delete` `action:block`                   | softmax: the moderator action |
+
+It is ModernBERT Ettin-encoder-17M (7 layers x 256), fine-tuned in f32 on 3,381 synthetic
+messages labeled twice under one written moderation policy. How it was made, and how to
+train your own: [README-classifier-training.md](README-classifier-training.md).
+
+## Built for an OpenChat moderation bot: use `run_classify_query`
+
+**For moderating an OpenChat channel, call `run_classify_query`.** A bot that watches an
+OpenChat channel runs off-chain and calls the canister directly, so it can use the query:
+
+- it is answered in one round trip, without waiting for consensus;
+- it costs the caller no cycles;
+- a message of up to 191 tokens fits the query's 5 B instructions (see below), and a chat
+  message is far shorter (the 200 test messages are 3-55 tokens, 0.61 B on average).
+
+A query answer comes from one replica and is not certified (see
+[Query or update?](#query-or-update)). That fits moderation: the worst case is one message
+misjudged, and a moderator action can be reversed. Use `run_classify`, an update, when
+another canister calls the classifier, or when a decision must hold against a faulty
+replica.
+
+## Results (local replica, llama_cpp_canister with llama.cpp b11476)
+
+On 200 held-out test messages, through `run_classify_query` on the canister:
+
+| kind | toxicity | scam | misleading | respectful | action | all 6 facts right |
+|------|----------|------|------------|------------|--------|-------------------|
+| 0.89 | 0.89     | 0.99 | 0.90       | 0.92       | 0.83   | 141/200           |
+
+- PyTorch, llama.cpp on the CPU and the canister give the same 141/200: their scores
+  differ by at most 0.016.
+- The weakest spot is the middle of the action scale: a message that deserves a warn
+  (mild mockery, a good-faith mistake) often gets none. Scams and abuse are blocked.
+
+### How a bot should act on it: only when confident
+
+"All 6 facts right" counts a message as wrong when any fact is off, also one a bot does
+not act on. For moderation, what matters is the action, and how sure the model is of it:
+the softmax probability of the top action (`action_p` in `facts()` of
+`examples/classifier/heads.py`). On the 200 test messages, of which 99 need an action:
+
+| The bot acts when the probability is at least | Acts on | Good messages hit | Wrong blocks | Real blocks caught |
+|-----------------------------------------------|---------|-------------------|--------------|--------------------|
+| any (always acts)                             | 75      | 2                 | 2            | 40 of 46           |
+| 0.6                                           | 67      | 2                 | 2            | 36 of 46           |
+| **0.8**                                       | **54**  | **0**             | **0**        | **34 of 46**       |
+| 0.9                                           | 36      | 0                 | 0            | 25 of 46           |
+
+**Recommended: act automatically above 0.8, and queue everything else for a human
+moderator.** At 0.8 the bot handled 54 of the 99 messages that need an action without a
+single wrong action, and left the hard cases to a person. Keep a human in the loop for
+`block` on a real channel.
+
+- The 2 wrong blocks below 0.8 were good messages close to a scam: a member warning about
+  a phishing site, and a question about recovering an account.
+- The model missed 3 messages that deserve a block: a pump-group invite, a copypasta, and
+  a veiled threat ("if i ever meet @someone irl he will regret it"). Threats in
+  particular need a human, or more training data like them.
+- The model was trained on synthetic messages. Measure it on messages from your own
+  channel before you let it act, and add labeled messages from that channel to the
+  training data ([README-classifier-training.md](README-classifier-training.md)).
+
+## Which file: f32
 
 **Use f32.** f32 runs on wasm SIMD; f16 does not (each f16 weight is converted to f32
-one by one as it is read), so f32 is 3.6x cheaper than f16, with the same scores. The
-four files are described in [Appendix: the files we measured](#appendix-the-files-we-measured).
+one by one as it is read), so f32 is 3.6x cheaper than f16. All four files answer the
+test set the same:
 
 | Measure                              | **f32**                             | f32 + Q8_0 embd                | Q8_0                           | f16                          |
 |--------------------------------------|-------------------------------------|--------------------------------|--------------------------------|------------------------------|
+| file                                 | **69 MB**                           | 31 MB                          | 20 MB                          | 36 MB                        |
 | instructions per token               | **~25 M**                           | ~25 M                          | ~19 M                          | ~89 M                        |
-| a 14-19 token text                   | **0.33-0.46 B**                     | 0.33-0.46 B                    | 0.22-0.31 B                    | 1.2-1.65 B                   |
-| a 138-character message (33 tokens)  | **0.88 B**                          | 0.88 B                         | 0.61 B                         | ~2.9 B                       |
+| a 33-token message                   | **0.88 B**                          | 0.88 B                         | 0.62 B                         | ~2.9 B                       |
 | longest text in a query (5 B)        | **191 tokens = 4.5 B** (`-ub 192`)  | 191 tokens = 4.5 B (`-ub 192`) | 255 tokens = 4.2 B (`-ub 256`) | 47 tokens = 4.3 B (`-ub 48`) |
 | longest text in an update (40 B)     | **511 tokens = 13.7 B** (`-ub 512`) |                                | 511 tokens = 9.7 B             | ~447 tokens = 39.6 B         |
-| `wasm_heap_bytes` after `load_model` | **108 MB** (`-ub 192`)              | 70 MB (`-ub 192`)              |                                |                              |
-| largest score difference             | **0.016** vs upstream               | 0.061 vs f32                   | 0.54 vs f16                    | 0.016 vs upstream            |
+| `wasm_heap_bytes` after `load_model` | **108 MB** (`-ub 192`)              | 70 MB (`-ub 192`)              | 59 MB (`-ub 256`)              | 72 MB (`-ub 48`)             |
+| all 6 facts right (200 messages)     | **141**                             | 141                            | 143                            | 141                          |
+| largest score difference vs f32      |                                     | 0.15                           | 0.57                           | 0.026                        |
 
-- f32 and f16 match upstream `llama-embedding` (f16) within 0.016; the native build of the
-  fork matches it exactly.
 - f32 + Q8_0 embd quantizes only the token-embedding table (13 of the 17 M parameters,
   used only as a lookup): half the file and the heap of f32, at the same cost per token.
-  A full Q8_0 also quantizes the inputs of every matrix multiplication, which moves the
-  scores most.
-- On the 4 texts we checked, every variant gave the same answer as f16 for every fact (the
-  top label of intent, respect and humor, and the sign of icp and steal). Check a smaller
-  variant on your own test set before you use it.
+- A full Q8_0 also quantizes the inputs of every matrix multiplication: the cheapest per
+  token, and the scores move most, although the facts did not change on this test set.
+  Check a smaller variant on your own test set before you use it.
+- The instructions and the heap are those of the Ettin-encoder-17M architecture, the same
+  for every model fine-tuned from it.
 
 ## Get the gguf
 
-The f32 file and the f32 + Q8_0-embedding file are on Hugging Face:
-[onicai/treasure-guard](https://huggingface.co/onicai/treasure-guard).
+The f32 file is on Hugging Face:
+[onicai/dao-moderation-classifier](https://huggingface.co/onicai/dao-moderation-classifier).
 
 ```bash
-mkdir -p models/onicai/treasure-guard
+mkdir -p models/onicai/dao-moderation-classifier
 ```
 
 ```bash
-wget -c -O models/onicai/treasure-guard/ettin-encoder-17m-f32.gguf https://huggingface.co/onicai/treasure-guard/resolve/main/ettin-encoder-17m-f32.gguf
+wget -c -O models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf https://huggingface.co/onicai/dao-moderation-classifier/resolve/main/dao-moderation-f32.gguf
 ```
 
-Verify the sha256 against the table above:
+Verify the sha256 against the appendix:
 
 ```bash
-shasum -a 256 models/onicai/treasure-guard/ettin-encoder-17m-f32.gguf
+shasum -a 256 models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf
 ```
 
 ## Upload the gguf
 
 ```bash
-python -m scripts.upload --network local --canister llama_cpp --canister-filename models/model.gguf models/onicai/treasure-guard/ettin-encoder-17m-f32.gguf
+python -m scripts.upload --network local --canister llama_cpp --canister-filename models/model.gguf models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf
 ```
 
 ## Load the model
@@ -105,17 +173,19 @@ icp canister call llama_cpp load_model '(record { args = vec {"--model"; "models
 As a query:
 
 ```bash
-icp canister call llama_cpp run_classify_query '(record { text = "I grab a handful of coins from the chest and run!" })' -e local --query
+icp canister call llama_cpp run_classify_query '(record { text = "Hi, I am from the team support desk. DM me your issue and I will fix your stuck stake directly" })' -e local --query
 ```
 
 ```
 (variant { Ok = record {
-  scores = vec { -1.152; 2.170; -0.543; ...; 3.071 };    // 18 raw scores, in label order
-  labels = vec { "intent:gift"; "intent:bribe"; ...; "steal" };
-  input_tokens = 14 : nat64;                             // with the special tokens
-  instructions = opt (329_978_389 : nat64);              // what this call used
+  scores = vec { 1.676; -1.285; -3.225; -1.565; 11.258; ...; 7.266 }; // 15 raw scores, in label order
+  labels = vec { "kind:question"; "kind:discussion"; ...; "action:block" };
+  input_tokens = 24 : nat64;                                          // with the special tokens
+  instructions = opt (603_853_217 : nat64);                           // what this call used
 } })
 ```
+
+Read as: kind spam, scam, misleading, not respectful, action block.
 
 `run_classify` takes the same input and gives the same reply, as an update. The
 scores are the raw outputs of the head, as upstream returns them with
@@ -142,6 +212,7 @@ Access is the same as for `run_decision`: controllers, the `AdminUpdate` role
 
 | Use case                                        | Call                 | Why                                              |
 |-------------------------------------------------|----------------------|--------------------------------------------------|
+| An OpenChat moderation bot                      | `run_classify_query` | one round trip, no cycles; a misjudged message can be reversed |
 | A frontend that needs the answer fast           | `run_classify_query` | one round trip; fits when `-ub` is set as above  |
 | Another canister calling it                     | `run_classify`       | a call from a canister runs as an update anyway  |
 | An answer that must be trusted                  | `run_classify`       | a query answer comes from one replica, uncertified |
@@ -182,29 +253,24 @@ by the subnet.
 pytest -vv --network local --identity llama-cpp-testing test/test_classify.py
 ```
 
-It checks the three reference texts against upstream's scores within 0.05, the query
+It checks three reference messages against llama.cpp's CPU scores within 0.05, the query
 against the update, the errors, the access and the generation guard.
 
 ## Appendix: the files we measured
 
-| File                                 | Size             | sha256                                                             | Where                                                                       |
-|--------------------------------------|------------------|--------------------------------------------------------------------|-----------------------------------------------------------------------------|
-| `ettin-encoder-17m-f32.gguf`         | 69,245,536 bytes | `131792413b5437b08ce8e12edf1e7fd506bae5ef611bed457d7d8fbdd7c26dc7` | [onicai/treasure-guard](https://huggingface.co/onicai/treasure-guard)       |
-| `ettin-encoder-17m-f32-q8embd.gguf`  | 31,368,800 bytes | `5664953e0d5f8c9f6c4a5d72653b5f51272403acb22f40fef5ba5f6d633c6630` | [onicai/treasure-guard](https://huggingface.co/onicai/treasure-guard)       |
-| `ettin-encoder-17m-q8_0.gguf`        | 19,708,288 bytes | `d594728c6468e7b51b2a0ec0b007f50eec072891dd872b7efd61ae4b34804902` | not published; made for this comparison                                     |
-| `ettin-encoder-17m-f16.gguf`         | 35,518,048 bytes | `89b8d56fb6c06c4386e08c36968b651413fd9cdfee51aaf06d02a29c01194312` | not published; the model's first conversion, from `convert_hf_to_gguf.py`   |
+| File                                 | Size             | sha256                                                             | Where                                     |
+|--------------------------------------|------------------|--------------------------------------------------------------------|-------------------------------------------|
+| `dao-moderation-f32.gguf`            | 69,242,400 bytes | `47856638d128afc076244ba6df67a59dfaf6b20de24de39f198720c7daa400e4` | Hugging Face, onicai/dao-moderation-classifier |
+| `dao-moderation-f32-q8embd.gguf`     | 31,365,664 bytes | `e7d1561a78e4d541e713249fc82dab9824152d6f18b6a5916d94f74e2a6148f1` | not published; made for this comparison   |
+| `dao-moderation-q8_0.gguf`           | 19,707,424 bytes | `cf9ee100f9b8a1eedca603d571cb8b0ef568235f2fe61bd33e5e09f4851136f3` | not published; made for this comparison   |
+| `dao-moderation-f16.gguf`            | 35,516,448 bytes | `118ee02607b08d68b359b240554af2205ef046c4f0e4078ffd0147d0f9823430` | not published; made for this comparison   |
 
-The f16 file is the one the model was first delivered as, so the other three were made
-from it with `llama-quantize`, built from the fork:
+All four come from the same fine-tuned f32 model (`examples/classifier`, `make gguf` for
+the f32 file):
 
 ```bash
-llama-quantize ettin-encoder-17m-f16.gguf ettin-encoder-17m-f32.gguf F32
-llama-quantize --tensor-type blk=f32 --tensor-type cls=f32 ettin-encoder-17m-f32.gguf ettin-encoder-17m-f32-q8embd.gguf Q8_0
-llama-quantize ettin-encoder-17m-f16.gguf ettin-encoder-17m-q8_0.gguf Q8_0
+python src/llama_cpp_onicai_fork/convert_hf_to_gguf.py build/model --outtype f32 --outfile dao-moderation-f32.gguf
+python src/llama_cpp_onicai_fork/convert_hf_to_gguf.py build/model --outtype f16 --outfile dao-moderation-f16.gguf
+llama-quantize --tensor-type blk=f32 --tensor-type cls=f32 dao-moderation-f32.gguf dao-moderation-f32-q8embd.gguf Q8_0
+llama-quantize dao-moderation-f32.gguf dao-moderation-q8_0.gguf Q8_0
 ```
-
-Going from f16 to f32 is exact, but it keeps the weights as f16 rounded them. For a new
-model, convert straight to f32 instead (`convert_hf_to_gguf.py --outtype f32`, see
-[README-classifier-training.md](README-classifier-training.md)). For this model it makes
-no measurable difference: both f32 files are within 0.015 of the PyTorch model's scores
-on the reference texts.

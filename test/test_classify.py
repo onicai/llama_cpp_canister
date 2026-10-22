@@ -1,8 +1,8 @@
 """Smoke tests for run_classify and run_classify_query (sequence classifiers).
 
 Runs against the classifier that scripts/qa_deploy_and_pytest.py uploaded as
-models/model.gguf: Ettin-encoder-17M in f32, a ModernBERT classifier with 18 labels
-(the guard model of an onicai game). See README-classifier-models.md.
+models/model.gguf: onicai/dao-moderation-classifier in f32, a ModernBERT classifier
+with 15 labels that helps moderate a DAO's chat channel. See README-classifier-models.md.
 
 The reference scores come from upstream llama.cpp, with the f16 GGUF:
   llama-embedding -m <gguf> --pooling rank -p "<text>" --embd-normalize -1
@@ -35,25 +35,24 @@ TOL = 0.05
 LOAD_ARGS = '"--embedding"; "--pooling"; "rank"; "--no-warmup"; "-c"; "192"; "-ub"; "192"'
 
 REFERENCE = {
-    "I grab a handful of coins from the chest and run!": [
-        -1.152, 2.17, -0.543, -0.297, 2.573, -2.099, -0.778, -0.017, 3.489,
-        2.168, -1.108, 4.771, 0.893, -1.456, -0.172, -1.96, -3.033, 3.071,
+    "how long is the min dissolve delay to vote with my neuron? new here 🙏": [
+        4.811, 1.1, 1.718, 0.549, 2.663, 3.253, -0.994, -6.576,
+        -5.15, -6.264, 3.78, 4.253, 0.197, -3.436, -3.588,
     ],
-    "Can I see the treasure? I promise I won't touch it.": [
-        -2.871, -1.228, -0.637, 0.41, 6.737, 1.087, -0.409, -1.045, 1.464,
-        5.313, -0.636, 1.939, -0.357, -0.271, -1.915, -2.361, -4.674, -1.642,
+    "lol imagine staking for 8 years in a coin run by clowns 🤡": [
+        -2.715, 0.466, -3.664, 4.776, 0.016, -2.278, 0.731, -2.751,
+        -7.644, -4.131, -2.92, -1.452, 1.862, -1.758, -1.314,
     ],
-    "Why did the canister cross the subnet? To get to the other cycle!": [
-        -2.909, -1.658, -3.459, -0.545, -0.008, 1.759, -1.394, -3.363, 1.395,
-        2.306, -1.975, 1.888, 0.052, 1.852, -2.769, -5.095, 3.853, -1.82,
+    "Hi, I'm from the team support desk. DM me your issue and I'll fix your stuck stake directly 🙏": [
+        0.851, -1.182, -3.551, -1.102, 10.701, 4.523, -3.043, -1.164,
+        6.606, 4.956, -9.664, -4.282, -6.804, 2.308, 6.073,
     ],
 }
 LABELS = [
-    "intent:gift", "intent:bribe", "intent:threat", "intent:trick",
-    "intent:plea", "intent:chat",
-    "respect:0", "respect:1", "respect:2", "respect:3", "respect:4",
-    "humor:0", "humor:1", "humor:2", "humor:3", "humor:4",
-    "icp", "steal",
+    "kind:question", "kind:discussion", "kind:support", "kind:troll", "kind:spam",
+    "toxicity:0", "toxicity:1", "toxicity:2",
+    "scam", "misleading", "respectful",
+    "action:none", "action:warn", "action:delete", "action:block",
 ]  # fmt: skip
 
 ClassifyInput = Types.Record({"text": Types.Text})
@@ -154,7 +153,7 @@ def test__errors(network: str) -> None:
         "Err": {"Other": "text is 8193 bytes, more than the limit of 8192"}
     }
     # more tokens than -ub 192: an Err, not a trap
-    r = classify(network, "the guard " * 100)
+    r = classify(network, "the proposal " * 100)
     assert "tokens, more than the 192 of the loaded context" in r["Err"]["Other"], r
 
 

@@ -1,7 +1,7 @@
-// Native tests for run_classify and run_classify_query, with Ettin-encoder-17M
-// (f32):
-// a ModernBERT sequence classifier with 18 labels (the guard model of an
-// onicai game). The reference scores come from upstream llama.cpp:
+// Native tests for run_classify and run_classify_query, with
+// onicai/dao-moderation-classifier (f32): a ModernBERT sequence classifier with
+// 15 labels that helps moderate a DAO's chat channel (README-classifier-models.md).
+// The reference scores come from llama.cpp on the CPU:
 //   llama-embedding -m <gguf> --pooling rank -p "<text>" --embd-normalize -1
 // Skipped when the model is not downloaded.
 //
@@ -121,7 +121,7 @@ void check_scores(const ClassifyReply &r, const std::string &name,
 
 void test_classify(MockIC &mockIC) {
   const std::string model =
-      "models/onicai/treasure-guard/ettin-encoder-17m-f32.gguf";
+      "models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf";
   if (!std::filesystem::exists(model)) {
     std::cout << "SKIP - test_classify: " << model << " not found" << std::endl;
     return;
@@ -131,25 +131,25 @@ void test_classify(MockIC &mockIC) {
   bool silent_on_trap = true;
 
   const std::string LOAD_CLASSIFIER =
-      "4449444c026c01dd9ad28304016d7101000a072d2d6d6f64656c376d6f64656c732f6f6e696361692f74726561737572652d67756172642f657474696e2d656e636f6465722d31376d2d6633322e676775660b2d2d656d62656464696e67092d2d706f6f6c696e670472616e6b0b2d2d6e6f2d7761726d7570022d6303353132032d756203353132";
+      "4449444c026c01dd9ad28304016d7101000a072d2d6d6f64656c3f6d6f64656c732f6f6e696361692f64616f2d6d6f6465726174696f6e2d636c61737369666965722f64616f2d6d6f6465726174696f6e2d6633322e676775660b2d2d656d62656464696e67092d2d706f6f6c696e670472616e6b0b2d2d6e6f2d7761726d7570022d6303353132032d756203353132";
   const std::string LOAD_CLASSIFIER_CTX_8 =
-      "4449444c026c01dd9ad28304016d7101000c072d2d6d6f64656c376d6f64656c732f6f6e696361692f74726561737572652d67756172642f657474696e2d656e636f6465722d31376d2d6633322e676775660b2d2d656d62656464696e67092d2d706f6f6c696e670472616e6b0b2d2d6e6f2d7761726d7570022d630138022d620138032d75620138";
+      "4449444c026c01dd9ad28304016d7101000c072d2d6d6f64656c3f6d6f64656c732f6f6e696361692f64616f2d6d6f6465726174696f6e2d636c61737369666965722f64616f2d6d6f6465726174696f6e2d6633322e676775660b2d2d656d62656464696e67092d2d706f6f6c696e670472616e6b0b2d2d6e6f2d7761726d7570022d630138022d620138032d75620138";
   const std::string LOAD_CLASSIFIER_NO_POOLING =
-      "4449444c026c01dd9ad28304016d71010005072d2d6d6f64656c376d6f64656c732f6f6e696361692f74726561737572652d67756172642f657474696e2d656e636f6465722d31376d2d6633322e676775660b2d2d6e6f2d7761726d7570022d6303353132";
+      "4449444c026c01dd9ad28304016d71010005072d2d6d6f64656c3f6d6f64656c732f6f6e696361692f64616f2d6d6f6465726174696f6e2d636c61737369666965722f64616f2d6d6f6465726174696f6e2d6633322e676775660b2d2d6e6f2d7761726d7570022d6303353132";
   const std::string LOAD_BAD_POOLING =
-      "4449444c026c01dd9ad28304016d71010004072d2d6d6f64656c376d6f64656c732f6f6e696361692f74726561737572652d67756172642f657474696e2d656e636f6465722d31376d2d6633322e67677566092d2d706f6f6c696e67076d6178696d756d";
+      "4449444c026c01dd9ad28304016d71010004072d2d6d6f64656c3f6d6f64656c732f6f6e696361692f64616f2d6d6f6465726174696f6e2d636c61737369666965722f64616f2d6d6f6465726174696f6e2d6633322e67677566092d2d706f6f6c696e67076d6178696d756d";
   const std::string LOAD_EMBEDDING_ONLY =
-      "4449444c026c01dd9ad28304016d71010006072d2d6d6f64656c376d6f64656c732f6f6e696361692f74726561737572652d67756172642f657474696e2d656e636f6465722d31376d2d6633322e676775660b2d2d656d62656464696e670b2d2d6e6f2d7761726d7570022d6303353132";
+      "4449444c026c01dd9ad28304016d71010006072d2d6d6f64656c3f6d6f64656c732f6f6e696361692f64616f2d6d6f6465726174696f6e2d636c61737369666965722f64616f2d6d6f6465726174696f6e2d6633322e676775660b2d2d656d62656464696e670b2d2d6e6f2d7761726d7570022d6303353132";
   const std::string LOAD_STORIES_AS_CLASSIFIER =
       "4449444c026c01dd9ad28304016d71010006072d2d6d6f64656c1d6d6f64656c732f73746f726965733236304b746f6b3531322e676775660b2d2d656d62656464696e67092d2d706f6f6c696e670472616e6b0b2d2d6e6f2d7761726d7570";
   const std::string LOAD_STORIES =
       "4449444c026c01dd9ad28304016d71010003072d2d6d6f64656c1d6d6f64656c732f73746f726965733236304b746f6b3531322e676775660b2d2d6e6f2d7761726d7570";
-  const std::string TEXT_COINS =
-      "4449444c016c01ad99e7e7047101003149206772616220612068616e6466756c206f6620636f696e732066726f6d2074686520636865737420616e642072756e21";
-  const std::string TEXT_TREASURE =
-      "4449444c016c01ad99e7e7047101003343616e204920736565207468652074726561737572653f20492070726f6d697365204920776f6e277420746f7563682069742e";
-  const std::string TEXT_SUBNET =
-      "4449444c016c01ad99e7e7047101004157687920646964207468652063616e69737465722063726f737320746865207375626e65743f20546f2067657420746f20746865206f74686572206379636c6521";
+  const std::string TEXT_QUESTION =
+      "4449444c016c01ad99e7e70471010048686f77206c6f6e6720697320746865206d696e20646973736f6c76652064656c617920746f20766f74652077697468206d79206e6575726f6e3f206e6577206865726520f09f998f";
+  const std::string TEXT_TROLL =
+      "4449444c016c01ad99e7e7047101003c6c6f6c20696d6167696e65207374616b696e6720666f72203820796561727320696e206120636f696e2072756e20627920636c6f776e7320f09fa4a1";
+  const std::string TEXT_SCAM =
+      "4449444c016c01ad99e7e7047101006048692c2049276d2066726f6d20746865207465616d20737570706f7274206465736b2e20444d206d6520796f757220697373756520616e642049276c6c2066697820796f757220737475636b207374616b65206469726563746c7920f09f998f";
   const std::string TEXT_EMPTY = "4449444c016c01ad99e7e70471010000";
   // 8193 bytes: one more than CLASSIFY_MAX_TEXT_BYTES (leb128 8193 = 81 40)
   std::string TEXT_TOO_LONG = "4449444c016c01ad99e7e7047101008140";
@@ -171,15 +171,15 @@ void test_classify(MockIC &mockIC) {
       "--embedding --pooling rank";
 
   // upstream llama-embedding, with the f16 GGUF
-  const std::vector<double> REF_COINS{
-      -1.152, 2.17,   -0.543, -0.297, 2.573,  -2.099, -0.778, -0.017, 3.489,
-      2.168,  -1.108, 4.771,  0.893,  -1.456, -0.172, -1.96,  -3.033, 3.071};
-  const std::vector<double> REF_TREASURE{
-      -2.871, -1.228, -0.637, 0.41,   6.737,  1.087,  -0.409, -1.045, 1.464,
-      5.313,  -0.636, 1.939,  -0.357, -0.271, -1.915, -2.361, -4.674, -1.642};
-  const std::vector<double> REF_SUBNET{
-      -2.909, -1.658, -3.459, -0.545, -0.008, 1.759,  -1.394, -3.363, 1.395,
-      2.306,  -1.975, 1.888,  0.052,  1.852,  -2.769, -5.095, 3.853,  -1.82};
+  const std::vector<double> REF_QUESTION{4.811, 1.1,    1.718,  0.549,  2.663,
+                                         3.253, -0.994, -6.576, -5.15,  -6.264,
+                                         3.78,  4.253,  0.197,  -3.436, -3.588};
+  const std::vector<double> REF_TROLL{-2.715, 0.466,  -3.664, 4.776,  0.016,
+                                      -2.278, 0.731,  -2.751, -7.644, -4.131,
+                                      -2.92,  -1.452, 1.862,  -1.758, -1.314};
+  const std::vector<double> REF_SCAM{0.851,  -1.182, -3.551, -1.102, 10.701,
+                                     4.523,  -3.043, -1.164, 6.606,  4.956,
+                                     -9.664, -4.282, -6.804, 2.308,  6.073};
   const double TOL = 0.02;
 
   // --- a bad --pooling value is refused by load_model
@@ -204,7 +204,7 @@ void test_classify(MockIC &mockIC) {
   // --- loaded without --embedding --pooling rank, it is no classifier
   mockIC.run_test("test_classify: load without rank pooling", load_model,
                   LOAD_CLASSIFIER_NO_POOLING, "", silent_on_trap, controller);
-  expect_error(mockIC, "without rank pooling", TEXT_COINS, controller,
+  expect_error(mockIC, "without rank pooling", TEXT_QUESTION, controller,
                NOT_A_CLASSIFIER);
 
   // --- the classifier
@@ -212,33 +212,36 @@ void test_classify(MockIC &mockIC) {
                   "", silent_on_trap, controller);
   check(classify_model_loaded(), "classify_model_loaded() after the load");
 
-  const ClassifyReply coins = call(mockIC, "coins", TEXT_COINS, controller);
-  check_scores(coins, "coins", REF_COINS, TOL);
-  check_scores(call(mockIC, "treasure", TEXT_TREASURE, controller), "treasure",
-               REF_TREASURE, TOL);
-  check_scores(call(mockIC, "subnet", TEXT_SUBNET, controller), "subnet",
-               REF_SUBNET, TOL);
-  check(coins.labels.size() == 18 && coins.labels[0] == "intent:gift" &&
-            coins.labels[6] == "respect:0",
+  const ClassifyReply question =
+      call(mockIC, "question", TEXT_QUESTION, controller);
+  check_scores(question, "question", REF_QUESTION, TOL);
+  check_scores(call(mockIC, "troll", TEXT_TROLL, controller), "troll",
+               REF_TROLL, TOL);
+  check_scores(call(mockIC, "scam", TEXT_SCAM, controller), "scam", REF_SCAM,
+               TOL);
+  check(question.labels.size() == 15 && question.labels[0] == "kind:question" &&
+            question.labels[5] == "toxicity:0",
         "the labels are the GGUF's classifier labels, in order");
 
   // the same text again, and as a query: the same scores
   {
     const ClassifyReply again =
-        call(mockIC, "coins again", TEXT_COINS, controller);
-    check(again.scores == coins.scores, "coins again: the scores changed");
-    const ClassifyReply query = call(mockIC, "coins as a query", TEXT_COINS,
-                                     controller, run_classify_query);
-    check(query.scores == coins.scores,
+        call(mockIC, "question again", TEXT_QUESTION, controller);
+    check(again.scores == question.scores,
+          "question again: the scores changed");
+    const ClassifyReply query =
+        call(mockIC, "question as a query", TEXT_QUESTION, controller,
+             run_classify_query);
+    check(query.scores == question.scores,
           "run_classify_query: the scores differ from run_classify");
   }
 
   // --- access
   {
-    const ClassifyReply r = call(mockIC, "anonymous", TEXT_COINS, anonymous);
+    const ClassifyReply r = call(mockIC, "anonymous", TEXT_QUESTION, anonymous);
     check(r.label == "Err" && r.err_text == "Access Denied",
           "anonymous: expected Access Denied, got " + r.err_text);
-    const ClassifyReply q = call(mockIC, "anonymous query", TEXT_COINS,
+    const ClassifyReply q = call(mockIC, "anonymous query", TEXT_QUESTION,
                                  anonymous, run_classify_query);
     check(q.label == "Err" && q.err_text == "Access Denied",
           "anonymous query: expected Access Denied, got " + q.err_text);
@@ -275,7 +278,7 @@ void test_classify(MockIC &mockIC) {
                   LOAD_CLASSIFIER_CTX_8, "", silent_on_trap, controller);
   {
     const ClassifyReply r =
-        call(mockIC, "longer than -ub", TEXT_COINS, controller);
+        call(mockIC, "longer than -ub", TEXT_QUESTION, controller);
     check(r.label == "Err" &&
               r.err_text.find("tokens, more than the 8 of the loaded "
                               "context") != std::string::npos,
@@ -293,7 +296,7 @@ void test_classify(MockIC &mockIC) {
               std::string::npos,
           "stories260K as a classifier: expected the 'no classification head' "
           "error");
-    expect_error(mockIC, "after a refused load", TEXT_COINS, controller,
+    expect_error(mockIC, "after a refused load", TEXT_QUESTION, controller,
                  "no model loaded");
   }
 
@@ -301,7 +304,8 @@ void test_classify(MockIC &mockIC) {
   mockIC.run_test("test_classify: load stories260K", load_model, LOAD_STORIES,
                   "", silent_on_trap, controller);
   check(!classify_model_loaded(), "classify_model_loaded() after a chat model");
-  expect_error(mockIC, "chat model", TEXT_COINS, controller, NOT_A_CLASSIFIER);
+  expect_error(mockIC, "chat model", TEXT_QUESTION, controller,
+               NOT_A_CLASSIFIER);
   {
     std::string out;
     mockIC.run_test("test_classify: run_update on the chat model", run_update,

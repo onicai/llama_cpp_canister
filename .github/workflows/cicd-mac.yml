@@ -154,8 +154,8 @@ jobs:
       - name: Download the classifier (native test_classify)
         if: matrix.job == 'native (x86_64 exact-token)'
         run: |
-          mkdir -p ./models/onicai/treasure-guard
-          wget -nv -O ./models/onicai/treasure-guard/ettin-encoder-17m-f32.gguf https://huggingface.co/onicai/treasure-guard/resolve/main/ettin-encoder-17m-f32.gguf?download=true
+          mkdir -p ./models/onicai/dao-moderation-classifier
+          wget -nv -O ./models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf https://huggingface.co/onicai/dao-moderation-classifier/resolve/main/dao-moderation-f32.gguf?download=true
 
       - name: test-llm-native
         if: matrix.job == 'native (x86_64 exact-token)'

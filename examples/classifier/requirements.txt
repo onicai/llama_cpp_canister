@@ -1,0 +1,7 @@
+# The classifier example: training, evaluation and GGUF conversion.
+# A separate environment from the canister's requirements.txt.
+torch>=2.6
+transformers>=4.57
+numpy
+safetensors
+sentencepiece

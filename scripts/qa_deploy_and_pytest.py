@@ -200,7 +200,7 @@ def main() -> int:
             },
             # A sequence classifier (run_classify): see README-classifier-models.md.
             {
-                "filename": "models/onicai/treasure-guard/ettin-encoder-17m-f32.gguf",
+                "filename": "models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf",  # pylint: disable=line-too-long
                 "canister_filename": "models/model.gguf",
                 "wasm_memory_limit": 4026531840,  # 3.75 GiB
                 "env": {},
