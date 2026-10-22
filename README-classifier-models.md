@@ -16,9 +16,11 @@ BERT-family GGUF with a classification head works: `llama.cpp`'s
 `convert_hf_to_gguf.py` converts a `...ForSequenceClassification` model, and writes
 its labels into the GGUF (`<arch>.classifier.output_labels`).
 
+To train your own, see [README-classifier-training.md](README-classifier-training.md).
+
 ## The model we tested: Ettin-encoder-17M
 
-The guard model of treasure-guard (an onicai game), a fine-tuned
+The guard model of an onicai game, a fine-tuned
 `ModernBertForSequenceClassification` (Ettin-encoder-17M, 7 layers x 256, mean
 pooling) with 18 labels: `intent:gift|bribe|threat|trick|plea|chat`,
 `respect:0..4`, `humor:0..4`, `icp` and `steal`.
@@ -26,11 +28,7 @@ pooling) with 18 labels: `intent:gift|bribe|threat|trick|plea|chat`,
 **Use f32.** f32 runs on wasm SIMD; f16 does not (each f16 weight is converted to f32
 one by one as it is read), so f32 is 3.6x cheaper than f16, with the same scores.
 
-**Smaller: f32 layers with a Q8_0 embedding table.** The token-embedding table is 13 of the
-17 M parameters, and only a lookup: quantizing just that table halves the file and the heap
-at the same cost per token, and moves the scores by up to 0.06. A full Q8_0 is the cheapest
-per token, but quantizes the inputs of every matrix multiplication too, and moves the scores
-by up to 0.54.
+TODO: where are these files? A reader will ask this... Perhaps also, move this in an APpendix ??
 
 | File                                 | Size             | sha256                                                             |
 |--------------------------------------|------------------|--------------------------------------------------------------------|
@@ -38,6 +36,8 @@ by up to 0.54.
 | `ettin-encoder-17m-f32-q8embd.gguf`  | 31,368,800 bytes | `5664953e0d5f8c9f6c4a5d72653b5f51272403acb22f40fef5ba5f6d633c6630` |
 | `ettin-encoder-17m-f16.gguf`         | 35,518,048 bytes | `89b8d56fb6c06c4386e08c36968b651413fd9cdfee51aaf06d02a29c01194312` |
 | `ettin-encoder-17m-q8_0.gguf`        | 19,708,288 bytes | `d594728c6468e7b51b2a0ec0b007f50eec072891dd872b7efd61ae4b34804902` |
+
+TODO: huh?? All made from the f16 file?? Why???
 
 Made from the f16 file with `llama-quantize` built from the fork:
 
@@ -49,8 +49,10 @@ llama-quantize ettin-encoder-17m-f16.gguf ettin-encoder-17m-q8_0.gguf Q8_0
 
 (`convert_hf_to_gguf.py --outtype f32` writes f32 directly from the Hugging Face model.)
 
+TODO: move this up.
 ## Headline results (local replica, llama_cpp_canister with llama.cpp b11476)
 
+TODO: put f16 column last
 | Measure                              | **f32**              | f32 + Q8_0 embd      | f16                 | Q8_0                 |
 |--------------------------------------|----------------------|----------------------|---------------------|----------------------|
 | instructions per token               | **~25 M**            | ~25 M                | ~89 M               | ~19 M                |
@@ -98,17 +100,27 @@ python -m scripts.upload --network local --canister llama_cpp --canister-filenam
 icp canister call llama_cpp load_model '(record { args = vec {"--model"; "models/model.gguf"; "--embedding"; "--pooling"; "rank"; "--no-warmup"; "-c"; "192"; "-ub"; "192"} })' -e local
 ```
 
-- `--embedding --pooling rank`: as upstream. Without them the model loads, but as no
-  classifier, and `run_classify` returns an error.
+- `--embedding --pooling rank`: as upstream, and only together. Without them the model
+  loads, but as no classifier, and `run_classify` returns an error. With them,
+  `load_model` refuses a model that has no classifier labels
+  (`<arch>.classifier.output_labels`): llama.cpp counts the outputs of the head from
+  them, and without them it cannot tell a classifier from any other model.
+  `convert_hf_to_gguf.py` writes them from `id2label` in `config.json`. It skips the
+  default `LABEL_0`/`LABEL_1` of a 2-label model, so give such a model real label names
+  (see [README-classifier-training.md](README-classifier-training.md)).
 - `-ub` (and `-c`) is the **longest text in tokens**, special tokens included. A
   classifier is a bidirectional encoder, so the whole text is decoded in one batch, and
   one text cannot be split over several messages. Pick it from the table above:
   - **f32: `-c 192 -ub 192`**, so that every text fits a query (4.5 B at most);
   - f16: `-c 48 -ub 48`; Q8_0: `-c 256 -ub 256`.
+  - For texts longer than the query limit allows, load with a larger `-c` and `-ub`
+    (f32: up to `-c 512 -ub 512`, 13.7 B for a 511-token text) and use `run_classify`:
+    a text longer than the loaded `-ub` gets the token-limit error.
 - `-b` follows `-ub` by itself.
 
 ## Classify a text
 
+TODO: Make the example a query call
 ```bash
 icp canister call llama_cpp run_classify '(record { text = "I grab a handful of coins from the chest and run!" })' -e local
 ```
@@ -144,6 +156,8 @@ Access is the same as for `run_decision`: controllers, the `AdminUpdate` role
 (`AdminQuery` for the query), or any caller that is not anonymous at access level 1.
 
 ## Query or update?
+
+TODO: I believe there is a way to make a query call also more trust worthy by checking the certificate or something like that...??...
 
 | Use case                                        | Call                 | Why                                              |
 |-------------------------------------------------|----------------------|--------------------------------------------------|

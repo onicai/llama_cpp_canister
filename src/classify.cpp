@@ -30,8 +30,10 @@
 
 bool classify_model_loaded() {
   llama_context *ctx = icpp_persisted_ctx();
+  // n_cls_out alone is not enough: llama.cpp defaults it to 1 for every model.
+  // A classifier converted from ...ForSequenceClassification has its labels.
   return ctx != nullptr && llama_pooling_type(ctx) == LLAMA_POOLING_TYPE_RANK &&
-         llama_model_n_cls_out(llama_get_model(ctx)) > 0;
+         llama_model_cls_label(llama_get_model(ctx), 0) != nullptr;
 }
 
 namespace {

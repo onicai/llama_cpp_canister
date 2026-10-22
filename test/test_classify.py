@@ -2,7 +2,7 @@
 
 Runs against the classifier that scripts/qa_deploy_and_pytest.py uploaded as
 models/model.gguf: Ettin-encoder-17M in f32, a ModernBERT classifier with 18 labels
-(treasure-guard's guard model). See README-classifier-models.md.
+(the guard model of an onicai game). See README-classifier-models.md.
 
 The reference scores come from upstream llama.cpp, with the f16 GGUF:
   llama-embedding -m <gguf> --pooling rank -p "<text>" --embd-normalize -1
@@ -17,6 +17,7 @@ $ pytest -vv --network local --identity llama-cpp-testing test/test_classify.py
 
 # pylint: disable=missing-function-docstring, line-too-long
 
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -128,7 +129,8 @@ def test__reference_scores(network: str, method: str) -> None:
         ok = r["Ok"]
         assert ok["labels"] == LABELS, ok["labels"]
         assert len(ok["scores"]) == len(reference)
-        max_diff = max(abs(a - b) for a, b in zip(ok["scores"], reference))
+        assert all(math.isfinite(x) for x in ok["scores"]), ok["scores"]
+        max_diff = max(abs(a - b) for a, b in zip(ok["scores"], reference, strict=True))
         assert max_diff <= TOL, (text, max_diff, ok["scores"])
         assert top(ok["scores"]) == top(reference), text
         assert ok["input_tokens"] > 2

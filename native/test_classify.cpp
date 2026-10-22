@@ -1,7 +1,7 @@
 // Native tests for run_classify and run_classify_query, with Ettin-encoder-17M
 // (f32):
-// a ModernBERT sequence classifier with 18 labels (treasure-guard's guard
-// model). The reference scores come from upstream llama.cpp:
+// a ModernBERT sequence classifier with 18 labels (the guard model of an
+// onicai game). The reference scores come from upstream llama.cpp:
 //   llama-embedding -m <gguf> --pooling rank -p "<text>" --embd-normalize -1
 // Skipped when the model is not downloaded.
 //
@@ -99,6 +99,9 @@ void check_scores(const ClassifyReply &r, const std::string &name,
   check(r.labels.size() == reference.size(), name + ": number of labels");
   check(r.input_tokens > 2, name + ": input_tokens");
   check(!r.instructions.has_value(), name + ": instructions not null");
+  check(std::all_of(r.scores.begin(), r.scores.end(),
+                    [](double x) { return std::isfinite(x); }),
+        name + ": a score is not finite");
   if (r.scores.size() != reference.size()) {
     return;
   }
@@ -135,6 +138,10 @@ void test_classify(MockIC &mockIC) {
       "4449444c026c01dd9ad28304016d71010005072d2d6d6f64656c376d6f64656c732f6f6e696361692f74726561737572652d67756172642f657474696e2d656e636f6465722d31376d2d6633322e676775660b2d2d6e6f2d7761726d7570022d6303353132";
   const std::string LOAD_BAD_POOLING =
       "4449444c026c01dd9ad28304016d71010004072d2d6d6f64656c376d6f64656c732f6f6e696361692f74726561737572652d67756172642f657474696e2d656e636f6465722d31376d2d6633322e67677566092d2d706f6f6c696e67076d6178696d756d";
+  const std::string LOAD_EMBEDDING_ONLY =
+      "4449444c026c01dd9ad28304016d71010006072d2d6d6f64656c376d6f64656c732f6f6e696361692f74726561737572652d67756172642f657474696e2d656e636f6465722d31376d2d6633322e676775660b2d2d656d62656464696e670b2d2d6e6f2d7761726d7570022d6303353132";
+  const std::string LOAD_STORIES_AS_CLASSIFIER =
+      "4449444c026c01dd9ad28304016d71010006072d2d6d6f64656c1d6d6f64656c732f73746f726965733236304b746f6b3531322e676775660b2d2d656d62656464696e67092d2d706f6f6c696e670472616e6b0b2d2d6e6f2d7761726d7570";
   const std::string LOAD_STORIES =
       "4449444c026c01dd9ad28304016d71010003072d2d6d6f64656c1d6d6f64656c732f73746f726965733236304b746f6b3531322e676775660b2d2d6e6f2d7761726d7570";
   const std::string TEXT_COINS =
@@ -163,7 +170,7 @@ void test_classify(MockIC &mockIC) {
       "the loaded model is not a sequence classifier: load it with "
       "--embedding --pooling rank";
 
-  // upstream llama-embedding, f16 (treasure-guard's handoff)
+  // upstream llama-embedding, with the f16 GGUF
   const std::vector<double> REF_COINS{
       -1.152, 2.17,   -0.543, -0.297, 2.573,  -2.099, -0.778, -0.017, 3.489,
       2.168,  -1.108, 4.771,  0.893,  -1.456, -0.172, -1.96,  -3.033, 3.071};
@@ -180,8 +187,18 @@ void test_classify(MockIC &mockIC) {
     std::string out;
     mockIC.run_test("test_classify: load with a bad --pooling", load_model,
                     LOAD_BAD_POOLING, "", silent_on_trap, controller, &out);
-    check(out.find("2d2d706f6f6c696e67206e65656473") != std::string::npos,
-          "bad --pooling: expected the '--pooling needs' error");
+    check(out.find("2d2d706f6f6c696e673a206f6e6c792072616e6b") !=
+              std::string::npos,
+          "bad --pooling: expected the 'only rank' error");
+  }
+  // --embedding without --pooling rank would leave an embeddings context that
+  // nothing serves: refused
+  {
+    std::string out;
+    mockIC.run_test("test_classify: load with --embedding only", load_model,
+                    LOAD_EMBEDDING_ONLY, "", silent_on_trap, controller, &out);
+    check(out.find("676f20746f676574686572") != std::string::npos,
+          "--embedding only: expected the 'go together' error");
   }
 
   // --- loaded without --embedding --pooling rank, it is no classifier
@@ -263,6 +280,21 @@ void test_classify(MockIC &mockIC) {
               r.err_text.find("tokens, more than the 8 of the loaded "
                               "context") != std::string::npos,
           "longer than -ub: expected the token limit error, got " + r.err_text);
+  }
+
+  // --- a model without a classification head, loaded as a classifier: refused,
+  //     and no model stays loaded
+  {
+    std::string out;
+    mockIC.run_test("test_classify: load stories260K as a classifier",
+                    load_model, LOAD_STORIES_AS_CLASSIFIER, "", silent_on_trap,
+                    controller, &out);
+    check(out.find("6e6f20636c617373696669636174696f6e2068656164") !=
+              std::string::npos,
+          "stories260K as a classifier: expected the 'no classification head' "
+          "error");
+    expect_error(mockIC, "after a refused load", TEXT_COINS, controller,
+                 "no model loaded");
   }
 
   // --- a chat model afterwards: no classifier, and generation works again

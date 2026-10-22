@@ -387,6 +387,16 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
   // ICPP-PATCH-START
 
+  // --embedding --pooling rank loads a sequence classifier: a model without a
+  // classification head would leave an embeddings context that nothing serves.
+  // (Not params.embedding: llama.cpp also sets that for a decision model.)
+  if (load_model_only && embedding_args.classifier && !classify_model_loaded()) {
+    icpp_free_model();
+    icpp_error_msg = "--embedding --pooling rank needs a sequence classifier: "
+                     "this model has no classification head with labels.";
+    return 1;
+  }
+
   // Return if we are asked to ONLY load the model
   if (load_model_only) {
     return 0;

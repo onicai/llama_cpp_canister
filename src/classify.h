@@ -11,5 +11,5 @@ void run_classify_query()
     WASM_SYMBOL_EXPORTED("canister_query run_classify_query");
 
 // True when the loaded model is a sequence classifier: rank pooling, and a
-// classification head.
+// classification head with labels.
 bool classify_model_loaded();

@@ -44,18 +44,17 @@ get_args_for_main(IC_API &ic_api);
 
 struct common_params;
 
-// --embedding (--embeddings) and --pooling <none|mean|cls|last|rank>, as
-// llama-server and llama-embedding take them. The canister parses its args as
-// llama-cli (LLAMA_EXAMPLE_COMPLETION), for which upstream does not register
-// them, so they are taken out of argv before common_params_parse and applied
-// to the parsed params after it.
+// --embedding (--embeddings) and --pooling rank, as llama-server and
+// llama-embedding take them for a sequence classifier (run_classify). The
+// canister parses its args as llama-cli (LLAMA_EXAMPLE_COMPLETION), for which
+// upstream does not register them, so they are taken out of argv before
+// common_params_parse and applied to the parsed params after it.
 struct EmbeddingArgs {
-  bool embedding = false;
-  std::string pooling; // empty: the model's default
+  bool classifier = false; // --embedding --pooling rank
 };
 
 // Moves the two options from argv into out, and shrinks argc. Returns false,
-// with error set, for a missing or unknown --pooling value.
+// with error set, unless both or neither are given, with --pooling rank.
 bool take_embedding_args(int &argc, char **argv, EmbeddingArgs &out,
                          std::string &error);
 void apply_embedding_args(const EmbeddingArgs &args, common_params &params);
