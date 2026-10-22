@@ -34,8 +34,10 @@ _(Issue a PR to get your project listed)_
 
 You can just grab the latest [release](https://github.com/onicai/llama_cpp_canister/releases) and unzip it. Then follow the instructions from the README, but skip these steps:
 
-- No need to clone the repo. Everything is included in the release zip
+- No need to clone the repo. The zip has what the steps below need: the wasm, `icp.yaml`, `requirements.txt`, the upload/download scripts and the `test/` smoke tests.
 - No need to build the wasm. It is included in the release zip.
+
+The other `README-*.md` files, the `Makefile` (`make ...` targets), `docker/`, `icpp.toml` and `scripts/monitor_logs.sh` are not in the zip. They are in the [repository](https://github.com/onicai/llama_cpp_canister).
 
 # Set up
 
@@ -48,8 +50,8 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   icp --version
   ```
 
-  > **Note:** icp-cli replaces the deprecated `dfx`. This project was built and
-  > tested against **icp-cli 1.2.0**.
+  > **Note:** icp-cli replaces the deprecated `dfx`. This project was tested
+  > with **icp-cli 1.7.0**.
 
 - Create an icp identity to deploy, upload and test with, and make it your default:
 
@@ -66,7 +68,7 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   same reason it must not be password protected. A plaintext key is unencrypted
   on disk, so use this identity for local development only.
 
-- Clone the repo and it's children:
+- Clone the repo and its children:
 
   _(skip when using the [release](https://github.com/onicai/llama_cpp_canister/releases))_
 
@@ -179,6 +181,12 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
     icp deploy llama_cpp -m upgrade -e local -y
     ```
 
+    An upgrade keeps the files in stable memory (the uploaded model, prompt caches)
+    and the access settings, but not the loaded model or the max_tokens. After an
+    upgrade, `ready` returns "Model not yet loaded" until you call `load_model`
+    again, and both max_tokens values are back at their default (0 = no cap), so
+    call `set_max_tokens` again if you use other values.
+
   - Check the health endpoint of the `llama_cpp` canister (calling a canister by
     name requires naming its environment with `-e`):
     ```bash
@@ -282,8 +290,14 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   pytest -vv --network local --identity "$(icp identity default)" test/test_qwen3.py
   ```
 
-  See [Smoke testing the deployed LLM](#smoke-testing-the-deployed-llm) for what
-  `--identity` is and why it is required.
+  `--identity` must name the identity that deployed the canister;
+  `$(icp identity default)` is that identity only if you deployed as your default
+  identity. See [Smoke testing the deployed LLM](#smoke-testing-the-deployed-llm).
+
+  It takes ~5 minutes. It loads the model and sets max_tokens itself (the next two
+  steps set them again), and it leaves prompt-cache files behind, among them
+  `prompt.cache`. The chat steps below then report cached tokens, unless you first
+  remove `prompt.cache` with `remove_prompt_cache`.
 
 - Load the gguf file into Orthogonal Persisted (OP) working memory
 
@@ -309,10 +323,12 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
   instruction-limited on the IC, so a large batch buys nothing here but costs GiBs of
   heap — shrinking it to 64 frees ~2 GiB. That leaves the KV cache as the only thing that
   grows with context, which is how we run **`--ctx-size 16384`** (~12K words of
-  conversation) at ~1.76 GiB heap, ~2 GiB under the 3.75 GiB `wasm_memory_limit`. See
+  conversation) at ~1.76 GiB heap, ~2 GiB under the 3.75 GiB `wasm_memory_limit`. A
+  second `load_model` raises the heap to ~2.30 GiB, because the heap does not shrink;
+  further reloads stay there. See
   [Context size & memory](#appendix-b-context-size--memory) for the full mechanism, levers, and
   **risks**. This assumes you raised the `wasm_memory_limit` to 3.75 GiB (see the
-  `update-settings` step above); watch live usage with the `get_memory_status` query.
+  `icp canister settings update` step above); watch live usage with the `get_memory_status` query.
 
 - Set the max_tokens for this model: `0` means no cap
 
@@ -361,6 +377,10 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
       }
     })'
     ```
+
+    `new_chat` re-uses an existing `prompt.cache`. For a fresh start, first remove it
+    with `remove_prompt_cache` (shown below). The output below, with
+    `n_prompt_tokens_cached = opt (0 : nat64)`, assumes there was no earlier cache.
 
     ***
 
@@ -464,8 +484,11 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 
     **Multi-turn conversation.** Qwen3 handles back-and-forth conversations well. To
     continue a chat, send the **full accumulated conversation** as the prompt each
-    turn — the prompt-cache reuses the shared prefix, so only the new turn is
-    processed. Here, turn 2 asks the model to recall facts stated in turn 1:
+    turn — the prompt-cache reuses the prefix it shares with the cached
+    conversation, so only the new part is processed. The example below is a new
+    conversation, with its own turn 1 written out in the prompt; it does not continue
+    the one above, so it reuses only the few tokens it shares with `prompt.cache`.
+    Turn 2 asks the model to recall facts stated in turn 1:
 
     ```bash
     icp canister call llama_cpp -e local run_update_full '(record {
@@ -615,7 +638,7 @@ Raise the log memory to its maximum of 2 MiB:
 icp canister settings update llama_cpp --log-memory-limit 2mib -e local
 ```
 
-To keep the log, capture it from outside with `scripts/monitor_logs.sh`:
+To keep the log, capture it from outside with `scripts/monitor_logs.sh` (in the repo, not in the release zip):
 
 ```bash
 # local network, as the test identity (llama-cpp-testing or $ICPP_PRO_TEST_IDENTITY)
@@ -642,7 +665,7 @@ scripts/monitor_logs.sh --network production
 
 For debug purposes, you can tell the canister to log to a file and download it afterwards.
 
-Pass `"--log-file"; "main.log";` to each `run_update` calls.
+Pass `"--log-file"; "main.log";` to each `run_update` call.
 
 Afterwards, you can download the `main.log` file from the canister with:
 
@@ -712,12 +735,17 @@ You can run a smoketest on the deployed LLM:
   icp identity new llama-cpp-other-user --storage plaintext
   ```
 
+  `test/test_files.py` also expects `.canister_cache` to hold only the files it
+  creates, so it fails after the chat steps or the other test files. Run it on a
+  freshly installed canister: `icp deploy llama_cpp -m reinstall -e local -y`
+  erases all the canister's files, the model included.
+
 - Or let the full QA do all of it for you — it creates the two identities
   (`llama-cpp-testing` and `llama-cpp-other-user`), deploys as the first, and
   runs every suite, without ever changing your active identity:
 
   ```bash
-  make test-llm-wasm
+  make test-llm-wasm   # in the repo, not in the release zip
   ```
 
 # Prompt Caching
@@ -733,7 +761,7 @@ Next to each prompt cache file `<name>` the canister keeps two small sidecar fil
 
 `remove_prompt_cache` and `copy_prompt_cache` remove and copy the sidecars together with the cache. A cache written before v0.23.0 has no `.logits` file; it gets one after its next call.
 
-Each caller of the llama_cpp_canister has it's own cache folder, and has the following endpoints available to manage their prompt-cache files:
+Each caller of the llama_cpp_canister has its own cache folder, and has the following endpoints available to manage their prompt-cache files:
 
 ```bash
 # Remove a prompt cache file from the caller's cache folder
@@ -763,7 +791,7 @@ icp canister call llama_cpp -e local download_prompt_cache_chunk '(record {
 (
   variant {
     Ok = record {
-      done = true;
+      done = false;
       chunk = blob "\47\47\55\46\03";
       offset = 0 : nat64;
       filesize = 675_710_816 : nat64;
@@ -783,7 +811,7 @@ icp canister call llama_cpp -e local download_prompt_cache_chunk '(record {
 (
   variant {
     Ok = record {
-      done = true;
+      done = false;
       chunk = blob "\08\33\41\43\04";
       offset = 5 : nat64;
       filesize = 675_710_816 : nat64;
@@ -796,7 +824,7 @@ icp canister call llama_cpp -e local download_prompt_cache_chunk '(record {
 #    (-) same-subnet, inter-canister: Up to 10 MiB
 #    (-) else                       : Up to  2 MiB
 # You can wrap the download call in a loop, as in scripts/download.py
-# Using a small chunksize goes faster !
+# A larger chunksize goes faster: the scripts default to 2_000_000
 #
 python -m scripts.download \
     --network local \
@@ -808,10 +836,11 @@ python -m scripts.download \
 # ------------------------------------------------------------------
 # Upload a chunk of a prompt cache file
 # Note: chunksize of 5 bytes is for demo only.
-#       -> use 200_000 or higher (2_000_000 max) in actual download
-#       -> experiment what chunksize results in fastest download
+#       -> use 200_000 or higher (2_000_000 max) in actual upload
+#       -> experiment what chunksize results in fastest upload
+# Note: demo.cache, so the demo does not overwrite your prompt.cache
 icp canister call llama_cpp -e local upload_prompt_cache_chunk '(record {
-  promptcache = "prompt.cache";
+  promptcache = "demo.cache";
   chunk = blob "\47\47\55\46\03";
   chunksize = 5 : nat64;
   offset = 0 : nat64;
@@ -820,7 +849,7 @@ icp canister call llama_cpp -e local upload_prompt_cache_chunk '(record {
 (
   variant {
     Ok = record {
-      filename = ".canister_cache/<principal-id>/sessions/prompt.cache";
+      filename = ".canister_cache/<principal-id>/sessions/demo.cache";
       filesize = 5 : nat64;
       filesha256 = "fe3b34fd092c3e2c6da3270eb91c4d3e9c2c6f891c21b6ed7358bf5ecca2d207";
     }
@@ -830,7 +859,7 @@ icp canister call llama_cpp -e local upload_prompt_cache_chunk '(record {
 # --
 # Then call it again to upload the next chunk of bytes
 icp canister call llama_cpp -e local upload_prompt_cache_chunk '(record {
-  promptcache = "prompt.cache";
+  promptcache = "demo.cache";
   chunk = blob "\08\33\41\43\04";
   chunksize = 5 : nat64;
   offset = 5 : nat64;
@@ -839,7 +868,7 @@ icp canister call llama_cpp -e local upload_prompt_cache_chunk '(record {
 (
   variant {
     Ok = record {
-      filename = ".canister_cache/<principal-id>/sessions/prompt.cache";
+      filename = ".canister_cache/<principal-id>/sessions/demo.cache";
       filesize = 10 : nat64;
       filesha256 = "438bb530032946102742839ca22319211409cbd1c403f87a82e68e35e89e8c15";
     }
@@ -849,13 +878,13 @@ icp canister call llama_cpp -e local upload_prompt_cache_chunk '(record {
 # --
 # You can check the filesize & sha256 of the uploaded prompt cache file in the canister
 icp canister call llama_cpp -e local uploaded_prompt_cache_details '(record {
-  promptcache = "prompt.cache";
+  promptcache = "demo.cache";
 })'
 # -> this will return
 (
   variant {
     Ok = record {
-      filename = ".canister_cache/<principal-id>/sessions/prompt.cache";
+      filename = ".canister_cache/<principal-id>/sessions/demo.cache";
       filesize = 10 : nat64;
       filesha256 = "438bb530032946102742839ca22319211409cbd1c403f87a82e68e35e89e8c15";
     }
@@ -863,6 +892,12 @@ icp canister call llama_cpp -e local uploaded_prompt_cache_details '(record {
 )
 
 # --
+# Note: an uploaded prompt cache is discarded on its first use. The canister
+# logs "Discarded prompt-cache file that was not written by this build with
+# the currently loaded model". The upload removes the `.icppfmt` stamp next to
+# the cache, and the stamp itself cannot be uploaded, so the canister cannot
+# trust the uploaded bytes. A download + upload does not restore a cache.
+#
 # You can wrap the upload call in a loop, as in scripts/upload.py
 python -m scripts.upload \
     --network local \
@@ -875,13 +910,17 @@ python -m scripts.upload \
 
 # Access control
 
-By default, only a controller can call the inference endpoints:
+By default, only a controller (or an admin, see `assignAdminRole`) can call these
+endpoints:
 
-- new_chat
-- run_update
-- run_query
+- new_chat, run_update, run_update_full, run_query
+- run_decision, run_decision_full, remove_decision_scope, pin_decision_state,
+  unpin_decision_state
+- run_classify, run_classify_query
+- remove_prompt_cache, copy_prompt_cache
+- get_chats, chats_resume, chats_pause
 
-You can open up the inference endpoints using the following command:
+You can open up these endpoints using the following command:
 
 ```bash
 #
@@ -894,7 +933,7 @@ icp canister call llama_cpp -e local set_access '(record {
 # Verify it worked
 icp canister call llama_cpp -e local get_access '()'
 
-# A caller can check it's access rights with
+# A caller can check its access rights with
 icp canister call llama_cpp -e local check_access '()'
 ```
 
@@ -913,17 +952,17 @@ For example, you can explore what is stored in the `.canister_cache` folder:
 
 ```bash
 # Query call to list all files & directories in a folder
-icp canister call llama_cpp -e local recursive_dir_content_query '(record {dir = ".canister_cache"; max_entries = 0 : nat64})' --output json
+icp canister call llama_cpp -e local recursive_dir_content_query '(record {dir = ".canister_cache"; max_entries = 0 : nat64})'
 # Update call in case you hit the instruction limit
-icp canister call llama_cpp -e local recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 0 : nat64})' --output json
+icp canister call llama_cpp -e local recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 0 : nat64})'
 # Update call to get eg. the first 5000 entries, in case you still hit the instruction limit
-icp canister call llama_cpp -e local recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 5000 : nat64})' --output json
+icp canister call llama_cpp -e local recursive_dir_content_update '(record {dir = ".canister_cache"; max_entries = 5000 : nat64})'
 
 # Get the size of a file in bytes
-icp canister call llama_cpp -e local filesystem_file_size '(record {filename = "<filename>"})' --output json
+icp canister call llama_cpp -e local filesystem_file_size '(record {filename = "<filename>"})'
 
 # Get the creation timestamp of a file in nanoseconds (also returns age of file in seconds)
-icp canister call llama_cpp -e local get_creation_timestamp_ns '(record {filename = "<filename>"})' --output json
+icp canister call llama_cpp -e local get_creation_timestamp_ns '(record {filename = "<filename>"})'
 
 # remove a file or empty directory
 icp canister call llama_cpp -e local filesystem_remove '(record {filename = "<filename>"})'
@@ -1037,16 +1076,18 @@ icp canister call llama_cpp -e local get_memory_status '()'
 (
   variant {
     Ok = record {
-      wasm_heap_bytes = 1_758_068_736 : nat64;   # linear-memory high-water-mark (~1.76 GiB at ctx 16384)
+      wasm_heap_bytes = 1_758_068_736 : nat64;   # linear-memory high-water-mark (~1.76 GiB at ctx 16384, after one load_model)
       stable_bytes = 1_132_527_616 : nat64;      # model file + virtual filesystem
     }
   },
 )
 ```
 
+The heap never shrinks: a second `load_model` raises `wasm_heap_bytes` to ~2.30 GiB, and
+further reloads keep it there.
+
 The `wasm_memory_limit` itself is set with `icp canister settings update llama_cpp
---wasm-memory-limit 4026531840` (see the setup steps) — it cannot go in `icp.yaml`'s
-`initialization_values` when the canister is created through a cycles wallet. Check it
+--wasm-memory-limit 4026531840` (see the setup steps). Check it
 with `icp canister status llama_cpp`. If `wasm_heap_bytes` approaches the limit, lower
 `--batch-size`/`--ubatch-size` (biggest win), reduce `--ctx-size`, and/or quantize the KV
 cache (`--cache-type-k`/`-v q8_0`) when loading — see [Context size & memory](#appendix-b-context-size--memory).
@@ -1065,16 +1106,15 @@ make docker-build-base
 make docker-verify-wasm VERIFY_CANISTER=<canister-id>
 ```
 
+This needs a clone of the [repository](https://github.com/onicai/llama_cpp_canister):
+the `Makefile` and `docker/` are not in the release zip.
+
 Or just read the deployed module hash. This needs no special rights, because
-`dfx canister info` reads the public read-state path:
+`--public` reads the public state tree:
 
 ```bash
-dfx canister --network ic info <canister-id>   # prints "Module hash: 0x..."
+icp canister status <canister-id> -n ic --public   # prints "Module hash: 0x..."
 ```
-
-Note that `make docker-verify-wasm` uses `icp canister status`, which is a
-controller-only management call and fails with `IC0542` for anyone else. Use the
-`dfx canister info` form above when you do not control the canister.
 
 # Appendix A: max_tokens
 
@@ -1165,7 +1205,7 @@ mechanism, the levers, and the risks.
 | `--batch-size` / `--ubatch-size` | Shrinks the compute buffers. 2048/512 → **64/64** frees ~2 GiB. | ≈none — a canister serves one request at a time and prefill is already instruction-limited, so large batches buy nothing here. |
 | `--cache-type-k` / `--cache-type-v` `q8_0` | Halves the KV cache vs f16. | Negligible quality impact. |
 | `--ctx-size` | Sets conversation length **and** the preallocated KV cache. | Longer context = more KV heap. |
-| `wasm_memory_limit` | The ceiling itself (≤ 3.75 GiB on wasm32). | Set via `update-settings`. |
+| `wasm_memory_limit` | The ceiling itself (≤ 3.75 GiB on wasm32). | Set via `icp canister settings update`. |
 
 With `--batch-size 64 --ubatch-size 64` the compute buffers stop scaling with context, so
 the **KV cache is the only thing that grows with `--ctx-size`**. Measured with full prefill

@@ -42,7 +42,7 @@ Use an **encoder** (bidirectional attention) that llama.cpp runs as a
 
 | Base model                    | Parameters | On this task                                                                        |
 |-------------------------------|------------|-------------------------------------------------------------------------------------|
-| `jhu-clsp/ettin-encoder-17m`  | 17 M       | **the example's model**: ~25 M instructions per token in f32; 191 tokens fit a query |
+| `jhu-clsp/ettin-encoder-17m`  | 17 M       | **the example's model**: ~25 M instructions per token in f32; 192 tokens fit a query |
 | `jhu-clsp/ettin-encoder-32m`  | 32 M       | the same accuracy here, at 2.8x the instructions; 191 tokens need 13 B              |
 | `jhu-clsp/mmBERT-small`       | 140 M      | multilingual (the base of Julia-1); not measured for this task                      |
 

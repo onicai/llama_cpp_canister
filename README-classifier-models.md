@@ -16,7 +16,8 @@ BERT-family GGUF with a classification head works: `llama.cpp`'s
 `convert_hf_to_gguf.py` converts a `...ForSequenceClassification` model, and writes
 its labels into the GGUF (`<arch>.classifier.output_labels`).
 
-To train your own, see [README-classifier-training.md](README-classifier-training.md).
+To train your own, see [README-classifier-training.md](README-classifier-training.md). That
+guide, `examples/classifier/` and the native tests are in the repo, not in the release zip.
 
 ## The example model: DAO-channel moderation
 
@@ -44,7 +45,7 @@ OpenChat channel runs off-chain and calls the canister directly, so it can use t
 
 - it is answered in one round trip, without waiting for consensus;
 - it costs the caller no cycles;
-- a message of up to 191 tokens fits the query's 5 B instructions (see below), and a chat
+- a message of up to 192 tokens fits the query's 5 B instructions (see below), and a chat
   message is far shorter (the 200 test messages are 3-55 tokens, 0.61 B on average).
 
 A query answer comes from one replica and is not certified (see
@@ -105,11 +106,13 @@ test set the same:
 | file                                 | **69 MB**                           | 31 MB                          | 20 MB                          | 36 MB                        |
 | instructions per token               | **~25 M**                           | ~25 M                          | ~19 M                          | ~89 M                        |
 | a 33-token message                   | **0.88 B**                          | 0.88 B                         | 0.62 B                         | ~2.9 B                       |
-| longest text in a query (5 B)        | **191 tokens = 4.5 B** (`-ub 192`)  | 191 tokens = 4.5 B (`-ub 192`) | 255 tokens = 4.2 B (`-ub 256`) | 47 tokens = 4.3 B (`-ub 48`) |
-| longest text in an update (40 B)     | **511 tokens = 13.7 B** (`-ub 512`) |                                | 511 tokens = 9.7 B (`-ub 512`) | ~447 tokens = 39.6 B (`-ub 512`) |
+| longest text in a query (5 B)        | **192 tokens = 4.5 B** (`-ub 192`)  | 192 tokens = 4.5 B (`-ub 192`) | 256 tokens ≈ 4.2 B (`-ub 256`) | 48 tokens ≈ 4.4 B (`-ub 48`) |
+| longest text in an update (40 B)     | **512 tokens = 13.7 B** (`-ub 512`) |                                | 512 tokens ≈ 9.7 B (`-ub 512`) | ~447 tokens = 39.6 B (`-ub 512`) |
 | `wasm_heap_bytes` after `load_model` | **108 MB** (`-ub 192`)              | 70 MB (`-ub 192`)              | 59 MB (`-ub 256`)              | 72 MB (`-ub 48`)             |
 | all 6 facts right (200 messages)     | **141**                             | 141                            | 143                            | 141                          |
 | largest score difference vs f32      |                                     | 0.15                           | 0.57                           | 0.026                        |
+
+The longest text is `-ub` tokens, special tokens included. ≈: measured one token shorter.
 
 - f32 + Q8_0 embd quantizes only the token-embedding table (13 of the 17 M parameters,
   used only as a lookup): less than half the file and about 35% less heap than f32, at
@@ -131,20 +134,25 @@ mkdir -p models/onicai/dao-moderation-classifier
 ```
 
 ```bash
-wget -c -O models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf https://huggingface.co/onicai/dao-moderation-classifier/resolve/main/dao-moderation-f32.gguf
+curl -L -C - -o models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf https://huggingface.co/onicai/dao-moderation-classifier/resolve/main/dao-moderation-f32.gguf
 ```
 
-Verify the sha256 against the appendix:
+Verify the sha256:
 
 ```bash
 shasum -a 256 models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf
+# -> 47856638d128afc076244ba6df67a59dfaf6b20de24de39f198720c7daa400e4
 ```
 
 ## Upload the gguf
 
 ```bash
-python -m scripts.upload --network local --canister llama_cpp --canister-filename models/model.gguf models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf
+python -m scripts.upload --network local --canister llama_cpp --canister-filename models/model.gguf --filetype gguf --hf-sha256 47856638d128afc076244ba6df67a59dfaf6b20de24de39f198720c7daa400e4 models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf
 ```
+
+The commands on this page run as the identity that deployed the canister, the default
+one of [README.md](README.md)'s `# Set up`, or add `--identity <name>`: the endpoints
+are controller-only by default.
 
 ## Load the model
 
@@ -153,7 +161,8 @@ icp canister call llama_cpp load_model '(record { args = vec {"--model"; "models
 ```
 
 - `--embedding --pooling rank`: as upstream, and only together. Without them the model
-  loads, but as no classifier, and `run_classify` returns an error. With them,
+  loads, but as no classifier: `run_classify` returns an error, and so does generation
+  ("The loaded model cannot generate text"). With them,
   `load_model` refuses a model that has no classifier labels
   (`<arch>.classifier.output_labels`): llama.cpp counts the outputs of the head from
   them, and without them it cannot tell a classifier from any other model.
@@ -166,7 +175,7 @@ icp canister call llama_cpp load_model '(record { args = vec {"--model"; "models
   - **f32: `-c 192 -ub 192`**, so that every text fits a query (4.5 B at most);
   - f16: `-c 48 -ub 48`; Q8_0: `-c 256 -ub 256`.
   - For texts longer than the query limit allows, load with a larger `-c` and `-ub`
-    (f32: up to `-c 512 -ub 512`, 13.7 B for a 511-token text) and use `run_classify`:
+    (f32: up to `-c 512 -ub 512`, 13.7 B for a 512-token text) and use `run_classify`:
     a text longer than the loaded `-ub` gets the token-limit error.
 - `-b` follows `-ub` by itself.
 
@@ -180,10 +189,10 @@ icp canister call llama_cpp run_classify_query '(record { text = "Hi, I am from 
 
 ```
 (variant { Ok = record {
-  scores = vec { 1.676; -1.285; -3.225; -1.565; 11.258; ...; 7.266 }; // 15 raw scores, in label order
+  scores = vec { 1.676; -1.285; -3.225; -1.565; 11.258; ...; 7.266 }; // 15 raw scores in label order (rounded here)
   labels = vec { "kind:question"; "kind:discussion"; ...; "action:block" };
-  input_tokens = 24 : nat64;                                          // with the special tokens
   instructions = opt (603_853_217 : nat64);                           // what this call used
+  input_tokens = 24 : nat64;                                          // with the special tokens
 } })
 ```
 
@@ -218,7 +227,7 @@ Access is the same as for `run_decision`: controllers, the `AdminUpdate` role
 | A frontend that needs the answer fast           | `run_classify_query` | one round trip; fits when `-ub` is set as above  |
 | Another canister calling it                     | `run_classify`       | a call from a canister runs as an update anyway  |
 | An answer that must be trusted                  | `run_classify`       | a query answer comes from one replica, uncertified |
-| Texts longer than the query limit allows        | `run_classify`       | f32: 511 tokens = 13.7 B, far below 40 B         |
+| Texts longer than the query limit allows        | `run_classify`       | f32: 512 tokens = 13.7 B, far below 40 B         |
 
 **How far can a query answer be trusted?** A query runs on one replica of the subnet,
 without consensus. The replica signs its response with its node key, and the agent
@@ -239,8 +248,9 @@ by the subnet.
 - **An empty text** and **a text over 8192 bytes** get an `Err` too.
 - **Over the instruction limit:** with a larger `-ub` than the table gives, a long text can
   still need more instructions than the call allows: 5 B for the query, 40 B for the
-  update (f16 at `-ub 512`: a text over ~447 tokens; f32 needs 13.7 B for 511
-  tokens). The IC then traps the message (IC0522), all its changes are rolled back, and
+  update (f16 at `-ub 512`: a text over ~447 tokens; f32 needs 13.7 B for 512
+  tokens). The IC then traps the message ("Canister exceeded the limit of ... instructions",
+  IC0522), all its changes are rolled back, and
   the caller gets a reject, never a partial result. There is no `run_classify_full`: one text cannot be split over messages.
 - **No generation:** while a classifier is loaded, `new_chat`, `run_update`, `run_query`
   and `run_update_full` return `The loaded model is a sequence classifier: use
@@ -248,8 +258,8 @@ by the subnet.
 
 ## Tests
 
-- Native: `native/test_classify.cpp` (skipped when the gguf is not downloaded).
-- pytest, after uploading and before loading:
+- Native, in the repo: `native/test_classify.cpp` (skipped when the gguf is not downloaded).
+- pytest, after uploading (it loads the model itself, with the documented arguments):
 
 ```bash
 pytest -vv --network local --identity llama-cpp-testing test/test_classify.py

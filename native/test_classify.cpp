@@ -206,6 +206,18 @@ void test_classify(MockIC &mockIC) {
                   LOAD_CLASSIFIER_NO_POOLING, "", silent_on_trap, controller);
   expect_error(mockIC, "without rank pooling", TEXT_QUESTION, controller,
                NOT_A_CLASSIFIER);
+  // generation on it returns an error instead of tripping llama.cpp's assert
+  // that the vocab does not add EOS (a trap in a canister)
+  {
+    std::string out;
+    mockIC.run_test(
+        "test_classify: run_update on an encoder without rank pooling",
+        run_update, RUN_UPDATE_HI, "", silent_on_trap, controller, &out);
+    check(
+        out.find("63616e6e6f742067656e65726174652074657874") !=
+            std::string::npos,
+        "run_update on an encoder: expected the 'cannot generate text' error");
+  }
 
   // --- the classifier
   mockIC.run_test("test_classify: load Ettin-17M", load_model, LOAD_CLASSIFIER,
