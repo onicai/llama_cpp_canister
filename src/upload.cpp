@@ -122,6 +122,14 @@ void load_file_metadata() {
     metadata.sha256.resize(sha256_size);
     file.read(&metadata.sha256[0], sha256_size);
 
+    // A count larger than the entries in the file must not add empty entries
+    // until memory runs out
+    if (!file) {
+      std::cout << "Corrupted metadata: the file ends after " << i << " of "
+                << count << " entries" << std::endl;
+      break;
+    }
+
     uploaded_files.push_back(metadata);
   }
 
@@ -240,12 +248,16 @@ void file_upload_chunk_(IC_API &ic_api, const std::string &filename,
   // Open an ofstream
   std::ofstream of_stream;
   std::string msg;
-  std::ios_base::openmode mode = std::ios::binary;
+  std::ios_base::openmode mode = std::ios::binary | std::ios::out;
   if (offset == 0) {
     mode |= std::ios::trunc;         // truncate the file to zero length
     session.is_first_chunk = true;   // reset the first chunk flag
     session.previous_offset = 0;     // reset the previous offset
     session.sha256_state = SHA256(); // reset the SHA256 state
+  } else {
+    // A later chunk keeps what is written: `out` alone opens like fopen "w",
+    // which empties the file before every chunk
+    mode |= std::ios::in;
   }
   if (!open_ofstream(filename, mode, of_stream, msg)) {
     ic_api.to_wire(CandidTypeVariant{

@@ -347,6 +347,70 @@ void test_files(MockIC &mockIC) {
       silent_on_trap, my_principal);
 
   // -----------------------------------------------------------------------------
+  // file_upload_chunk in two chunks, then read back: the second chunk must not
+  // empty the file (an ofstream opened with `out` alone truncates)
+
+  // The upload metadata is kept in the working directory: keep what is there.
+  // A backup left by an interrupted run already holds the original.
+  const std::filesystem::path metadata{"uploaded_files_metadata.dat"};
+  const std::filesystem::path metadata_backup{
+      "uploaded_files_metadata.dat.test_files"};
+  const bool had_backup = std::filesystem::exists(metadata_backup);
+  const bool had_metadata = had_backup || std::filesystem::exists(metadata);
+  if (!had_backup && had_metadata) {
+    std::filesystem::copy_file(metadata, metadata_backup);
+  }
+
+  // '(record { filename = "Work/test_files_qa/two_chunks.bin"; chunk = blob "abc"; chunksize = 3 : nat64; offset = 0 : nat64 })'
+  mockIC.run_test(
+      std::string(__func__) + ": " + "file_upload_chunk - first of two chunks",
+      file_upload_chunk,
+      "4449444c026c04ed8c8bae040193affe810678c7dda8bb0771aec3faa40b786d7b010003616263000000000000000021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e0300000000000000",
+      "4449444c026c03c7dda8bb0771bdbaf9d50778e3efa9c70c716b01bc8a010001010021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e03000000000000004062613738313662663866303163666561343134313430646535646165323232336230303336316133393631373761396362343130666636316632303031356164",
+      silent_on_trap, my_principal);
+
+  // '(record { filename = "Work/test_files_qa/two_chunks.bin"; chunk = blob "def"; chunksize = 3 : nat64; offset = 3 : nat64 })'
+  mockIC.run_test(
+      std::string(__func__) + ": " + "file_upload_chunk - second of two chunks",
+      file_upload_chunk,
+      "4449444c026c04ed8c8bae040193affe810678c7dda8bb0771aec3faa40b786d7b010003646566030000000000000021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e0300000000000000",
+      "4449444c026c03c7dda8bb0771bdbaf9d50778e3efa9c70c716b01bc8a010001010021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e06000000000000004062656635376563376635336136643430626562363430613738306136333963383362633239616338613938313666316663366335633664636439336334373231",
+      silent_on_trap, my_principal);
+
+  // '(record { filename = "Work/test_files_qa/two_chunks.bin"; chunksize = 6 : nat64; offset = 0 : nat64 })'
+  // -> '(variant { Ok = record { chunk = blob "abcdef"; chunksize = 6 : nat64; filesize = 6 : nat64; offset = 0 : nat64; done = true } })'
+  mockIC.run_test(
+      std::string(__func__) + ": " +
+          "file_download_chunk - both uploaded chunks are kept",
+      file_download_chunk,
+      "4449444c016c0393affe810678c7dda8bb0771aec3faa40b780100000000000000000021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e0600000000000000",
+      "4449444c036c0582e1b793047eed8c8bae040193affe810678bdbaf9d50778aec3faa40b786d7b6b01bc8a01000102000106616263646566000000000000000006000000000000000600000000000000",
+      silent_on_trap, my_principal);
+
+  // A corrupt metadata file: its first 8 bytes read as a huge entry count.
+  // Loading must stop at the end of the file, instead of adding empty entries
+  // until memory runs out.
+  {
+    std::ofstream corrupt(metadata, std::ios::binary | std::ios::trunc);
+    corrupt << "modified";
+  }
+  // '(record { filename = "Work/test_files_qa/two_chunks.bin" })'
+  // -> '(variant { Err = variant { Other = "uploaded_file_details_: Metadata for this file are not found: Work/test_files_qa/two_chunks.bin" } })'
+  mockIC.run_test(
+      std::string(__func__) + ": " +
+          "uploaded_file_details - a corrupt metadata file stops at its end",
+      uploaded_file_details,
+      "4449444c016c01c7dda8bb0771010021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e",
+      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100005f75706c6f616465645f66696c655f64657461696c735f3a204d6574616461746120666f7220746869732066696c6520617265206e6f7420666f756e643a20576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e",
+      silent_on_trap, my_principal);
+
+  if (had_metadata) {
+    std::filesystem::rename(metadata_backup, metadata);
+  } else {
+    std::filesystem::remove(metadata);
+  }
+
+  // -----------------------------------------------------------------------------
   // file_download_chunk test: chunksize exceeds MAX_CHUNK_SIZE (security test)
   // '(record { filename = "Work/test_files_qa/random_data_1.bin"; chunksize = 3145728 : nat64; offset = 0 : nat64 })'
   // -> '(variant { Err = variant { Other = "file_download_chunk_: chunksize 3145728 exceeds limit 2097152" } })'

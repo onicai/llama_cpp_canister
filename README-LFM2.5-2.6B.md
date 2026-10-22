@@ -272,12 +272,14 @@ round trip across calls, wasm heap after load.
 
 Not verified:
 
-- **Loading the current file with v0.23.0rc1.** The file on Hugging Face has changed
-  since these measurements: its sha256 is now `02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed`
-  (same size). With v0.23.0rc1, on a fresh canister on a local network, `load_model` on
-  it exceeds the IC's limit of 2 GiB of stable memory read per message. This is under
-  investigation; `run_update_full` and `max_tokens_update = 0` are not verified on this
-  model yet.
+- **The current file on mainnet.** The file on Hugging Face has changed since these
+  measurements: its sha256 is now `02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed`
+  (same size). With v0.23.0rc1 (icpp-pro 7.0.0rc2), `load_model` on it exceeds the IC's
+  limit of 2 GiB of stable memory read per message: that file system stored the 1.67 GB
+  file in 2.81 GB. With icpp-pro 7.0.0rc3 it takes 1.74 GB of stable memory in all, and on
+  a fresh canister on a local network it loads and answers one `run_update_full` call
+  with `max_tokens_update = 0`. Not yet measured: the `max_tokens` ceilings with this
+  file.
 - **Only `-c 4096`.** Larger contexts are untested; the ceiling is already 4, so
   a bigger context may push generation below one token per call.
 - **Tool calling / agentic use**, which is the model's actual selling point and
