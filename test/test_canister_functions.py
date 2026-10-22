@@ -50,6 +50,8 @@ def test__get_memory_status_source_uses_64bit_api(network: str) -> None:
     #     rejects the module at install time with IC0505 ("not exported by the
     #     runtime"), verified by deliberately breaking the name
     # so a revert to the 32-bit call is only visible in the source itself.
+    if not MEMORY_STATUS_CPP.exists():
+        pytest.skip("source check: src/memory_status.cpp is not in the release zip")
     source = MEMORY_STATUS_CPP.read_text(encoding="utf-8")
     assert "ic0_stable64_size()" in source, (
         f"{MEMORY_STATUS_CPP} no longer calls ic0_stable64_size(); the 32-bit "

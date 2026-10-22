@@ -146,15 +146,13 @@ docker-verify-wasm:
 	@cd docker && $(COMPOSE) build --no-cache wasm && $(COMPOSE) run --rm wasm
 	@LOCAL_HASH=$$(shasum -a 256 out/$(CANISTER_NAME).wasm | cut -d ' ' -f 1); \
 	echo "Docker wasm hash : $$LOCAL_HASH"; \
-	DEPLOYED_HASH=$$(icp canister status $(VERIFY_CANISTER) -n $(VERIFY_NETWORK) 2>&1 \
+	DEPLOYED_HASH=$$(icp canister status $(VERIFY_CANISTER) -n $(VERIFY_NETWORK) --public 2>&1 \
 	                 | grep "Module hash" | awk '{print $$3}' | sed 's/^0x//'); \
 	echo "Deployed hash    : $$DEPLOYED_HASH  ($(VERIFY_CANISTER) on $(VERIFY_NETWORK))"; \
 	if [ -z "$$DEPLOYED_HASH" ]; then \
 		echo "ERROR: could not read a module hash for $(VERIFY_CANISTER)."; \
-		echo "  \`icp canister status\` is a controller-only management call, so it"; \
-		echo "  fails with IC0542 unless you control the canister. Anyone can read the"; \
-		echo "  hash from the PUBLIC read-state path instead:"; \
-		echo "      dfx canister --network ic info $(VERIFY_CANISTER)"; \
+		echo "  It is read from the public state tree, so anyone can read it; check the"; \
+		echo "  canister id and the network (VERIFY_CANISTER, VERIFY_NETWORK)."; \
 		exit 1; \
 	elif [ "$$LOCAL_HASH" = "$$DEPLOYED_HASH" ]; then \
 		echo "MATCH: the Docker build matches deployed canister $(VERIFY_CANISTER)"; \

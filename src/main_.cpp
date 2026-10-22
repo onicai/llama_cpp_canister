@@ -571,7 +571,15 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   // params.use_jinja is forced false above, so this equals b4531's behavior.
   const bool add_bos = llama_vocab_get_add_bos(vocab) && !params.use_jinja;
   if (!llama_model_has_encoder(model)) {
-    GGML_ASSERT(!llama_vocab_get_add_eos(vocab));
+    // ICPP-PATCH: upstream asserts here; in a canister a failed assert traps.
+    // A vocab that adds EOS belongs to an encoder (a BERT-style classifier
+    // loaded without --embedding --pooling rank), which cannot generate.
+    if (llama_vocab_get_add_eos(vocab)) {
+      icpp_error_msg = "The loaded model cannot generate text (its vocab adds "
+                       "EOS: an encoder). For a sequence classifier, load it "
+                       "with --embedding --pooling rank and use run_classify.";
+      return 1;
+    }
   }
 
   LOG_DBG("n_ctx: %d, add_bos: %d\n", n_ctx, add_bos);
