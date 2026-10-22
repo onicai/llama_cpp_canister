@@ -131,15 +131,15 @@ def _generate_hindi(network: str, max_tokens_update: int) -> str:
     try:
         return _ingest_and_generate(network, max_tokens_update)
     finally:
-        _assert_ok(
-            _call(
-                network,
-                "set_max_tokens",
-                f"(record {{ max_tokens_query = {query.group(1)} : nat64; "
-                f"max_tokens_update = {update.group(1)} : nat64 }})",
-            ),
-            "restore max_tokens",
+        # Not _assert_ok, which skips on a trap: a failed restore must fail
+        restore = _call(
+            network,
+            "set_max_tokens",
+            f"(record {{ max_tokens_query = {query.group(1)} : nat64; "
+            f"max_tokens_update = {update.group(1)} : nat64 }})",
         )
+        if not restore.startswith("(variant { Ok"):
+            raise AssertionError(f"restore max_tokens failed: {restore[:400]}")
 
 
 def _ingest_and_generate(network: str, max_tokens_update: int) -> str:
