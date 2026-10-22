@@ -40,9 +40,21 @@ void load_model() {
   // Get the data from the wire and prepare arguments for main_
   auto [argc, argv, args] = get_args_for_main(ic_api);
 
+  // --embedding and --pooling are not llama-cli args (see utils.h): check the
+  // rest here, on a copy, and leave all of them to main_.
+  std::vector<char *> argv_check = argv;
+  int argc_check = argc;
+  EmbeddingArgs embedding_args;
+  if (!take_embedding_args(argc_check, argv_check.data(), embedding_args,
+                           error_msg)) {
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::BadRequest, error_msg);
+    return;
+  }
+
   common_params params;
-  if (!common_params_parse(argc, argv.data(), params, LLAMA_EXAMPLE_COMPLETION,
-                           print_usage)) {
+  if (!common_params_parse(argc_check, argv_check.data(), params,
+                           LLAMA_EXAMPLE_COMPLETION, print_usage)) {
     error_msg = "Cannot parse args.";
     send_output_record_result_error_to_wire(
         ic_api, Http::StatusCode::InternalServerError, error_msg);

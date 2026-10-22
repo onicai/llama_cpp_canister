@@ -130,6 +130,11 @@ jobs:
           wget -nv -O ./models/ggml-org/Laya-GGUF/Laya-Q8_0.gguf https://huggingface.co/ggml-org/Laya-GGUF/resolve/main/Laya-Q8_0.gguf?download=true
           wget -nv -O ./models/ggml-org/Kev-0.8B-GGUF/Kev-0.8B-Q8_0.gguf https://huggingface.co/ggml-org/Kev-0.8B-GGUF/resolve/main/Kev-0.8B-Q8_0.gguf?download=true
 
+      - name: Download the classifier (test_classify)
+        run: |
+          mkdir -p ./models/onicai/dao-moderation-classifier
+          wget -nv -O ./models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf https://huggingface.co/onicai/dao-moderation-classifier/resolve/main/dao-moderation-f32.gguf?download=true
+
       - name: test-llm-wasm (against the Docker-built wasm)
         # `icp network start` downloads the network-launcher via the GitHub API.
         # Unauthenticated that is 60 req/hour shared across all GitHub-hosted

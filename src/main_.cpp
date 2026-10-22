@@ -2,6 +2,7 @@
 // Internet Computer SmartContract version of: tools/completion/completion.cpp
 // See: https://github.com/onicai/llama_cpp_onicai_fork/tree/master/tools/completion/README.md
 #include "main_.h"
+#include "classify.h"
 #include "decision.h"
 #include "ic_api.h"
 #include "promptcache.h"
@@ -202,6 +203,11 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   bool instructions_exhausted = false;
   const bool instructions_guard =
       max_instructions > 0 && instruction_counter() > 0;
+  // --embedding and --pooling, as llama-server takes them (see utils.h)
+  EmbeddingArgs embedding_args;
+  if (!take_embedding_args(argc, argv, embedding_args, icpp_error_msg)) {
+    return 1;
+  }
   // ICPP-PATCH-END
 
   if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMPLETION,
@@ -213,6 +219,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   }
 
   // ICPP-PATCH-START
+  apply_embedding_args(embedding_args, params);
+
   // A canister is single threaded. Constructing a std::thread traps at runtime
   // in this build, so clamp the thread counts right after parsing the CLI args.
   params.cpuparams.n_threads = 1;
@@ -246,13 +254,12 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   // Note: upstream removed params.logits_all (and with it the 'please use the
   //       perplexity tool' guard), so there is nothing to check here anymore.
 
-  if (params.embedding) {
-    LOG_ERR("************\n");
-    LOG_ERR("%s: please use the 'embedding' tool for embedding calculations\n",
-            __func__);
-    LOG_ERR("************\n\n");
-
-    return 0;
+  // ICPP-PATCH: load_model loads an embedding model (a sequence classifier,
+  // served by run_classify); only generation is refused, with an error.
+  if (params.embedding && !load_model_only) {
+    icpp_error_msg = "--embedding is for load_model only: an embedding model "
+                     "has no text generation.";
+    return 1;
   }
 
   if (params.n_ctx != 0 && params.n_ctx < 8) {
@@ -372,9 +379,23 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     icpp_error_msg = "The loaded model is a decision model: use run_decision.";
     return 1;
   }
+  if (!load_model_only && classify_model_loaded()) {
+    icpp_error_msg = "The loaded model is a sequence classifier: use run_classify.";
+    return 1;
+  }
   // ICPP-PATCH-END
 
   // ICPP-PATCH-START
+
+  // --embedding --pooling rank loads a sequence classifier: a model without a
+  // classification head would leave an embeddings context that nothing serves.
+  // (Not params.embedding: llama.cpp also sets that for a decision model.)
+  if (load_model_only && embedding_args.classifier && !classify_model_loaded()) {
+    icpp_free_model();
+    icpp_error_msg = "--embedding --pooling rank needs a sequence classifier: "
+                     "this model has no classification head with labels.";
+    return 1;
+  }
 
   // Return if we are asked to ONLY load the model
   if (load_model_only) {

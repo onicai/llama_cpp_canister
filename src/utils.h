@@ -10,6 +10,7 @@
 const uint64_t MAX_CHUNK_SIZE = 2 * 1024 * 1024; // ICP message size limit
 const uint64_t MAX_FILENAME_SIZE = 4096;         // Linux PATH_MAX
 const uint64_t MAX_SHA256_SIZE = 64;             // SHA256 hex string length
+const uint64_t CLASSIFY_MAX_TEXT_BYTES = 8192;   // run_classify input text
 
 // The IC's instruction counter for the current message. 0 in native builds:
 // the Mock IC returns nanoseconds there, which would trip instruction budgets.
@@ -40,6 +41,23 @@ bool open_ofstream(const std::string &f_name,
 
 std::tuple<int, std::vector<char *>, std::unique_ptr<std::vector<std::string>>>
 get_args_for_main(IC_API &ic_api);
+
+struct common_params;
+
+// --embedding (--embeddings) and --pooling rank, as llama-server and
+// llama-embedding take them for a sequence classifier (run_classify). The
+// canister parses its args as llama-cli (LLAMA_EXAMPLE_COMPLETION), for which
+// upstream does not register them, so they are taken out of argv before
+// common_params_parse and applied to the parsed params after it.
+struct EmbeddingArgs {
+  bool classifier = false; // --embedding --pooling rank
+};
+
+// Moves the two options from argv into out, and shrinks argc. Returns false,
+// with error set, unless both or neither are given, with --pooling rank.
+bool take_embedding_args(int &argc, char **argv, EmbeddingArgs &out,
+                         std::string &error);
+void apply_embedding_args(const EmbeddingArgs &args, common_params &params);
 
 bool my_create_directory(const std::filesystem::path &dir_path,
                          std::string &error_msg);

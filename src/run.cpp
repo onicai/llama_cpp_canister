@@ -1,5 +1,6 @@
 #include "run.h"
 #include "auth.h"
+#include "classify.h"
 #include "common.h"
 #include "db_chats.h"
 #include "decision.h"
@@ -36,12 +37,19 @@ static void print_usage(int argc, char **argv) {
   // do nothing function
 }
 
-// A decision model has no text generation: it is served by run_decision.
+// A decision model or a sequence classifier has no text generation: they are
+// served by run_decision and run_classify.
 static bool reject_if_decision_model(IC_API &ic_api) {
-  if (!decision_model_loaded()) return false;
-  send_output_record_result_error_to_wire(
-      ic_api, Http::StatusCode::BadRequest,
-      "The loaded model is a decision model: use run_decision.");
+  std::string error;
+  if (decision_model_loaded()) {
+    error = "The loaded model is a decision model: use run_decision.";
+  } else if (classify_model_loaded()) {
+    error = "The loaded model is a sequence classifier: use run_classify.";
+  } else {
+    return false;
+  }
+  send_output_record_result_error_to_wire(ic_api, Http::StatusCode::BadRequest,
+                                          error);
   return true;
 }
 

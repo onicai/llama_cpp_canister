@@ -13,6 +13,8 @@
 // NOTE the path: a bare #include "unicode.h" resolves to the TOKENIZER's header,
 // because cpp_include_dirs lists .../fork/src before .../fork/common.
 #include "common/unicode.h"
+// "common/" prefix: a bare "common.h" resolves to ggml/src/ggml-cpu/common.h
+#include "common/common.h"
 
 #include <map>
 
@@ -65,6 +67,44 @@ get_args_for_main(IC_API &ic_api) {
   // }
 
   return std::make_tuple(argc, std::move(argv), std::move(args));
+}
+
+bool take_embedding_args(int &argc, char **argv, EmbeddingArgs &out,
+                         std::string &error) {
+  bool pooling_rank = false;
+  int kept = 0;
+  for (int i = 0; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--embedding" || arg == "--embeddings") {
+      out.classifier = true;
+      continue;
+    }
+    if (arg == "--pooling") {
+      pooling_rank = i + 1 < argc && std::string(argv[++i]) == "rank";
+      if (!pooling_rank) {
+        error = "--pooling: only rank is supported, with --embedding";
+        return false;
+      }
+      continue;
+    }
+    argv[kept++] = argv[i];
+  }
+  argc = kept;
+  // Only a sequence classifier is served (run_classify): an embeddings context
+  // of any other kind has no endpoint, and cannot generate either
+  if (out.classifier != pooling_rank) {
+    error = "--embedding and --pooling rank go together: they load a sequence "
+            "classifier for run_classify";
+    return false;
+  }
+  return true;
+}
+
+void apply_embedding_args(const EmbeddingArgs &args, common_params &params) {
+  if (args.classifier) {
+    params.embedding = true;
+    params.pooling_type = LLAMA_POOLING_TYPE_RANK;
+  }
 }
 
 bool my_create_directory(const std::filesystem::path &dir_path,

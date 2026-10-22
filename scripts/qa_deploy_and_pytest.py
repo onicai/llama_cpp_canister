@@ -198,6 +198,14 @@ def main() -> int:
                 "env": {"DECISION_MODEL": "kev-0.8b"},
                 "test_paths": ["test/test_decision.py"],
             },
+            # A sequence classifier (run_classify): see README-classifier-models.md.
+            {
+                "filename": "models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf",  # pylint: disable=line-too-long
+                "canister_filename": "models/model.gguf",
+                "wasm_memory_limit": 4026531840,  # 3.75 GiB
+                "env": {},
+                "test_paths": ["test/test_classify.py"],
+            },
             {
                 "filename": "models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf",  # pylint: disable=line-too-long
                 "canister_filename": "models/model.gguf",

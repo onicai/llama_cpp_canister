@@ -6,6 +6,7 @@
 #include "test_alternating_sessions.h"
 #include "test_cache_cleanup.h"
 #include "test_canister_functions.h"
+#include "test_classify.h"
 #include "test_cycle_balance.h"
 #include "test_decision.h"
 #include "test_files.h"
@@ -46,6 +47,7 @@ int main() {
   test_files(mockIC);
   test_decision(mockIC);
   test_decision_kev(mockIC);
+  test_classify(mockIC);
   test_tiny_stories(mockIC);
   test_alternating_sessions(mockIC);
   test_run_update_full(mockIC);
