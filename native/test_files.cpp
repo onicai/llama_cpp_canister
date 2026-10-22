@@ -375,6 +375,9 @@ void test_files(MockIC &mockIC) {
       "4449444c036c0582e1b793047eed8c8bae040193affe810678bdbaf9d50778aec3faa40b786d7b6b01bc8a01000102000106616263646566000000000000000006000000000000000600000000000000",
       silent_on_trap, my_principal);
 
+  // The upload metadata is kept in the working directory
+  std::filesystem::remove("uploaded_files_metadata.dat");
+
   // -----------------------------------------------------------------------------
   // file_download_chunk test: chunksize exceeds MAX_CHUNK_SIZE (security test)
   // '(record { filename = "Work/test_files_qa/random_data_1.bin"; chunksize = 3145728 : nat64; offset = 0 : nat64 })'
