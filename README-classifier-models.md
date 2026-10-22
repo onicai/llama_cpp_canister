@@ -150,9 +150,11 @@ shasum -a 256 models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf
 python -m scripts.upload --network local --canister llama_cpp --canister-filename models/model.gguf --filetype gguf --hf-sha256 47856638d128afc076244ba6df67a59dfaf6b20de24de39f198720c7daa400e4 models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf
 ```
 
-The commands on this page run as the identity that deployed the canister, the default
-one of [README.md](README.md)'s `# Set up`, or add `--identity <name>`: the endpoints
-are controller-only by default.
+The commands on this page run as the identity that deployed the canister (the default
+one of [README.md](README.md)'s `# Set up`): the endpoints are controller-only by
+default. To use another identity, add `--identity <name>` to the `icp` and pytest
+commands, and set `ICPP_PRO_TEST_IDENTITY=<name>` for `python -m scripts.upload`, which
+has no `--identity` option.
 
 ## Load the model
 
