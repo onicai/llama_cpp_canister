@@ -69,16 +69,27 @@ llama-quantize ettin-encoder-17m-f16.gguf ettin-encoder-17m-q8_0.gguf Q8_0
 
 ## Get the gguf
 
-Download it into `models/onicai/ettin-encoder-17m-GGUF/` and verify the sha256 above:
+The f32 file and the f32 + Q8_0-embedding file are on Hugging Face:
+[onicai/treasure-guard](https://huggingface.co/onicai/treasure-guard).
 
 ```bash
-shasum -a 256 models/onicai/ettin-encoder-17m-GGUF/ettin-encoder-17m-f32.gguf
+mkdir -p models/onicai/treasure-guard
+```
+
+```bash
+wget -c -O models/onicai/treasure-guard/ettin-encoder-17m-f32.gguf https://huggingface.co/onicai/treasure-guard/resolve/main/ettin-encoder-17m-f32.gguf
+```
+
+Verify the sha256 against the table above:
+
+```bash
+shasum -a 256 models/onicai/treasure-guard/ettin-encoder-17m-f32.gguf
 ```
 
 ## Upload the gguf
 
 ```bash
-python -m scripts.upload --network local --canister llama_cpp --canister-filename models/model.gguf models/onicai/ettin-encoder-17m-GGUF/ettin-encoder-17m-f32.gguf
+python -m scripts.upload --network local --canister llama_cpp --canister-filename models/model.gguf models/onicai/treasure-guard/ettin-encoder-17m-f32.gguf
 ```
 
 ## Load the model
