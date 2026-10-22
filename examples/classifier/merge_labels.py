@@ -82,9 +82,10 @@ def merge(raw: Path, relabel: Path, test: Path, out: Path) -> None:
         for k in bad:
             disagree[k] += 1
         if not bad:
-            kept.append(
-                {"text": a["text"], **{k: v for k, v in other.items() if k != "text"}}
-            )
+            labels = {k: v for k, v in other.items() if k != "text"}
+            if labels["scam"]:
+                labels["misleading"] = True  # the policy makes every scam misleading
+            kept.append({"text": a["text"], **labels})
     out.write_text("".join(json.dumps(e) + "\n" for e in kept))
     print(f"kept {len(kept)}, without a second label {missing}")
     print(f"disagreements per fact: {disagree}")

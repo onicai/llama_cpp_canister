@@ -80,8 +80,8 @@ the softmax probability of the top action (`action_p` in `facts()` of
 | **0.8**                                       | **54**  | **0**             | **0**        | **34 of 46**       |
 | 0.9                                           | 36      | 0                 | 0            | 25 of 46           |
 
-**Recommended: act automatically above 0.8, and queue everything else for a human
-moderator.** At 0.8 the bot handled 54 of the 99 messages that need an action without a
+**Recommended: act automatically when the probability is at least 0.8, and queue
+everything else for a human moderator.** At 0.8 the bot handled 54 of the 99 messages that need an action without a
 single wrong action, and left the hard cases to a person. Keep a human in the loop for
 `block` on a real channel.
 
@@ -106,18 +106,20 @@ test set the same:
 | instructions per token               | **~25 M**                           | ~25 M                          | ~19 M                          | ~89 M                        |
 | a 33-token message                   | **0.88 B**                          | 0.88 B                         | 0.62 B                         | ~2.9 B                       |
 | longest text in a query (5 B)        | **191 tokens = 4.5 B** (`-ub 192`)  | 191 tokens = 4.5 B (`-ub 192`) | 255 tokens = 4.2 B (`-ub 256`) | 47 tokens = 4.3 B (`-ub 48`) |
-| longest text in an update (40 B)     | **511 tokens = 13.7 B** (`-ub 512`) |                                | 511 tokens = 9.7 B             | ~447 tokens = 39.6 B         |
+| longest text in an update (40 B)     | **511 tokens = 13.7 B** (`-ub 512`) |                                | 511 tokens = 9.7 B (`-ub 512`) | ~447 tokens = 39.6 B (`-ub 512`) |
 | `wasm_heap_bytes` after `load_model` | **108 MB** (`-ub 192`)              | 70 MB (`-ub 192`)              | 59 MB (`-ub 256`)              | 72 MB (`-ub 48`)             |
 | all 6 facts right (200 messages)     | **141**                             | 141                            | 143                            | 141                          |
 | largest score difference vs f32      |                                     | 0.15                           | 0.57                           | 0.026                        |
 
 - f32 + Q8_0 embd quantizes only the token-embedding table (13 of the 17 M parameters,
-  used only as a lookup): half the file and the heap of f32, at the same cost per token.
+  used only as a lookup): less than half the file and about 35% less heap than f32, at
+  the same cost per token.
 - A full Q8_0 also quantizes the inputs of every matrix multiplication: the cheapest per
   token, and the scores move most, although the facts did not change on this test set.
   Check a smaller variant on your own test set before you use it.
-- The instructions and the heap are those of the Ettin-encoder-17M architecture, the same
-  for every model fine-tuned from it.
+- The instructions and the heap depend on the architecture, the file format and `-ub`,
+  not on the fine-tuning: another classifier fine-tuned from Ettin-encoder-17M costs the
+  same in the same format and with the same load arguments.
 
 ## Get the gguf
 

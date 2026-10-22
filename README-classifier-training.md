@@ -74,9 +74,10 @@ SLICES = [
 - **One of several values** (kind, action), or **a level** (toxicity): one score per
   value, softmax over the group.
 - **Yes/no** (scam, misleading, respectful): one score, sigmoid.
-- **Names:** every score is named `fact:value`. The names become the model's `id2label`,
-  the GGUF's labels, and the `labels` that `run_classify` returns, in order, so a caller
-  can check the order it reads.
+- **Names:** a score of a group is named `fact:value` (`kind:troll`, `toxicity:2`), and a
+  yes/no score is named after its fact alone (`scam`). The names become the model's
+  `id2label`, the GGUF's labels, and the `labels` that `run_classify` returns, in order,
+  so a caller can check the order it reads.
 - **The labels are required:** `load_model` loads a model as a classifier only when its
   GGUF has them. The converter writes them from `id2label`, but drops the default
   `LABEL_0`/`LABEL_1` of a 2-label model, so always set real names (`train.py` does).
@@ -121,7 +122,7 @@ make train          # python train.py --base jhu-clsp/ettin-encoder-17m --data d
 
 `train.py` holds out 10% for validation, trains 8 epochs (AdamW, learning rate 1e-4,
 batch 32, warmup, gradient clipping), and saves the epoch with the best validation loss,
-in f32, with the `fact:value` labels in `id2label`.
+in f32, with the labels in `id2label`.
 
 The validation loss is lowest after 2-3 epochs: on a few thousand examples the model
 overfits soon, and keeping the best epoch handles that.
@@ -187,7 +188,7 @@ The GGUF holds:
 ## 7. Check the GGUF against PyTorch
 
 Build `llama-embedding` from the fork once, outside the source tree, CPU only like the
-canister:
+canister. From the repository root:
 
 ```bash
 cmake -S src/llama_cpp_onicai_fork -B build-llama -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF -DGGML_METAL=OFF
@@ -204,7 +205,7 @@ build-llama/bin/llama-embedding -m examples/classifier/build/dao-moderation-f32.
 ```
 
 Write its 15 scores for every test message as one JSON list per line, and score them with
-the same evaluation:
+the same evaluation, from `examples/classifier`:
 
 ```bash
 python eval.py --scores build/llama-scores.jsonl data/test.jsonl
@@ -217,7 +218,8 @@ model was trained with.
 
 ## 8. Deploy and check on the canister
 
-Upload the GGUF and load it, as in [README-classifier-models.md](README-classifier-models.md):
+Upload the GGUF and load it, as in [README-classifier-models.md](README-classifier-models.md).
+From the repository root:
 
 ```bash
 python -m scripts.upload --network local --canister llama_cpp --canister-filename models/model.gguf examples/classifier/build/dao-moderation-f32.gguf
