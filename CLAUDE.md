@@ -80,8 +80,13 @@ didc decode 4449444c...
 
 **Running unit tests:**
 ```bash
-icpp build-native && ./build-native/mockic.exe
+make test-llm-native
 ```
+
+It builds and runs `./build-native/mockic.exe` under `scripts/memory_guard.py`. Never run
+`mockic.exe` directly: natively nothing caps its memory, so a bug that allocates without
+limit fills the host's memory within minutes. Over `NATIVE_MAX_GB` (4 GB; a healthy run
+peaks at ~1.8 GB), the guard kills it, prints an ERROR and fails the run, in CI too.
 
 **Adding a new test file:**
 1. Create `native/test_yourmodule.cpp` and `native/test_yourmodule.h`
@@ -236,7 +241,7 @@ feature-development and release process lives in
 1. **Add constants** to `src/utils.h` if needed
 2. **Implement validation** in the relevant `.cpp` file
 3. **Add unit test** to appropriate `native/test_*.cpp`
-4. **Build and run unit tests**: `icpp build-native && ./build-native/mockic.exe`
+4. **Build and run unit tests**: `make test-llm-native`
 5. **Add smoke test** to appropriate `test/test_*.py`
 6. **Deploy and run smoke tests**: `icp deploy -e local -y --identity llama-cpp-testing && pytest -vv --network local --identity llama-cpp-testing test/test_*.py`
 
