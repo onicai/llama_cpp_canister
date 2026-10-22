@@ -120,7 +120,30 @@ def _generate_hindi(network: str, max_tokens_update: int) -> str:
     is slow and tests nothing extra - the ingest boundary is already split at 20
     (visible as U+FFFD in `conversation`). The carry is exercised by GENERATION,
     which is what max_tokens_update varies here.
+
+    The canister's max_tokens are restored afterwards, so a later suite on the same
+    canister does not run at max_tokens_update = 1.
     """
+    limits = _call(network, "get_max_tokens", "()")
+    query = re.search(r"max_tokens_query = (\d+)", limits)
+    update = re.search(r"max_tokens_update = (\d+)", limits)
+    assert query and update, limits
+    try:
+        return _ingest_and_generate(network, max_tokens_update)
+    finally:
+        # Not _assert_ok, which skips on a trap: a failed restore must fail
+        restore = _call(
+            network,
+            "set_max_tokens",
+            f"(record {{ max_tokens_query = {query.group(1)} : nat64; "
+            f"max_tokens_update = {update.group(1)} : nat64 }})",
+        )
+        if not restore.startswith("(variant { Ok"):
+            raise AssertionError(f"restore max_tokens failed: {restore[:400]}")
+
+
+def _ingest_and_generate(network: str, max_tokens_update: int) -> str:
+    """The body of _generate_hindi, which restores max_tokens around it."""
     _set_max_tokens(network, 20)
     # Remove, not just new_chat: new_chat RE-USES an existing cache, so a second
     # run would ingest in one call and never split a boundary.

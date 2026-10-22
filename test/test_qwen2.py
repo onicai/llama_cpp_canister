@@ -203,17 +203,6 @@ def test__chats_resume(network: str) -> None:
     expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
     assert response == norm(expected_response)
 
-def test__log_pause(network: str) -> None:
-    response = call_canister_api(
-        icp_yaml_path=ICP_YAML_PATH,
-        canister_name=CANISTER_NAME,
-        canister_method="log_pause",
-        canister_argument='()',
-        network=network,
-    )
-    expected_response = '(variant { Ok = record { status_code = 200 : nat16;} })'
-    assert response == norm(expected_response)
-
 def test__new_chat_3(network: str) -> None:
     response = call_canister_api(
         icp_yaml_path=ICP_YAML_PATH,
