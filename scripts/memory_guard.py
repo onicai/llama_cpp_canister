@@ -40,22 +40,36 @@ def error(message: str) -> None:
         print(f"::error title=memory guard::{message}", flush=True)
 
 
+def stop(process: "subprocess.Popen[bytes]", message: str) -> int:
+    """Kills the command, reports why, and returns the guard's exit code 1."""
+    process.kill()
+    process.wait()
+    error(message)
+    return 1
+
+
 def guard(command: List[str], max_bytes: int, interval: float) -> int:
-    """Runs the command; kills it above max_bytes. Returns the exit code."""
+    """Runs the command; kills it above max_bytes, or when its memory cannot be
+    measured (the guard fails closed). Returns the exit code."""
     with subprocess.Popen(command) as process:
         peak = 0
         while process.poll() is None:
-            rss = rss_bytes(process.pid) or 0
+            try:
+                rss = rss_bytes(process.pid)
+            except OSError as e:
+                return stop(process, f"cannot run ps to measure {command[0]}: {e}")
+            if rss is None:
+                if process.poll() is not None:
+                    break  # it ended between the two checks
+                return stop(process, f"cannot measure the memory of {command[0]}")
             peak = max(peak, rss)
             if rss > max_bytes:
-                process.kill()
-                process.wait()
-                error(
+                return stop(
+                    process,
                     f"{command[0]} used {rss / 2**30:.1f} GiB, over the "
                     f"{max_bytes / 2**30:.1f} GiB limit of the memory guard: "
-                    "killed. Something allocates without limit."
+                    "killed. Something allocates without limit.",
                 )
-                return 1
             time.sleep(interval)
         print(f"[memory guard] {command[0]}: peak {peak / 2**30:.2f} GiB")
         return process.returncode
