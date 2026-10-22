@@ -1,10 +1,10 @@
 """Smoke tests for run_classify and run_classify_query (sequence classifiers).
 
 Runs against the classifier that scripts/qa_deploy_and_pytest.py uploaded as
-models/model.gguf: Ettin-encoder-17M, a ModernBERT classifier with 18 labels
+models/model.gguf: Ettin-encoder-17M in f32, a ModernBERT classifier with 18 labels
 (treasure-guard's guard model). See README-classifier-models.md.
 
-The reference scores come from upstream llama.cpp, f16:
+The reference scores come from upstream llama.cpp, with the f16 GGUF:
   llama-embedding -m <gguf> --pooling rank -p "<text>" --embd-normalize -1
 The canister must match them within TOL per score.
 
@@ -29,9 +29,9 @@ ICP_YAML_PATH = Path(__file__).parent / "../icp.yaml"
 CANISTER_NAME = "llama_cpp"
 TOL = 0.05
 
-# The documented f16 arguments: -ub 48 keeps the longest text under the 5B
+# The documented f32 arguments: -ub 192 keeps the longest text under the 5B
 # instructions of a query (README-classifier-models.md)
-LOAD_ARGS = '"--embedding"; "--pooling"; "rank"; "--no-warmup"; "-c"; "48"; "-ub"; "48"'
+LOAD_ARGS = '"--embedding"; "--pooling"; "rank"; "--no-warmup"; "-c"; "192"; "-ub"; "192"'
 
 REFERENCE = {
     "I grab a handful of coins from the chest and run!": [
@@ -151,9 +151,9 @@ def test__errors(network: str) -> None:
     assert classify(network, "a" * 8193) == {
         "Err": {"Other": "text is 8193 bytes, more than the limit of 8192"}
     }
-    # more tokens than -ub 48: an Err, not a trap
-    r = classify(network, "the guard " * 50)
-    assert "tokens, more than the 48 of the loaded context" in r["Err"]["Other"], r
+    # more tokens than -ub 192: an Err, not a trap
+    r = classify(network, "the guard " * 100)
+    assert "tokens, more than the 192 of the loaded context" in r["Err"]["Other"], r
 
 
 def test__access(
