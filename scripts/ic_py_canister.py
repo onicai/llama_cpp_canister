@@ -113,16 +113,16 @@ def get_canister(
     # `icp canister status <name> --id-only` reads icp-cli's id store, so it
     # resolves the id even when the network is down. We also provide the option
     # to just pass in the canister_id directly.
-    if canister_id == "":
+    if not canister_id:
         canister_id = run_icp_command(
             f"{ICP} canister status {canister_name} -e {network} --id-only"
         )
-        if not canister_id:
-            print(
-                f"Error: could not find the canister id of '{canister_name}' "
-                f"on environment '{network}'. Deploy it first, or pass its id."
-            )
-            sys.exit(1)
+    if not canister_id:
+        print(
+            f"Error: could not find the canister id of '{canister_name}' "
+            f"on environment '{network}'. Deploy it first, or pass its id."
+        )
+        sys.exit(1)
     print(f"Canister ID = {canister_id}")
 
     # Read canister's candid from file

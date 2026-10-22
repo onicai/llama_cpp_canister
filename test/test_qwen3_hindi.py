@@ -131,11 +131,14 @@ def _generate_hindi(network: str, max_tokens_update: int) -> str:
     try:
         return _ingest_and_generate(network, max_tokens_update)
     finally:
-        _call(
-            network,
-            "set_max_tokens",
-            f"(record {{ max_tokens_query = {query.group(1)} : nat64; "
-            f"max_tokens_update = {update.group(1)} : nat64 }})",
+        _assert_ok(
+            _call(
+                network,
+                "set_max_tokens",
+                f"(record {{ max_tokens_query = {query.group(1)} : nat64; "
+                f"max_tokens_update = {update.group(1)} : nat64 }})",
+            ),
+            "restore max_tokens",
         )
 
 
