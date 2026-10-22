@@ -122,6 +122,14 @@ void load_file_metadata() {
     metadata.sha256.resize(sha256_size);
     file.read(&metadata.sha256[0], sha256_size);
 
+    // A count larger than the entries in the file must not add empty entries
+    // until memory runs out
+    if (!file) {
+      std::cout << "Corrupted metadata: the file ends after " << i << " of "
+                << count << " entries" << std::endl;
+      break;
+    }
+
     uploaded_files.push_back(metadata);
   }
 
