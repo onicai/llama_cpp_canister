@@ -74,10 +74,18 @@ def get_agent(network: str = "local") -> Agent:
     identity_whoami = os.environ.get(IDENTITY_ENV_VAR, "").strip() or run_icp_command(
         f"{ICP} identity default"
     )
+    if not identity_whoami:
+        print("Error: could not determine the identity to sign as.")
+        print(f"Set {IDENTITY_ENV_VAR}, or check `{ICP} identity default`.")
+        sys.exit(1)
     print(f"Using identity = {identity_whoami}")
 
     # Get the private key (PEM) of that identity.
     private_key = run_icp_command(f"{ICP} identity export {identity_whoami}")
+    if not private_key:
+        print(f"Error: could not export the key of identity '{identity_whoami}'.")
+        print("It must not be anonymous or password-protected.")
+        sys.exit(1)
 
     # Create an Identity instance using the private key
     identity = Identity.from_pem(private_key)
@@ -109,6 +117,12 @@ def get_canister(
         canister_id = run_icp_command(
             f"{ICP} canister status {canister_name} -e {network} --id-only"
         )
+        if not canister_id:
+            print(
+                f"Error: could not find the canister id of '{canister_name}' "
+                f"on environment '{network}'. Deploy it first, or pass its id."
+            )
+            sys.exit(1)
     print(f"Canister ID = {canister_id}")
 
     # Read canister's candid from file

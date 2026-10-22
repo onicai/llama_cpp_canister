@@ -236,6 +236,26 @@ feature-development and release process lives in
 - An icpp-pro version bump changes the wasm hash, so it goes through this repo's
   own release process (`.claude/skills/llama_cpp_canister-release`).
 
+## Upstream llama.cpp first
+
+The canister runs what regular llama.cpp can do; the fork does not add capabilities of its own.
+Before changing `src/llama_cpp_onicai_fork`, or writing canister code around a llama.cpp
+capability, check whether upstream llama.cpp already provides it:
+
+- an API in `include/llama.h`, or a helper in `common/`;
+- a CLI flag in `common/arg.cpp` (note which tools it is registered for);
+- how `llama-server`, `llama-embedding` or `llama-cli` do it.
+
+Check both the fork's base and upstream master:
+`git -C src/llama_cpp_onicai_fork fetch upstream`, then `git log` or `git grep` on
+`upstream/master`. If upstream has it, use it the way upstream does: the same flags and the same
+call sequence, with the canister-side code in `src/`.
+
+An `ICPP-PATCH` in the fork is only for what the IC or wasm forces: no threads, no host files,
+the instruction limits, logging into the canister log, state that persists across calls. When
+one seems needed, say in the PR why upstream cannot do it, and get the maintainer's approval
+before the fork commit.
+
 ## Workflow for Adding Security Fixes
 
 1. **Add constants** to `src/utils.h` if needed

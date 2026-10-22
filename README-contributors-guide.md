@@ -362,6 +362,12 @@ grep -n "ICPP-PATCH" src/llama_cpp_onicai_fork/src/models/qwen35.cpp   # expect 
 A lost patch fails the Kev-0.8B QA iteration: its 20-token `team` question then needs
 ~43 B instructions and traps with IC0522.
 
+## Upstream llama.cpp first
+
+Before adding an `ICPP-PATCH`, check that upstream llama.cpp cannot already do it; if it
+can, use upstream's API, flags and call sequence instead. Only what the IC or wasm forces
+belongs in the fork. See "Upstream llama.cpp first" in `CLAUDE.md`.
+
 ## Branch management
 
 We need to rethink this logic, but for now it is ok...
