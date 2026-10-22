@@ -198,6 +198,16 @@ def main() -> int:
                 "env": {"DECISION_MODEL": "kev-0.8b"},
                 "test_paths": ["test/test_decision.py"],
             },
+            # A sequence classifier (run_classify): see README-classifier-models.md.
+            # local_only until the GGUF is on Hugging Face, where CI can download it.
+            {
+                "filename": "models/onicai/ettin-encoder-17m-GGUF/ettin-encoder-17m-f16.gguf",  # pylint: disable=line-too-long
+                "canister_filename": "models/model.gguf",
+                "wasm_memory_limit": 4026531840,  # 3.75 GiB
+                "local_only": True,
+                "env": {},
+                "test_paths": ["test/test_classify.py"],
+            },
             {
                 "filename": "models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/qwen2.5-0.5b-instruct-q8_0.gguf",  # pylint: disable=line-too-long
                 "canister_filename": "models/model.gguf",

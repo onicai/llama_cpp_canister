@@ -375,6 +375,21 @@ type DecisionResult = variant {
 };
 
 // -----------------------------------------------------
+// Sequence classifiers: see README-classifier-models.md
+// load_model with --embedding --pooling rank, as llama-embedding and llama-server
+type ClassifyInputRecord = record { text : text };
+type ClassifyOutputRecord = record {
+  scores : vec float64;     // the raw outputs of the classification head, one per label
+  labels : vec text;        // the model's classifier labels, in the order of scores
+  input_tokens : nat64;     // tokens of the text, with the model's special tokens
+  instructions : opt nat64; // the instructions this call used
+};
+type ClassifyResult = variant {
+  Err : ApiError;
+  Ok : ClassifyOutputRecord
+};
+
+// -----------------------------------------------------
 // The endpoint services of our canister
 service : {
   // canister
@@ -401,6 +416,8 @@ service : {
   remove_decision_scope : (text) -> (StatusCodeRecordResult); // all of the caller's files of a scope
   pin_decision_state : (DecisionPinInputRecord) -> (StatusCodeRecordResult);
   unpin_decision_state : (DecisionUnpinInputRecord) -> (StatusCodeRecordResult);
+  run_classify : (ClassifyInputRecord) -> (ClassifyResult);
+  run_classify_query : (ClassifyInputRecord) -> (ClassifyResult) query;
 
   // Prompt cache endpoints
   remove_prompt_cache : (InputRecord) -> (OutputRecordResult);

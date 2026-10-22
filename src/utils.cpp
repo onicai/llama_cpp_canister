@@ -13,6 +13,8 @@
 // NOTE the path: a bare #include "unicode.h" resolves to the TOKENIZER's header,
 // because cpp_include_dirs lists .../fork/src before .../fork/common.
 #include "common/unicode.h"
+// "common/" prefix: a bare "common.h" resolves to ggml/src/ggml-cpu/common.h
+#include "common/common.h"
 
 #include <map>
 
@@ -65,6 +67,43 @@ get_args_for_main(IC_API &ic_api) {
   // }
 
   return std::make_tuple(argc, std::move(argv), std::move(args));
+}
+
+// upstream's --pooling values (common/arg.cpp)
+static const std::map<std::string, enum llama_pooling_type> POOLING_TYPES = {
+    {"none", LLAMA_POOLING_TYPE_NONE},
+    {"mean", LLAMA_POOLING_TYPE_MEAN},
+    {"cls", LLAMA_POOLING_TYPE_CLS},
+    {"last", LLAMA_POOLING_TYPE_LAST},
+    {"rank", LLAMA_POOLING_TYPE_RANK}};
+
+bool take_embedding_args(int &argc, char **argv, EmbeddingArgs &out,
+                         std::string &error) {
+  int kept = 0;
+  for (int i = 0; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--embedding" || arg == "--embeddings") {
+      out.embedding = true;
+      continue;
+    }
+    if (arg == "--pooling") {
+      if (i + 1 >= argc || POOLING_TYPES.count(argv[i + 1]) == 0) {
+        error = "--pooling needs one of: none, mean, cls, last, rank";
+        return false;
+      }
+      out.pooling = argv[++i];
+      continue;
+    }
+    argv[kept++] = argv[i];
+  }
+  argc = kept;
+  return true;
+}
+
+void apply_embedding_args(const EmbeddingArgs &args, common_params &params) {
+  if (args.embedding) params.embedding = true;
+  if (!args.pooling.empty())
+    params.pooling_type = POOLING_TYPES.at(args.pooling);
 }
 
 bool my_create_directory(const std::filesystem::path &dir_path,
