@@ -349,6 +349,18 @@ void test_files(MockIC &mockIC) {
   // -----------------------------------------------------------------------------
   // file_upload_chunk in two chunks, then read back: the second chunk must not
   // empty the file (an ofstream opened with `out` alone truncates)
+
+  // The upload metadata is kept in the working directory: keep what is there
+  const std::filesystem::path metadata{"uploaded_files_metadata.dat"};
+  const std::filesystem::path metadata_backup{
+      "uploaded_files_metadata.dat.test_files"};
+  const bool had_metadata = std::filesystem::exists(metadata);
+  if (had_metadata) {
+    std::filesystem::copy_file(
+        metadata, metadata_backup,
+        std::filesystem::copy_options::overwrite_existing);
+  }
+
   // '(record { filename = "Work/test_files_qa/two_chunks.bin"; chunk = blob "abc"; chunksize = 3 : nat64; offset = 0 : nat64 })'
   mockIC.run_test(
       std::string(__func__) + ": " + "file_upload_chunk - first of two chunks",
@@ -375,8 +387,11 @@ void test_files(MockIC &mockIC) {
       "4449444c036c0582e1b793047eed8c8bae040193affe810678bdbaf9d50778aec3faa40b786d7b6b01bc8a01000102000106616263646566000000000000000006000000000000000600000000000000",
       silent_on_trap, my_principal);
 
-  // The upload metadata is kept in the working directory
-  std::filesystem::remove("uploaded_files_metadata.dat");
+  if (had_metadata) {
+    std::filesystem::rename(metadata_backup, metadata);
+  } else {
+    std::filesystem::remove(metadata);
+  }
 
   // -----------------------------------------------------------------------------
   // file_download_chunk test: chunksize exceeds MAX_CHUNK_SIZE (security test)
