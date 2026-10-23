@@ -8,7 +8,7 @@
 // checked value by value instead of comparing Candid hex.
 //
 // The input hex was encoded with icp-py-core (icp_candid); the PR request is
-// the one of llama.cpp PR #29818 (see README-decision-models.md).
+// the one of llama.cpp PR #29818 (see docs/README-decision-models.md).
 
 #include "test_decision.h"
 #include "test_run_update_full.h"

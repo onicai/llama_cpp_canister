@@ -9,7 +9,7 @@ The worked example is a **moderation classifier for the public chat channel of a
 for each message it scores what kind of message it is, how toxic, whether it is a scam,
 misleading or respectful, and which moderator action fits. Everything is runnable:
 
-- the code: [examples/classifier](examples/classifier) (`heads.py`, `train.py`,
+- the code: [examples/classifier](../examples/classifier) (`heads.py`, `train.py`,
   `eval.py`, `merge_labels.py`, `Makefile`);
 - the data: [onicai/dao-moderation-classifier](https://huggingface.co/datasets/onicai/dao-moderation-classifier)
   on Hugging Face, 3,381 training and 200 test messages, synthetic;
@@ -173,7 +173,9 @@ make gguf           # convert_hf_to_gguf.py build/model --outtype f32 --outfile 
 ```
 
 It uses `convert_hf_to_gguf.py` from the fork in this repo (`src/llama_cpp_onicai_fork`),
-which needs `torch`, `transformers` and `numpy`, as the training environment has.
+which needs `torch`, `transformers` and `numpy`, as the training environment has. The
+release zip has no llama.cpp: there, pass a llama.cpp checkout, e.g.
+`make gguf LLAMA_CPP=~/llama.cpp` (upstream's converter writes the same GGUF).
 
 **Use `--outtype f32`, not f16.** In wasm, f32 runs on SIMD, while f16 converts every
 weight one by one as it reads it: an f32 model is 3.6x cheaper per token, with the same
@@ -188,7 +190,8 @@ The GGUF holds:
 ## 7. Check the GGUF against PyTorch
 
 Build `llama-embedding` from the fork once, outside the source tree, CPU only like the
-canister. From the repository root:
+canister. From the repository root (from the release zip, use the llama.cpp checkout you
+passed as `LLAMA_CPP` in place of `src/llama_cpp_onicai_fork`):
 
 ```bash
 cmake -S src/llama_cpp_onicai_fork -B build-llama -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF -DGGML_METAL=OFF

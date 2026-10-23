@@ -9,7 +9,7 @@ struct llama_model;
 
 // Typed decision models (TypeSafe System One, llama.cpp /v1/systemone).
 // The model answers each question in one forward pass; no token is generated.
-// See README-decision-models.md.
+// See docs/README-decision-models.md.
 void run_decision() WASM_SYMBOL_EXPORTED("canister_update run_decision");
 // The whole request in one update call: it yields to itself between steps.
 void run_decision_full()

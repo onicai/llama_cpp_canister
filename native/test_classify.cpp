@@ -1,6 +1,6 @@
 // Native tests for run_classify and run_classify_query, with
 // onicai/dao-moderation-classifier (f32): a ModernBERT sequence classifier with
-// 15 labels that helps moderate a DAO's chat channel (README-classifier-models.md).
+// 15 labels that helps moderate a DAO's chat channel (docs/README-classifier-models.md).
 // The reference scores come from llama.cpp on the CPU:
 //   llama-embedding -m <gguf> --pooling rank -p "<text>" --embd-normalize -1
 // Skipped when the model is not downloaded.

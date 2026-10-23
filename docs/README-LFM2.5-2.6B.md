@@ -125,7 +125,7 @@ icp canister call llama_cpp_qwen3_17b set_max_tokens \
 
 Use **3**, not 4, in production: the ceiling shrinks as a conversation grows,
 and a larger `--ctx-size` lowers it too — see
-[Appendix A: max_tokens](README.md#appendix-a-max_tokens) for why the context
+[Appendix A: max_tokens](../README.md#appendix-a-max_tokens) for why the context
 you allocate is a flat tax on every call. Overshooting is safe to recover from:
 the call is rejected with `IC0522` and rolled back, leaving the prompt cache
 intact.

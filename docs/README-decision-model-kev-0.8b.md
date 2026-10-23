@@ -12,7 +12,7 @@
 >
 > It runs on the **same `llama_cpp` canister** as the chat models.
 
-![Kev-0.8B in a canister: one run_decision_full call stores a DEXSwapper support ticket and answers five questions about it; a second call appends a follow-up message, ingests only the new tokens and answers two questions; a third call answers one more question from the stored ticket](images/kev-0.8b-decision.gif)
+![Kev-0.8B in a canister: one run_decision_full call stores a DEXSwapper support ticket and answers five questions about it; a second call appends a follow-up message, ingests only the new tokens and answers two questions; a third call answers one more question from the stored ticket](../images/kev-0.8b-decision.gif)
 
 _The walkthrough below, recorded on a local network: top, one `run_decision_full` call per
 request; bottom, the canister log, with a line per step. The two longer calls are shown at
@@ -94,7 +94,7 @@ Every command below was run as shown, on a fresh canister; the outputs are the r
 
 ## Set up
 
-- Follow the [Set up](README.md#set-up) of the main README up to and including **Deploy
+- Follow the [Set up](../README.md#set-up) of the main README up to and including **Deploy
   the wasm to a canister on the local network** (icp-cli, an identity, the repo or the
   release, the Python environment, the wasm). Then continue here.
 
@@ -625,7 +625,7 @@ llama_cpp: run_decision - full: step 5, 18 tokens, 0 pending, 26.68 B instructio
 A caller keeps at most 8 stored states per scope (the oldest is removed first; see
 [A cap per scope](#serving-many-users-through-one-caller)); each is ~20 MB + ~24 KB per
 state token. Stored states are prompt-cache files, so the
-[prompt-cache cleanup timer](README.md#prompt-cache-cleanup-timer) can also remove them.
+[prompt-cache cleanup timer](../README.md#prompt-cache-cleanup-timer) can also remove them.
 It is **off by default**. To use it, start it once, and optionally set its TTL (default
 6 h). Both survive upgrades:
 

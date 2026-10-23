@@ -126,6 +126,8 @@ jobs:
           mkdir -p release/build release/scripts release/test
           mkdir -p release/src/llama_cpp_onicai_fork
           cp version.txt requirements.txt README.md icp.yaml LICENSE __init__.py release/
+          # docs/README-decision-models.md links to this upgrade note
+          cp README-0003-305ba519.md release/
           cp out/llama_cpp.wasm out/llama_cpp.did out/llama_cpp.wasm.sha256 release/build/
           cp out/BUILD-PROVENANCE.txt release/
           cp scripts/__init__.py release/scripts/
@@ -136,6 +138,11 @@ jobs:
           cp scripts/upload.py release/scripts/
           cp scripts/calculate_sha256.py release/scripts/
           cp scripts/requirements.txt release/scripts/
+          cp scripts/monitor_logs.sh scripts/monitor_logs.py release/scripts/
+          # The model guides, the images they show, and the classifier example
+          cp -r docs release/docs
+          mkdir -p release/images && cp images/* release/images/
+          mkdir -p release/examples && cp -r examples/classifier release/examples/classifier
           # These come out of the container: the fork is not on the runner.
           cp    out/fork/requirements.txt release/src/llama_cpp_onicai_fork/
           cp -r out/fork/requirements     release/src/llama_cpp_onicai_fork/

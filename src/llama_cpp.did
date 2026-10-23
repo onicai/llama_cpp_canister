@@ -333,7 +333,7 @@ type MemoryStatusRecordResult = variant {
 };
 
 // -----------------------------------------------------
-// Decision models (System One): see README-decision-models.md
+// Decision models (System One): see docs/README-decision-models.md
 // Flat tables (icpp-pro decodes a vec record as a record of vecs), linked by
 // question id. Rows keep the request order.
 type DecisionKind = variant { choice; score; noul };
@@ -375,7 +375,7 @@ type DecisionResult = variant {
 };
 
 // -----------------------------------------------------
-// Sequence classifiers: see README-classifier-models.md
+// Sequence classifiers: see docs/README-classifier-models.md
 // load_model with --embedding --pooling rank, as llama-embedding and llama-server
 type ClassifyInputRecord = record { text : text };
 type ClassifyOutputRecord = record {

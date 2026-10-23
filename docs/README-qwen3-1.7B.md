@@ -8,7 +8,7 @@
 >
 > It runs on the **same `llama_cpp` canister** as the default — you just upload a
 > different gguf and load it with the settings below. Follow the main
-> [README.md](README.md) for `# Set up` (icp, Python env, build, deploy, cycles, and
+> [README.md](../README.md) for `# Set up` (icp, Python env, build, deploy, cycles, and
 > the 3.75 GiB `wasm_memory_limit`), then use the model-specific steps here.
 
 ## Two hard Internet-Computer limits you must respect
@@ -196,7 +196,7 @@ make them shrink:
   > everything the larger context costs you is KV bookkeeping, not inference.
   > Switching to `clear(false)` only recovers ~4.6 %, because the IC charges a
   > page on first touch and the session restore then pays what the memset no
-  > longer does. See [Appendix A: max_tokens](README.md#appendix-a-max_tokens)
+  > longer does. See [Appendix A: max_tokens](../README.md#appendix-a-max_tokens)
   > for the per-context instruction budget.
 
 With `max_tokens_update = 0` you do not need to pick a value from this table: each call
@@ -257,7 +257,7 @@ A loyal companion that barks and plays fetch.<|im_end|>
 ```
 
 To show the text while it is being generated, use the `run_update` loop instead (see the
-[main README](README.md#set-up)).
+[main README](../README.md#set-up)).
 
 ### Concatenating `run_update` calls — check for a boundary-repeat token
 
