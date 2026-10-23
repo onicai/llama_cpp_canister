@@ -191,3 +191,29 @@ def test__download_prompt_cache_chunk_another_full(network: str, principal: str)
     )
     expected_response = '(variant { Ok = record { done = true; chunk = blob "\\03\\46\\55\\47\\47\\04\\33\\41\\43\\08"; offset = 0 : nat64; filesize = 10 : nat64; chunksize = 10 : nat64;} })'
     assert response == norm(expected_response)
+
+
+# ------------------------------------------------------------------
+# The details of an uploaded cache only count while the file exists with its
+# uploaded size: after remove_prompt_cache they are not found.
+def test__uploaded_prompt_cache_details_after_remove(network: str) -> None:
+    def call(method: str, arg: str) -> str:
+        return call_canister_api(
+            icp_yaml_path=ICP_YAML_PATH,
+            canister_name=CANISTER_NAME,
+            canister_method=method,
+            canister_argument=arg,
+            network=network,
+        )
+
+    response = call(
+        "upload_prompt_cache_chunk",
+        '(record { promptcache = "repro.cache"; chunk = blob "\\01\\02\\03\\04\\05"; chunksize = 5 : nat64; offset = 0 : nat64; })',
+    )
+    assert "Ok" in response, response
+    response = call("uploaded_prompt_cache_details", '(record { promptcache = "repro.cache"; })')
+    assert "filesize = 5" in response, response
+    response = call("remove_prompt_cache", '(record { args = vec {"--prompt-cache"; "repro.cache"} })')
+    assert "status_code = 200" in response, response
+    response = call("uploaded_prompt_cache_details", '(record { promptcache = "repro.cache"; })')
+    assert "Metadata for this file are not found" in response, response

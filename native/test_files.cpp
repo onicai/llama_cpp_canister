@@ -387,6 +387,43 @@ void test_files(MockIC &mockIC) {
       "4449444c036c0582e1b793047eed8c8bae040193affe810678bdbaf9d50778aec3faa40b786d7b6b01bc8a01000102000106616263646566000000000000000006000000000000000600000000000000",
       silent_on_trap, my_principal);
 
+  // The details only count while the uploaded file exists with its uploaded
+  // size: after a remove they are not found, although the stored metadata
+  // entry is still there.
+  // '(record { filename = "Work/test_files_qa/two_chunks.bin" })'
+  mockIC.run_test(
+      std::string(__func__) + ": " + "filesystem_remove - the uploaded file",
+      filesystem_remove,
+      "4449444c016c01c7dda8bb0771010021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e",
+      "", silent_on_trap, my_principal);
+  mockIC.run_test(
+      std::string(__func__) + ": " +
+          "uploaded_file_details - not found after the file is removed",
+      uploaded_file_details,
+      "4449444c016c01c7dda8bb0771010021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e",
+      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100005f75706c6f616465645f66696c655f64657461696c735f3a204d6574616461746120666f7220746869732066696c6520617265206e6f7420666f756e643a20576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e",
+      silent_on_trap, my_principal);
+
+  // ... and after the file changed size since its upload (as a prompt cache
+  // does when the canister saves it after a run)
+  mockIC.run_test(
+      std::string(__func__) + ": " + "file_upload_chunk - upload again",
+      file_upload_chunk,
+      "4449444c026c04ed8c8bae040193affe810678c7dda8bb0771aec3faa40b786d7b010003616263000000000000000021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e0300000000000000",
+      "", silent_on_trap, my_principal);
+  {
+    std::ofstream grow("Work/test_files_qa/two_chunks.bin",
+                       std::ios::binary | std::ios::app);
+    grow << "xyz";
+  }
+  mockIC.run_test(
+      std::string(__func__) + ": " +
+          "uploaded_file_details - not found after the file changed size",
+      uploaded_file_details,
+      "4449444c016c01c7dda8bb0771010021576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e",
+      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100005f75706c6f616465645f66696c655f64657461696c735f3a204d6574616461746120666f7220746869732066696c6520617265206e6f7420666f756e643a20576f726b2f746573745f66696c65735f71612f74776f5f6368756e6b732e62696e",
+      silent_on_trap, my_principal);
+
   // A corrupt metadata file: its first 8 bytes read as a huge entry count.
   // Loading must stop at the end of the file, instead of adding empty entries
   // until memory runs out.
