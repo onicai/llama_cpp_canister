@@ -249,7 +249,7 @@ def test__run_update_4(network: str) -> None:
     )
     if PRINT_RESPONSE:
         print(f"{current_func_name()}: response: {response}")
-    expected_response = '(variant { Ok = record { output = ". He li"; conversation = " Joe loves writing stories. He"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
+    expected_response = '(variant { Ok = record { output = ". He li"; conversation = " Joe loves writing stories. He li"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
     assert strip_token_accounting(response) == norm(expected_response)
 
 def test__run_update_5(network: str) -> None:
@@ -262,7 +262,7 @@ def test__run_update_5(network: str) -> None:
     )
     if PRINT_RESPONSE:
         print(f"{current_func_name()}: response: {response}")
-    expected_response = '(variant { Ok = record { output = " liked to"; conversation = " Joe loves writing stories. He liked"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
+    expected_response = '(variant { Ok = record { output = "ked to play"; conversation = " Joe loves writing stories. He liked to play"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
     assert strip_token_accounting(response) == norm(expected_response)
 
 def test__get_chats_ok(network: str) -> None:
@@ -423,7 +423,7 @@ def test__run_update_2_4(network: str) -> None:
     )
     if PRINT_RESPONSE:
         print(f"{current_func_name()}: response: {response}")
-    expected_response = '(variant { Ok = record { output = ". He li"; conversation = " Joe loves writing stories. He"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
+    expected_response = '(variant { Ok = record { output = ". He li"; conversation = " Joe loves writing stories. He li"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
     assert strip_token_accounting(response) == norm(expected_response)
 
 def test__run_update_2_5(network: str) -> None:
@@ -436,7 +436,7 @@ def test__run_update_2_5(network: str) -> None:
     )
     if PRINT_RESPONSE:
         print(f"{current_func_name()}: response: {response}")
-    expected_response = '(variant { Ok = record { output = " liked to"; conversation = " Joe loves writing stories. He liked"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
+    expected_response = '(variant { Ok = record { output = "ked to play"; conversation = " Joe loves writing stories. He liked to play"; error = ""; status_code = 200 : nat16; prompt_remaining = ""; generated_eog = false;} })'
     assert strip_token_accounting(response) == norm(expected_response)
 
 def test__remove_prompt_cache_cleanup(network: str) -> None:

@@ -159,9 +159,12 @@ def _ingest_and_generate(network: str, max_tokens_update: int) -> str:
         "new_chat",
     )
 
+    # The output of the last ingest call starts the response
+    out = ""
     for i in range(60):
         resp = _run_update(network, PROMPT_HINDI, "1")
         _assert_ok(resp, f"ingest call {i} (max_tokens={max_tokens_update})")
+        out += _field(resp, "output")
         if 'prompt_remaining = ""' in resp:
             break
     else:
@@ -170,7 +173,6 @@ def _ingest_and_generate(network: str, max_tokens_update: int) -> str:
     # Now switch to the max_tokens under test for the generation phase.
     _set_max_tokens(network, max_tokens_update)
 
-    out = ""
     for i in range(400 if max_tokens_update == 1 else 60):
         resp = _run_update(network, "", "512")
         _assert_ok(resp, f"generate call {i} (max_tokens={max_tokens_update})")

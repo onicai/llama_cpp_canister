@@ -712,6 +712,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
   // if we will use the cache for the full prompt without reaching the end of the cache, force
   // reevaluation of the last token to recalculate the cached logits
+  int n_replayed = 0; // ICPP-PATCH
   if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() &&
       session_tokens.size() > embd_inp.size()) {
     LOG_DBG(
@@ -719,6 +720,18 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         embd_inp.size() - 1);
 
     session_tokens.resize(embd_inp.size() - 1);
+
+    // ICPP-PATCH-START
+    // Also remove that token from the KV cache, like upstream does: the
+    // seq_rm above keeps it, and decoding it again would add a second cell at
+    // the same position, which changes every token generated after it.
+    if (!llama_memory_seq_rm(mem, -1, (llama_pos)(embd_inp.size() - 1), -1)) {
+      LOG_WRN("%s: unable to remove the last prompt token from the cache\n",
+              __func__);
+    }
+    // It is decoded again, but it is not a generated token.
+    n_replayed = 1;
+    // ICPP-PATCH-END
   }
 
   // ICPP-PATCH-START
@@ -948,6 +961,14 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   // We do want to break the while loop cleanly, to go through the memory cleanup at the end
   generated_eog = false;
   bool break_while_loop = false;
+  // When -n runs out, llama.cpp stops right after sampling the last token, so
+  // it is in the output but never decoded. We go back one more time to decode
+  // it, so the output, conversation, session file and n_tokens_generated agree,
+  // and the next call continues after it instead of sampling it again.
+  bool decode_last_sample = false;
+  // Whether embd holds a sampled token, which goes to the output, or prompt
+  // tokens, which do not (even when it is only one).
+  bool embd_sampled = false;
   // ICPP-PATCH-END
 
   std::vector<int> input_tokens;
@@ -996,7 +1017,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     embd_inp.push_back(decoder_start_token_id);
   }
 
-  while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
+  while ((n_remain != 0 && !is_antiprompt) || params.interactive ||
+         decode_last_sample) { // ICPP-PATCH: decode_last_sample
     // predict
     if (!embd.empty()) {
       // Note: (n_ctx - 4) here is to match the logic for commandline prompt handling via
@@ -1272,7 +1294,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       }
     }
     // ICPP-PATCH-START
-    if (break_while_loop) {
+    // decode_last_sample: the last sampled token is decoded, we're done.
+    if (break_while_loop || decode_last_sample) {
       break;
     }
     // ICPP-PATCH-END
@@ -1308,6 +1331,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       // LOG_DBG("last: %s\n", string_from(ctx, smpl->prev.to_vector()).c_str());
 
       embd.push_back(id);
+      embd_sampled = true; // ICPP-PATCH
 
       // echo this to console
       input_echo = true;
@@ -1316,10 +1340,18 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       --n_remain;
 
       LOG_DBG("n_remain: %d\n", n_remain);
+
+      // ICPP-PATCH-START
+      // -n ran out: go back one more time, to decode this token
+      if (params.n_predict >= 0 && n_remain <= 0 && !params.interactive) {
+        decode_last_sample = true;
+      }
+      // ICPP-PATCH-END
     } else {
       // some user input remains from prompt or interaction, forward it to processing
       LOG_DBG("embd_inp.size(): %d, n_consumed: %d\n", (int)embd_inp.size(),
               n_consumed);
+      embd_sampled = false; // ICPP-PATCH
       while ((int)embd_inp.size() > n_consumed) {
         embd.push_back(embd_inp[n_consumed]);
 
@@ -1368,7 +1400,8 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
 
         // Record Displayed Tokens To Log
         // Note: Generated tokens are created one by one hence this check
-        if (embd.size() > 1) {
+        // ICPP-PATCH: a 1-token embd may be the rest of the prompt
+        if (!embd_sampled) {
           // Incoming Requested Tokens
           input_tokens.push_back(id);
         } else {
@@ -1647,12 +1680,15 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   n_prompt_tokens = (uint64_t)embd_inp.size();
   n_prompt_tokens_cached = (uint64_t)n_matching_session_tokens;
   n_prompt_tokens_decoded = (uint64_t)decoded_prompt;
-  n_tokens_generated = (uint64_t)((int64_t)n_eval_total - decoded_prompt);
+  // ICPP-PATCH: not the replayed prompt token (0 when nothing was decoded)
+  n_tokens_generated = (uint64_t)std::max<int64_t>(
+      0, (int64_t)n_eval_total - decoded_prompt - n_replayed);
   n_prompt_tokens_remaining =
       (uint64_t)((int64_t)embd_inp.size() - (int64_t)n_consumed);
 
-  // ICPP-PATCH: whether -n ended this call. Its last sampled token is then in
-  // the output, but was not decoded into the session file.
+  // ICPP-PATCH: whether -n ended this call. Its last sampled token was decoded
+  // like the others (see decode_last_sample), and is counted in
+  // n_tokens_generated.
   if (n_predict_reached) {
     *n_predict_reached = params.n_predict >= 0 && n_remain <= 0;
   }
