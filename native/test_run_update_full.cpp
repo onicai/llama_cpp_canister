@@ -208,14 +208,15 @@ void test_run_update_full(MockIC &mockIC) {
   uint64_t generated = 0;
   int calls = 0;
   // Every call's output is part of the response, and its n_tokens_generated
-  // counts exactly the tokens of that output.
+  // counts the tokens of that output. A special token sampled without -sp is
+  // counted but adds no text, so only text without a count is wrong.
   bool outputs_match_counts = true;
   auto add_call = [&](const Out &o) {
     ref += o.output;
     eog = o.generated_eog;
     generated += o.n_tokens_generated;
     outputs_match_counts =
-        outputs_match_counts && o.output.empty() == (o.n_tokens_generated == 0);
+        outputs_match_counts && (o.output.empty() || o.n_tokens_generated > 0);
   };
   // ingest with -n 1. The call that ingests the end of the prompt samples a
   // token, and decodes it into the session file: it starts the response.
@@ -229,7 +230,7 @@ void test_run_update_full(MockIC &mockIC) {
     add_call(last_ingest);
     if (last_ingest.prompt_remaining.empty()) break;
   }
-  check(last_ingest.n_tokens_generated == 1 && !last_ingest.output.empty(),
+  check(last_ingest.n_tokens_generated == 1,
         "the last ingest call generates the token -n 1 asks for");
   // generate, empty prompt, N tokens in total.
   while (calls < 100 && !eog && generated < N) {
