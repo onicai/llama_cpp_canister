@@ -29,4 +29,4 @@ eval:
 
 .PHONY: gguf
 gguf:
-	$(PYTHON) $(LLAMA_CPP)/convert_hf_to_gguf.py build/model --outtype f32 --outfile build/dao-moderation-f32.gguf
+	$(PYTHON) "$(LLAMA_CPP)/convert_hf_to_gguf.py" build/model --outtype f32 --outfile build/dao-moderation-f32.gguf
