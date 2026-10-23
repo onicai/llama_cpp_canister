@@ -747,7 +747,9 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       session_tokens.size() == embd_inp.size()) {
     logits_valid =
         prompt_cache_restore_logits(path_session, ctx, session_tokens);
-    if (!logits_valid) {
+    // With -n 0 nothing is sampled, so nothing would re-decode the last token:
+    // leave the session as it is.
+    if (!logits_valid && params.n_predict != 0) {
       // No logits for these bytes (e.g. an uploaded cache): re-decode the last
       // token, like upstream's "recalculate the cached logits" above. Its
       // position leaves the memory first, so it is not stored twice.
@@ -1692,8 +1694,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   // forwarded into decode, independent of the fragile input/output display split.
   // All values are non-negative under normal operation; compute signed to avoid
   // unsigned underflow, then cast to uint64_t.
-  const int64_t decoded_prompt =
-      (int64_t)n_consumed - (int64_t)n_matching_session_tokens;
+  // The cached tokens count as consumed even when the loop never ran (-n 0).
+  const int64_t consumed =
+      std::max((int64_t)n_consumed, (int64_t)n_matching_session_tokens);
+  const int64_t decoded_prompt = consumed - (int64_t)n_matching_session_tokens;
   n_prompt_tokens = (uint64_t)embd_inp.size();
   n_prompt_tokens_cached = (uint64_t)n_matching_session_tokens;
   n_prompt_tokens_decoded = (uint64_t)decoded_prompt;
@@ -1701,7 +1705,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   n_tokens_generated = (uint64_t)std::max<int64_t>(
       0, (int64_t)n_eval_total - decoded_prompt - n_replayed);
   n_prompt_tokens_remaining =
-      (uint64_t)((int64_t)embd_inp.size() - (int64_t)n_consumed);
+      (uint64_t)((int64_t)embd_inp.size() - consumed);
 
   // ICPP-PATCH: whether -n ended this call. Its last sampled token was decoded
   // like the others (see decode_last_sample), and is counted in

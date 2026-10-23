@@ -429,6 +429,24 @@ void test_prompt_cache_restore(MockIC &mockIC) {
   restore_check(!std::filesystem::exists(dir + "orig.cache.logits"),
                 "a stamped upload has a logits sidecar");
 
+  // An empty prompt with -n 0 decodes nothing and leaves the restored cache as
+  // it is, however often it is called
+  for (int i = 0; i < 2; ++i) {
+    std::vector<std::string> a = greedy_args("orig.cache", "");
+    a.back() = "0";
+    r = run(mockIC, "-n 0 on the restored cache", a, caller);
+    restore_check(r.label == "Ok", "-n 0 on the restored cache: " + r.error);
+    restore_check(r.n_cached == n_session && r.n_decoded == 0,
+                  "-n 0 changed the restored cache: cached " +
+                      std::to_string(r.n_cached) + ", decoded " +
+                      std::to_string(r.n_decoded) + ", session " +
+                      std::to_string(n_session));
+    restore_check(read_file(dir + "orig.cache") == bytes,
+                  "-n 0 rewrote the restored cache");
+    restore_check(read_file(dir + "orig.cache.icppfmt") == stamp,
+                  "-n 0 dropped the stamp of the restored cache");
+  }
+
   // The restored cache is loaded, not discarded, and continues exactly like the
   // control. Without logits it re-decodes its last token.
   r = run(mockIC, "continue the restored cache", greedy_args("orig.cache", ""),
