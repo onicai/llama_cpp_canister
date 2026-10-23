@@ -653,8 +653,6 @@ static IC_Async run_update_full_async() {
       co_return;
     }
   }
-  // The token that ended the call by -n was sampled, not decoded.
-  if (c.n_predict_reached) ++totals.n_tokens_generated;
   std::cout << "llama_cpp: run_update_full - done: chunks=" << chunks
             << " generated=" << totals.n_tokens_generated
             << " partial=" << partial << std::endl;

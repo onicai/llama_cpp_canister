@@ -97,13 +97,18 @@ def _run_update(network: str, prompt: str, n: str) -> str:
     return _call(network, "run_update", arg)
 
 
-def _ingest(network: str, prompt: str) -> None:
-    """Prefill the prompt (‑n 1) until prompt_remaining is empty."""
+def _ingest(network: str, prompt: str) -> str:
+    """Prefill the prompt (-n 1) until prompt_remaining is empty.
+
+    Returns the output: the token the last call samples starts the response.
+    """
+    out = ""
     for i in range(25):
         resp = _run_update(network, prompt, "1")
         _assert_ok(resp, f"ingest call {i}")
+        out += _field(resp, "output")
         if 'prompt_remaining = ""' in resp:
-            return
+            return out
     raise AssertionError("prefill did not complete within 25 calls")
 
 
@@ -155,8 +160,8 @@ def test__generate_no_think(network: str) -> None:
         ),
         "new_chat",
     )
-    _ingest(network, PROMPT_INTRO)
-    output = _generate(network)
+    output = _ingest(network, PROMPT_INTRO)
+    output += _generate(network)
 
     assert output.strip(), "no tokens generated"
     assert "<think>" not in output, f"unexpected <think> in output: {output!r}"
@@ -173,8 +178,8 @@ def test__multi_turn_recall(network: str) -> None:
         ),
         "new_chat",
     )
-    _ingest(network, PROMPT_MULTITURN)
-    answer = _generate(network)
+    answer = _ingest(network, PROMPT_MULTITURN)
+    answer += _generate(network)
 
     assert answer.strip(), "no tokens generated"
     assert "<think>" not in answer, f"unexpected <think> in answer: {answer!r}"
@@ -301,7 +306,11 @@ def test__instruction_bounded_chunks(network: str) -> None:
         assert ingest_calls > 1, "the instruction guard did not split the prompt"
         conversation = _field(response, "conversation")
         assert conversation.count(sentence.strip()) == n_sentences, conversation
-        assert conversation.rstrip("\\n").endswith("</think>"), conversation
+        # The last ingest call also decoded the token -n 1 sampled: its output
+        output = _field(response, "output")
+        assert output and conversation.endswith(output), response
+        prompt_part = conversation[: -len(output)]
+        assert prompt_part.rstrip("\\n").endswith("</think>"), conversation
 
         generated_eog = False
         for _ in range(10):
@@ -327,11 +336,17 @@ def _full(network: str, cache: str, prompt: str, n: str = "-1") -> str:
 
 
 def _loop(network: str, cache: str, prompt: str) -> str:
-    """The multi-call run_update loop: ingest with -n 1, then generate to eog."""
-    for _ in range(25):
-        if 'prompt_remaining = ""' in _greedy(network, cache, prompt, "1"):
-            break
+    """The multi-call run_update loop: ingest with -n 1, then generate to eog.
+
+    The output of every call is part of the response, also of the last ingest
+    call: the token -n 1 samples there is its first token.
+    """
     output = ""
+    for _ in range(25):
+        response = _greedy(network, cache, prompt, "1")
+        output += _field(response, "output")
+        if 'prompt_remaining = ""' in response:
+            break
     for _ in range(25):
         response = _greedy(network, cache, "", "512")
         output += _field(response, "output")

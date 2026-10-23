@@ -34,6 +34,15 @@ namespace {
 const std::string MODEL = "models/stories15Mtok4096.gguf";
 const std::string PROMPT = "Joe loves writing stories";
 const std::string PROMPT_B = "Once upon a time, a little cat";
+// n times "cat"
+std::string cats(int n) {
+  std::string s = "cat";
+  for (int i = 1; i < n; ++i)
+    s += " cat";
+  return s;
+}
+// 129 tokens, BOS included: one more than the batch of the context
+const std::string PROMPT_ONE = cats(128);
 // The tokens of the response: stories15M rarely ends a story with an eog.
 const uint64_t N = 30;
 
@@ -51,6 +60,7 @@ struct Out {
   std::string output;
   std::string prompt_remaining;
   bool generated_eog = false;
+  uint64_t n_prompt_tokens = 0;
   uint64_t n_tokens_generated = 0;
   bool partial = false;
 };
@@ -67,6 +77,8 @@ Out decode_out(const std::string &hex, bool full = false) {
   r.append("error", CandidTypeText{&error});
   r.append("prompt_remaining", CandidTypeText{&o.prompt_remaining});
   r.append("generated_eog", CandidTypeBool{&o.generated_eog});
+  std::optional<uint64_t> n_prompt;
+  r.append("n_prompt_tokens", CandidTypeOptNat64{&n_prompt});
   std::optional<uint64_t> n_gen;
   r.append("n_tokens_generated", CandidTypeOptNat64{&n_gen});
   std::optional<bool> partial;
@@ -84,6 +96,7 @@ Out decode_out(const std::string &hex, bool full = false) {
     std::cout << "run_update_full test: Err - " << error << std::endl;
     exit(1);
   }
+  o.n_prompt_tokens = n_prompt.value_or(0);
   o.n_tokens_generated = n_gen.value_or(0);
   o.partial = partial.value_or(false);
   return o;
@@ -190,38 +203,48 @@ void test_run_update_full(MockIC &mockIC) {
   mockIC.run_test("test_run_update_full: new_chat ref", new_chat,
                   args_hex({"--prompt-cache", "ref.cache"}), "", silent_on_trap,
                   my_principal);
-  // The tokens per call; -n binds when it is <= this (see the generate loop)
-  const uint64_t MTU = 4;
   std::string ref;
   bool eog = false;
   uint64_t generated = 0;
   int calls = 0;
-  // ingest with -n 1. Like test/test_qwen3.py, the output is not used: the
-  // token -n 1 samples at the end of the prompt is not decoded into the
-  // session file, so the first generate call samples it again.
+  // Every call's output is part of the response, and its n_tokens_generated
+  // counts exactly the tokens of that output.
+  bool outputs_match_counts = true;
+  auto add_call = [&](const Out &o) {
+    ref += o.output;
+    eog = o.generated_eog;
+    generated += o.n_tokens_generated;
+    outputs_match_counts =
+        outputs_match_counts && o.output.empty() == (o.n_tokens_generated == 0);
+  };
+  // ingest with -n 1. The call that ingests the end of the prompt samples a
+  // token, and decodes it into the session file: it starts the response.
+  Out last_ingest;
   while (calls < 100) {
     ++calls;
     mockIC.run_test("test_run_update_full: run_update ref ingest", run_update,
                     args_hex(run_args("ref.cache", PROMPT, "1")), "",
                     silent_on_trap, my_principal, &out_hex);
-    if (decode_out(out_hex).prompt_remaining.empty()) break;
+    last_ingest = decode_out(out_hex);
+    add_call(last_ingest);
+    if (last_ingest.prompt_remaining.empty()) break;
   }
-  // generate, empty prompt, N tokens in total. The last call is the one where
-  // -n is within the max_tokens budget: it ends that call after sampling.
+  check(last_ingest.n_tokens_generated == 1 && !last_ingest.output.empty(),
+        "the last ingest call generates the token -n 1 asks for");
+  // generate, empty prompt, N tokens in total.
   while (calls < 100 && !eog && generated < N) {
     ++calls;
     const uint64_t r = N - generated;
     mockIC.run_test("test_run_update_full: run_update ref generate", run_update,
                     args_hex(run_args("ref.cache", "", std::to_string(r))), "",
                     silent_on_trap, my_principal, &out_hex);
-    Out o = decode_out(out_hex);
-    ref += o.output;
-    eog = o.generated_eog;
-    generated += r <= MTU ? r : o.n_tokens_generated;
+    add_call(decode_out(out_hex));
   }
   check(eog || generated == N, "reference loop: " + std::to_string(generated) +
                                    " tokens in " + std::to_string(calls) +
                                    " calls");
+  check(outputs_match_counts,
+        "reference loop: a call has output exactly when it generated tokens");
 
   // --- One call
   mockIC.run_test("test_run_update_full: new_chat full", new_chat,
@@ -251,6 +274,41 @@ void test_run_update_full(MockIC &mockIC) {
   check(n10.n_tokens_generated == 10 && !n10.output.empty() &&
             ref.rfind(n10.output, 0) == 0,
         "run_update_full -n 10 is a prefix of the full response");
+
+  // --- The prompt is not output, also when its last batch is 1 token.
+  // PROMPT_ONE is one token more than the batch of the context, so without a
+  // max_tokens cap it is decoded as a batch of 128 tokens and a batch of 1.
+  // '(record { max_tokens_query = 0 : nat64; max_tokens_update = 0 : nat64 })'
+  mockIC.run_test(
+      "test_run_update_full: set_max_tokens 0 (one)", set_max_tokens,
+      "4449444c016c02deb5daad0478f3a29d8e077801000000000000000000000000000000"
+      "0000",
+      "", silent_on_trap, my_principal);
+  // The cache starts empty: new_chat keeps a cache of an earlier run.
+  mockIC.run_test("test_run_update_full: remove_prompt_cache one",
+                  remove_prompt_cache,
+                  args_hex({"--prompt-cache", "one.cache"}), "", silent_on_trap,
+                  my_principal);
+  mockIC.run_test("test_run_update_full: new_chat one", new_chat,
+                  args_hex({"--prompt-cache", "one.cache"}), "", silent_on_trap,
+                  my_principal);
+  mockIC.run_test("test_run_update_full: run_update one", run_update,
+                  args_hex(run_args("one.cache", PROMPT_ONE, "1")), "",
+                  silent_on_trap, my_principal, &out_hex);
+  const Out one = decode_out(out_hex);
+  mockIC.run_test(
+      "test_run_update_full: set_max_tokens 4 (one)", set_max_tokens,
+      "4449444c016c02deb5daad0478f3a29d8e077801000400000000000000040000000000"
+      "0000",
+      "", silent_on_trap, my_principal);
+  check(one.n_prompt_tokens == 129 && one.prompt_remaining.empty(),
+        "one: the prompt is 129 tokens, ingested in one call");
+  check(one.n_tokens_generated == 1 && !one.output.empty(),
+        "one: the call generates 1 token");
+  // The conversation is the prompt followed by the output, so the output holds
+  // nothing of the prompt.
+  check(one.conversation.ends_with(PROMPT_ONE + one.output),
+        "one: a 1-token last batch of the prompt is not in the output");
 
   // --- Interleaving: two generations whose chunks take turns on the shared
   // model context. Each chunk reloads its own session file, so each must end
