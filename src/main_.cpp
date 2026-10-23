@@ -747,10 +747,34 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
       session_tokens.size() == embd_inp.size()) {
     logits_valid =
         prompt_cache_restore_logits(path_session, ctx, session_tokens);
-    if (!logits_valid) {
-      LOG_WRN("%s: no valid logits sidecar for the session file; the first "
-              "token is sampled from the context's last logits\n",
-              __func__);
+    // With -n 0 nothing is sampled, so nothing would re-decode the last token:
+    // leave the session as it is.
+    if (!logits_valid && params.n_predict != 0) {
+      // No logits for these bytes (e.g. an uploaded cache): re-decode the last
+      // token, like upstream's "recalculate the cached logits" above. Its
+      // position leaves the memory first, so it is not stored twice.
+      const llama_pos n_keep_pos = (llama_pos)embd_inp.size() - 1;
+      if (llama_memory_seq_rm(mem, -1, n_keep_pos, -1)) {
+        LOG_WRN("%s: no valid logits sidecar for the session file; "
+                "re-decoding its last token\n",
+                __func__);
+        session_tokens.resize(embd_inp.size() - 1);
+        // Count it as decoded, not cached, so the token counts reconcile.
+        n_matching_session_tokens = session_tokens.size();
+      } else {
+        // A recurrent memory cannot drop just the last token. Re-decoding the
+        // whole session may not fit in one call, and a partial one would save
+        // a shortened session: refuse, and leave the cache as it is.
+        LOG_ERR("%s: no valid logits sidecar for the session file, and the "
+                "model's recurrent memory cannot re-decode its last token\n",
+                __func__);
+        icpp_error_msg = std::format(
+            "{}: error: the prompt cache has no logits, and this model's "
+            "recurrent memory cannot re-decode just its last token; start a "
+            "new chat (new_chat) or remove the prompt cache",
+            __func__);
+        return 1;
+      }
     }
   }
   // Write the sidecars that describe the session file just saved. If the save
@@ -1675,8 +1699,10 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   // forwarded into decode, independent of the fragile input/output display split.
   // All values are non-negative under normal operation; compute signed to avoid
   // unsigned underflow, then cast to uint64_t.
-  const int64_t decoded_prompt =
-      (int64_t)n_consumed - (int64_t)n_matching_session_tokens;
+  // The cached tokens count as consumed even when the loop never ran (-n 0).
+  const int64_t consumed =
+      std::max((int64_t)n_consumed, (int64_t)n_matching_session_tokens);
+  const int64_t decoded_prompt = consumed - (int64_t)n_matching_session_tokens;
   n_prompt_tokens = (uint64_t)embd_inp.size();
   n_prompt_tokens_cached = (uint64_t)n_matching_session_tokens;
   n_prompt_tokens_decoded = (uint64_t)decoded_prompt;
@@ -1684,7 +1710,7 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
   n_tokens_generated = (uint64_t)std::max<int64_t>(
       0, (int64_t)n_eval_total - decoded_prompt - n_replayed);
   n_prompt_tokens_remaining =
-      (uint64_t)((int64_t)embd_inp.size() - (int64_t)n_consumed);
+      (uint64_t)((int64_t)embd_inp.size() - consumed);
 
   // ICPP-PATCH: whether -n ended this call. Its last sampled token was decoded
   // like the others (see decode_last_sample), and is counted in

@@ -12,7 +12,7 @@ Run with:
 
 import sys
 from pathlib import Path
-from typing import List
+from typing import Any, List
 from .ic_py_canister import extract_variant, get_canister, run_icp_command
 from .parse_args_download import parse_args
 from .calculate_sha256 import calculate_sha256
@@ -23,6 +23,72 @@ ROOT_PATH = Path(__file__).parent.parent
 #  1 - minimal
 #  2 - a lot
 DEBUG_VERBOSE = 1
+
+
+def download_to(
+    canister_instance: Any,
+    filetype: str,
+    canister_filename: str,
+    local_filename_path: Path,
+    chunksize: int,
+    required: bool = True,
+) -> bool:
+    """Downloads a file from the canister in chunks and writes it to disk.
+
+    On an error it exits when the file is required; otherwise it removes the
+    partial file and returns False."""
+    done = False
+    offset = 0
+    with open(local_filename_path, "wb") as f:
+        while not done:
+            if filetype == "promptcache":
+                response = canister_instance.download_prompt_cache_chunk(
+                    {
+                        "promptcache": canister_filename,
+                        "chunksize": chunksize,
+                        "offset": offset,
+                    }
+                )
+            else:
+                response = canister_instance.file_download_chunk(
+                    {
+                        "filename": canister_filename,
+                        "chunksize": chunksize,
+                        "offset": offset,
+                    }
+                )
+
+            result = extract_variant(response)
+            if "Ok" in result:
+                r_filesize = result["Ok"]["filesize"]
+                r_chunk: List[int] = result["Ok"]["chunk"]
+                r_chunksize = result["Ok"]["chunksize"]
+                r_offset = result["Ok"]["offset"]
+                total_received = offset + len(r_chunk)
+                print(
+                    "--"
+                    "\nDownloaded a chunk:"
+                    f"\n- filesize       = {r_filesize} bytes ({r_filesize/1024/1024:.3f} Mb), "
+                    f"\n- len(chunk)     = {len(r_chunk)} bytes ({len(r_chunk)/1024/1024:.3f} Mb), "
+                    f"\n- chunksize      = {r_chunksize} bytes ({r_chunksize/1024/1024:.3f} Mb), "
+                    f"\n- offset         = {r_offset} bytes ({r_offset/1024/1024:.3f} Mb), "
+                    f"\n- total_received = {total_received} bytes ({total_received/1024/1024:.3f} Mb)"
+                )
+                offset += len(r_chunk)
+
+                f.write(bytearray(r_chunk))
+
+                done = result["Ok"]["done"]
+            else:
+                print("Something went wrong:")
+                print(response)
+                if required:
+                    sys.exit(1)
+                break
+    if not done:
+        local_filename_path.unlink(missing_ok=True)
+        return False
+    return True
 
 
 def main() -> int:
@@ -84,52 +150,26 @@ def main() -> int:
     print(f"--\nDownloading the file: {canister_filename}")
     print(f"--\nSaving to: {local_filename_path}")
 
-    done = False
-    offset = 0
-    with open(local_filename_path, "wb") as f:
-        while not done:
-            if filetype == "promptcache":
-                response = canister_instance.download_prompt_cache_chunk(
-                    {
-                        "promptcache": canister_filename,
-                        "chunksize": chunksize,
-                        "offset": offset,
-                    }
-                )
-            else:
-                response = canister_instance.file_download_chunk(
-                    {
-                        "filename": canister_filename,
-                        "chunksize": chunksize,
-                        "offset": offset,
-                    }
-                )
+    download_to(
+        canister_instance, filetype, canister_filename, local_filename_path, chunksize
+    )
 
-            result = extract_variant(response)
-            if "Ok" in result:
-                r_filesize = result["Ok"]["filesize"]
-                r_chunk: List[int] = result["Ok"]["chunk"]
-                r_chunksize = result["Ok"]["chunksize"]
-                r_offset = result["Ok"]["offset"]
-                total_received = offset + len(r_chunk)
-                print(
-                    "--"
-                    "\nDownloaded a chunk:"
-                    f"\n- filesize       = {r_filesize} bytes ({r_filesize/1024/1024:.3f} Mb), "
-                    f"\n- len(chunk)     = {len(r_chunk)} bytes ({len(r_chunk)/1024/1024:.3f} Mb), "
-                    f"\n- chunksize      = {r_chunksize} bytes ({r_chunksize/1024/1024:.3f} Mb), "
-                    f"\n- offset         = {r_offset} bytes ({r_offset/1024/1024:.3f} Mb), "
-                    f"\n- total_received = {total_received} bytes ({total_received/1024/1024:.3f} Mb)"
-                )
-                offset += len(r_chunk)
-
-                f.write(bytearray(r_chunk))
-
-                done = result["Ok"]["done"]
-            else:
-                print("Something went wrong:")
-                print(response)
-                sys.exit(1)
+    # A prompt cache is only used again after an upload when its stamp comes
+    # with it: scripts.upload hands it to stamp_uploaded_prompt_cache
+    if filetype == "promptcache":
+        stamp_path = Path(f"{local_filename_path}.icppfmt")
+        print(f"--\nDownloading the stamp of the prompt cache to: {stamp_path}")
+        if not download_to(
+            canister_instance,
+            filetype,
+            f"{canister_filename}.icppfmt",
+            stamp_path,
+            chunksize,
+            required=False,
+        ):
+            print(
+                "WARNING - this cache has no stamp: it will start cold after an upload."
+            )
 
     # ---------------------------------------------------------------------------
     local_file_sha256 = calculate_sha256(local_filename_path)

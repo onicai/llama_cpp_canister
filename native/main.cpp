@@ -52,6 +52,7 @@ int main() {
   test_alternating_sessions(mockIC);
   test_run_update_full(mockIC);
   test_prompt_cache_format(mockIC);
+  test_prompt_cache_restore(mockIC);
   test_qwen2(mockIC);
   test_qwen3(mockIC);
   test_utf8(mockIC);

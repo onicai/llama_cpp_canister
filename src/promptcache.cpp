@@ -15,11 +15,14 @@
 #include "llama.h" // llama_model_desc, for the model-identity stamp
 #include "log.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include "ic_api.h"
@@ -78,6 +81,28 @@ prompt_cache_logits_path(const std::string &canister_path_session) {
 // Every sidecar describes the cache BYTES, so all of them are removed and
 // copied together with the cache.
 static const char *const PROMPT_CACHE_SIDECARS[] = {".icppfmt", ".logits"};
+
+// Whether a canister path names a sidecar instead of a cache. Sidecars are
+// written by the canister only: a stamp that arrived any other way could
+// vouch for bytes this build never wrote, and llama.cpp traps on those.
+static bool is_prompt_cache_sidecar(const std::string &canister_path_session) {
+  const std::string name =
+      std::filesystem::path(canister_path_session).lexically_normal().string();
+  for (const char *suffix : PROMPT_CACHE_SIDECARS) {
+    const std::string s(suffix);
+    if (name.size() >= s.size() &&
+        name.compare(name.size() - s.size(), s.size(), s) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static std::string sidecar_name_error(const std::string &promptcache) {
+  return "'" + promptcache +
+         "' names a prompt-cache sidecar (.icppfmt, .logits), which only the "
+         "canister writes";
+}
 
 std::string prompt_cache_model_id() {
   // Identity of the currently loaded model, e.g. "qwen3 1.7B Q4_K_M".
@@ -377,6 +402,13 @@ void remove_prompt_cache() {
   }
   path_session = canister_path_session;
 
+  if (is_prompt_cache_sidecar(path_session)) {
+    send_output_record_result_error_to_wire(
+        ic_api, Http::StatusCode::BadRequest,
+        sidecar_name_error(params.path_prompt_cache));
+    return;
+  }
+
   std::string msg;
   if (!path_session.empty()) {
     // Remove the file if it exists
@@ -455,6 +487,16 @@ void copy_prompt_cache() {
     ic_api.to_wire(CandidTypeVariant{
         "Err", CandidTypeVariant{"Other", CandidTypeText{error_msg}}});
     return;
+  }
+
+  // A copy to or from a sidecar would let a stamp vouch for other bytes
+  for (const auto &[name, path] : {std::pair{from, from_path}, {to, to_path}}) {
+    if (is_prompt_cache_sidecar(path)) {
+      ic_api.to_wire(CandidTypeVariant{
+          "Err", CandidTypeVariant{"Other",
+                                   CandidTypeText{sidecar_name_error(name)}}});
+      return;
+    }
   }
 
   // copy the file from_path to to_path if it exists
@@ -569,10 +611,18 @@ void upload_prompt_cache_chunk() {
     return;
   }
 
+  if (is_prompt_cache_sidecar(filename)) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{
+                   "Other", CandidTypeText{sidecar_name_error(promptcache)}}});
+    return;
+  }
+
   // The uploaded bytes did not come from this canister, so any existing stamp
   // no longer describes this file. Drop it: the cache is then treated as
   // unstamped and discarded on first use (a cold start), instead of being
-  // handed to llama.cpp, which traps on a session it cannot parse.
+  // handed to llama.cpp, which traps on a session it cannot parse. Only
+  // stamp_uploaded_prompt_cache stamps it again, after validating it.
   prompt_cache_remove_stamp(filename);
 
   file_upload_chunk_(ic_api, filename, v, chunksize, offset);
@@ -608,4 +658,216 @@ void uploaded_prompt_cache_details() {
   }
 
   uploaded_file_details_(ic_api, filename);
+}
+
+// --- restoring an uploaded prompt cache --------------------------------------
+
+// Checks the head of a session file without llama.cpp, which throws (a trap in
+// a canister) on many mismatches. Layout, from llama_context::state_save_file:
+//   u32 magic, u32 version, u32 n_token_count, i32 tokens[n_token_count],
+//   u32 arch length, arch name (state_write_data), then the memory module.
+// Returns "" when the head matches the loaded model and context.
+static std::string prompt_cache_header_error(const std::string &path,
+                                             llama_context *ctx,
+                                             const std::string &arch) {
+  std::error_code ec;
+  const uint64_t file_size = std::filesystem::file_size(path, ec);
+  if (ec) return "cannot read the size of " + path;
+
+  std::ifstream f(path, std::ios::binary);
+  if (!f.is_open()) return "cannot open " + path;
+
+  uint32_t head[3] = {0, 0, 0};
+  f.read(reinterpret_cast<char *>(head), sizeof(head));
+  if (!f) return "the file is shorter than a session file header";
+  const uint32_t magic = head[0];
+  const uint32_t version = head[1];
+  const uint64_t n_tokens = head[2];
+  if (magic != LLAMA_SESSION_MAGIC) {
+    return "not a session file (magic " + std::to_string(magic) +
+           ", expected " + std::to_string(LLAMA_SESSION_MAGIC) + ")";
+  }
+  if (version != LLAMA_SESSION_VERSION) {
+    return "session version " + std::to_string(version) + ", expected " +
+           std::to_string(LLAMA_SESSION_VERSION);
+  }
+  const uint64_t n_ctx = llama_n_ctx(ctx);
+  if (n_tokens > n_ctx) {
+    return "the session holds " + std::to_string(n_tokens) +
+           " tokens, more than the context size " + std::to_string(n_ctx);
+  }
+  // n_tokens <= n_ctx, so this cannot overflow
+  const uint64_t n_head = sizeof(head) + 4 * n_tokens + 4 + arch.size();
+  if (file_size < n_head) {
+    return "the file has " + std::to_string(file_size) +
+           " bytes, fewer than the " + std::to_string(n_head) +
+           " of its header";
+  }
+
+  // Every token must be in the vocabulary. Read in fixed-size blocks, so the
+  // header cannot make this allocate more than one block.
+  const int32_t n_vocab = ctx_n_vocab(ctx);
+  std::vector<llama_token> block(4096);
+  for (uint64_t done = 0; done < n_tokens;) {
+    const uint64_t n = std::min<uint64_t>(block.size(), n_tokens - done);
+    f.read(reinterpret_cast<char *>(block.data()),
+           (std::streamsize)(n * sizeof(llama_token)));
+    if (!f) return "cannot read the tokens of the session";
+    for (uint64_t i = 0; i < n; ++i) {
+      if (block[i] < 0 || block[i] >= n_vocab) {
+        return "token " + std::to_string(done + i) + " is " +
+               std::to_string(block[i]) + ", outside the vocabulary of " +
+               std::to_string(n_vocab) + " tokens";
+      }
+    }
+    done += n;
+  }
+
+  // The model architecture, which llama.cpp checks by throwing
+  uint32_t arch_len = 0;
+  f.read(reinterpret_cast<char *>(&arch_len), sizeof(arch_len));
+  if (!f) return "cannot read the model architecture of the session";
+  if (arch_len != arch.size()) {
+    return "the model architecture of the session has length " +
+           std::to_string(arch_len) + ", loaded: '" + arch + "'";
+  }
+  std::string file_arch(arch_len, '\0');
+  f.read(file_arch.data(), arch_len);
+  if (!f || file_arch != arch) {
+    return "the session was written for model architecture '" + file_arch +
+           "', loaded: '" + arch + "'";
+  }
+  return "";
+}
+
+// The architecture name of the loaded model, as a session file stores it.
+static std::string loaded_model_arch() {
+  if (g_model == nullptr || *g_model == nullptr) return "";
+  char buf[128];
+  buf[0] = '\0';
+  llama_model_meta_val_str(*g_model, "general.architecture", buf, sizeof(buf));
+  return std::string(buf);
+}
+
+void stamp_uploaded_prompt_cache() {
+  IC_API ic_api(CanisterUpdate{std::string(__func__)}, false);
+  if (!has_admin_update_role(ic_api)) {
+    send_access_denied_api_error(ic_api);
+    return;
+  }
+
+  CandidTypePrincipal caller = ic_api.get_caller();
+  std::string principal_id = caller.get_text();
+
+  std::string promptcache{""};
+  std::string stamp{""};
+  std::string filesha256{""};
+  CandidTypeRecord r_in;
+  r_in.append("promptcache", CandidTypeText{&promptcache});
+  r_in.append("stamp", CandidTypeText{&stamp});
+  r_in.append("filesha256", CandidTypeText{&filesha256});
+  ic_api.from_wire(r_in);
+
+  const std::string func = __func__;
+  auto send_error = [&](const std::string &msg) {
+    ic_api.to_wire(CandidTypeVariant{
+        "Err", CandidTypeVariant{"Other", CandidTypeText{func + ": " + msg}}});
+  };
+
+  if (session_busy(utf8_session_key(promptcache, principal_id), __func__)) {
+    send_error(SESSION_BUSY_ERROR);
+    return;
+  }
+
+  // Each principal has their own cache folder
+  std::string filename;
+  std::string error_msg;
+  if (!get_canister_path_session(promptcache, principal_id, filename,
+                                 error_msg)) {
+    send_error(error_msg);
+    return;
+  }
+  if (filename.empty()) {
+    send_error("promptcache is empty");
+    return;
+  }
+  if (is_prompt_cache_sidecar(filename)) {
+    send_error(sidecar_name_error(promptcache));
+    return;
+  }
+
+  // (a) A model and context to compare against
+  llama_context *ctx = icpp_persisted_ctx();
+  const std::string current[3] = {
+      prompt_cache_format(), prompt_cache_model_id(), prompt_cache_layout_id()};
+  const std::string arch = loaded_model_arch();
+  if (ctx == nullptr || current[1].empty() || current[2].empty() ||
+      arch.empty()) {
+    send_error("no model is loaded; load the model the cache was written "
+               "with first");
+    return;
+  }
+
+  // A recurrent memory cannot drop the last token of a cache without logits,
+  // so such a model cannot continue an uploaded cache (see main_)
+  if (llama_model_is_recurrent(*g_model) || llama_model_is_hybrid(*g_model)) {
+    send_error("the loaded " + arch +
+               " model keeps a recurrent state, which cannot continue an "
+               "uploaded prompt cache; it starts cold");
+    return;
+  }
+
+  // (b) The file was uploaded completely and not changed since
+  auto metadata = get_live_file_metadata(filename);
+  if (!metadata.has_value()) {
+    send_error("no completed upload of " + filename +
+               " (upload it with upload_prompt_cache_chunk first)");
+    return;
+  }
+
+  // (c) The bytes arrived intact
+  if (filesha256 != metadata->sha256) {
+    send_error("filesha256 " + filesha256 + " does not match the uploaded " +
+               metadata->sha256);
+    return;
+  }
+
+  // (d) The stamp the cache was downloaded with matches this build, the
+  // loaded model and the loaded context layout
+  std::istringstream stamp_in(stamp);
+  static const char *const LINE_NAMES[3] = {"format", "model",
+                                            "context layout"};
+  for (int i = 0; i < 3; ++i) {
+    std::string line;
+    std::getline(stamp_in, line);
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line != current[i]) {
+      send_error(std::string("the ") + LINE_NAMES[i] +
+                 " does not match. stamp: '" + line + "'; loaded: '" +
+                 current[i] + "'");
+      return;
+    }
+  }
+
+  // (e) The head of the session file fits the loaded model and context
+  const std::string header_error =
+      prompt_cache_header_error(filename, ctx, arch);
+  if (!header_error.empty()) {
+    send_error(header_error);
+    return;
+  }
+
+  // The canister writes its own stamp, never the client's text. There are no
+  // logits for these bytes: the first run re-decodes the last token.
+  prompt_cache_write_format_stamp(filename);
+  prompt_cache_remove_logits(filename);
+  if (!prompt_cache_format_is_current(filename)) {
+    prompt_cache_remove_stamp(filename);
+    send_error("could not write the stamp of " + filename);
+    return;
+  }
+
+  CandidTypeRecord status_code_record;
+  status_code_record.append("status_code", CandidTypeNat16{200});
+  ic_api.to_wire(CandidTypeVariant{"Ok", status_code_record});
 }

@@ -921,13 +921,17 @@ icp canister call llama_cpp -e local uploaded_prompt_cache_details '(record {
 )
 
 # --
-# Note: an uploaded prompt cache is discarded on its first use. The canister
-# logs "Discarded prompt-cache file that was not written by this build with
-# the currently loaded model". The upload removes the `.icppfmt` stamp next to
-# the cache, and the stamp itself cannot be uploaded, so the canister cannot
-# trust the uploaded bytes. A download + upload does not restore a cache.
-#
+# An upload removes the cache's stamp, so the canister does not trust the bytes
+# yet: an unstamped cache is discarded on its first use. Stamp it with the
+# `.icppfmt` file it was downloaded with, and the sha256 of the uploaded bytes:
+icp canister call llama_cpp -e local stamp_uploaded_prompt_cache '(record {
+  promptcache = "prompt.cache";
+  stamp = "<the text of prompt.cache.icppfmt>";
+  filesha256 = "<sha256 of prompt.cache>";
+})'
+
 # You can wrap the upload call in a loop, as in scripts/upload.py
+# When prompt.cache.icppfmt is next to the local file, it also stamps the cache
 python -m scripts.upload \
     --network local \
     --canister llama_cpp \
@@ -936,6 +940,35 @@ python -m scripts.upload \
     --chunksize 2000000 \
     prompt.cache
 ```
+
+## Saving and restoring a prompt cache
+
+`python -m scripts.download --filetype promptcache prompt.cache` saves the cache
+and its stamp (`prompt.cache.icppfmt`). `python -m scripts.upload --filetype
+promptcache prompt.cache` uploads the cache again and calls
+`stamp_uploaded_prompt_cache`, which stamps it only when:
+
+- a model is loaded, and the upload of the cache is complete and unchanged since;
+- `filesha256` equals the sha256 of the uploaded bytes;
+- the three lines of the stamp equal this build's format, the loaded model and the
+  loaded context layout (`--ctx-size`, cache types, ...): restore a cache into the
+  same release, with the same `load_model` arguments;
+- the head of the cache is a session file of this llama.cpp version, for the
+  loaded model's architecture, with no more tokens than the context and only
+  tokens of the vocabulary.
+
+The canister writes its own stamp; the downloaded one is only compared. On a
+mismatch the call returns an `Err` that shows both sides, the cache stays
+unstamped, and its first use discards it and starts cold. A restored cache has
+no `.logits` file, so its first call decodes its last token again.
+
+A model with a recurrent or hybrid memory, such as LFM2.5, cannot decode just the
+last token again, so it cannot restore a cache: `stamp_uploaded_prompt_cache`
+returns an `Err` for it, and the upload starts cold.
+
+The sidecars themselves cannot be uploaded or copied: `upload_prompt_cache_chunk`,
+`copy_prompt_cache` and `remove_prompt_cache` reject names ending in `.icppfmt` or
+`.logits`. `download_prompt_cache_chunk` can download them.
 
 # Access control
 
