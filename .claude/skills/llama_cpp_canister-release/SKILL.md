@@ -179,11 +179,16 @@ curl -sL https://github.com/onicai/llama_cpp_canister/releases/download/v<NEW_VE
 The two must be equal, and must equal the hash in the release title. If they differ,
 abort and report -- the release is not trustworthy.
 
-Check that the release body starts with the notes of step 4, followed by the changelog:
+Check the release body: it must start with the notes of step 4, then the changelog, then
+the "Reproducible build" section:
 
 ```bash
-gh release view v<NEW_VERSION> --repo onicai/llama_cpp_canister --json body --jq .body | head -20
+gh release view v<NEW_VERSION> --repo onicai/llama_cpp_canister --json body --jq .body > /tmp/rel-body.md
+head -n "$(wc -l < docs/release-notes/v<NEW_VERSION>.md)" /tmp/rel-body.md | diff - docs/release-notes/v<NEW_VERSION>.md && echo "notes ok"
+grep -n -E '^## (Changelog|Reproducible build)' /tmp/rel-body.md
 ```
+
+`diff` prints nothing, and `grep` shows the changelog heading before "Reproducible build".
 
 ## 9. Summary
 
