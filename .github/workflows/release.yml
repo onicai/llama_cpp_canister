@@ -126,6 +126,8 @@ jobs:
           mkdir -p release/build release/scripts release/test
           mkdir -p release/src/llama_cpp_onicai_fork
           cp version.txt requirements.txt README.md icp.yaml LICENSE __init__.py release/
+          # docs/README-decision-models.md links to this upgrade note
+          cp README-0003-305ba519.md release/
           cp out/llama_cpp.wasm out/llama_cpp.did out/llama_cpp.wasm.sha256 release/build/
           cp out/BUILD-PROVENANCE.txt release/
           cp scripts/__init__.py release/scripts/

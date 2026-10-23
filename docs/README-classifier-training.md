@@ -173,7 +173,9 @@ make gguf           # convert_hf_to_gguf.py build/model --outtype f32 --outfile 
 ```
 
 It uses `convert_hf_to_gguf.py` from the fork in this repo (`src/llama_cpp_onicai_fork`),
-which needs `torch`, `transformers` and `numpy`, as the training environment has.
+which needs `torch`, `transformers` and `numpy`, as the training environment has. The
+release zip has no llama.cpp: there, pass a llama.cpp checkout, e.g.
+`make gguf LLAMA_CPP=~/llama.cpp` (upstream's converter writes the same GGUF).
 
 **Use `--outtype f32`, not f16.** In wasm, f32 runs on SIMD, while f16 converts every
 weight one by one as it reads it: an f32 model is 3.6x cheaper per token, with the same

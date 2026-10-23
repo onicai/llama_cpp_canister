@@ -56,7 +56,7 @@ _(Issue a PR to get your project listed)_
 
 You can just grab the latest [release](https://github.com/onicai/llama_cpp_canister/releases) and unzip it. Then follow the instructions from the README, but skip these steps:
 
-- No need to clone the repo. The zip has what the steps below need: the wasm, `icp.yaml`, `requirements.txt`, the upload, download and log-monitor scripts, the `test/` smoke tests, the model guides in `docs/`, and the classifier example in `examples/classifier/`.
+- No need to clone the repo. The zip has what the steps below need: the wasm, `icp.yaml`, `requirements.txt`, the upload, download and log-monitor scripts, the `test/` smoke tests, the model guides in `docs/`, and the classifier example in `examples/classifier/` (its GGUF conversion needs a llama.cpp checkout, see `docs/README-classifier-training.md`).
 - No need to build the wasm. It is included in the release zip.
 
 The build files (`Makefile` and its `make ...` targets, `docker/`, `icpp.toml`, the C++ sources) and the contributor guides are not in the zip. They are in the [repository](https://github.com/onicai/llama_cpp_canister).
