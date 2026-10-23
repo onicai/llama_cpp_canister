@@ -308,6 +308,13 @@ void test_prompt_cache_restore(MockIC &mockIC) {
   uint32_t n_session = 0;
   if (bytes.size() >= 12) std::memcpy(&n_session, bytes.data() + 8, 4);
   restore_check(n_session > 1 && !stamp.empty(), "chat: no session saved");
+  // Every later step edits or replays these bytes: stop here without them
+  if (n_session <= 1 || bytes.size() < 16 || stamp.empty()) {
+    remove_restore_files(dir);
+    std::cout << RESTORE << "setup failed, " << g_restore_failures
+              << " failure(s)" << std::endl;
+    std::exit(1);
+  }
 
   // The control continues a copy that keeps its stamp and logits
   {
