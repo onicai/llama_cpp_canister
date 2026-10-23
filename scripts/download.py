@@ -31,8 +31,12 @@ def download_to(
     canister_filename: str,
     local_filename_path: Path,
     chunksize: int,
-) -> None:
-    """Downloads a file from the canister in chunks and writes it to disk."""
+    required: bool = True,
+) -> bool:
+    """Downloads a file from the canister in chunks and writes it to disk.
+
+    On an error it exits when the file is required; otherwise it removes the
+    partial file and returns False."""
     done = False
     offset = 0
     with open(local_filename_path, "wb") as f:
@@ -78,7 +82,13 @@ def download_to(
             else:
                 print("Something went wrong:")
                 print(response)
-                sys.exit(1)
+                if required:
+                    sys.exit(1)
+                break
+    if not done:
+        local_filename_path.unlink(missing_ok=True)
+        return False
+    return True
 
 
 def main() -> int:
@@ -149,13 +159,17 @@ def main() -> int:
     if filetype == "promptcache":
         stamp_path = Path(f"{local_filename_path}.icppfmt")
         print(f"--\nDownloading the stamp of the prompt cache to: {stamp_path}")
-        download_to(
+        if not download_to(
             canister_instance,
             filetype,
             f"{canister_filename}.icppfmt",
             stamp_path,
             chunksize,
-        )
+            required=False,
+        ):
+            print(
+                "WARNING - this cache has no stamp: it will start cold after an upload."
+            )
 
     # ---------------------------------------------------------------------------
     local_file_sha256 = calculate_sha256(local_filename_path)
