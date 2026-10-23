@@ -191,9 +191,9 @@ NATIVE_CONFIG := icpp.toml
 endif
 
 .PHONY: test-llm-native
-# The native tests run under a memory guard: a bug that allocates without limit
-# fails the run with an ERROR instead of filling the host's memory. A healthy
-# run peaks at ~1.8 GB (arm64, 2026-10-22).
+# The native tests run under icpp-pro's memory guard (`icpp run-native`): a bug
+# that allocates without limit fails the run with an ERROR instead of filling the
+# host's memory. A healthy run peaks at ~1.8 GB (arm64, 2026-10-22).
 NATIVE_MAX_GB ?= 4
 
 test-llm-native:
@@ -201,7 +201,7 @@ ifneq ($(NATIVE_CONFIG),icpp.toml)
 	sed 's#ggml-cpu/arch/x86/#ggml-cpu/arch/arm/#g' icpp.toml > $(NATIVE_CONFIG)
 endif
 	icpp build-native --config $(NATIVE_CONFIG)
-	python -m scripts.memory_guard --max-gb $(NATIVE_MAX_GB) -- ./build-native/mockic.exe
+	icpp run-native --max-gb $(NATIVE_MAX_GB)
 
 .PHONY: test-llm-wasm
 test-llm-wasm: icp-test-identities

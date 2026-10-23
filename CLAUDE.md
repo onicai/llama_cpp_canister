@@ -83,9 +83,9 @@ didc decode 4449444c...
 make test-llm-native
 ```
 
-It builds and runs `./build-native/mockic.exe` under `scripts/memory_guard.py`. Never run
-`mockic.exe` directly: natively nothing caps its memory, so a bug that allocates without
-limit fills the host's memory within minutes. Over `NATIVE_MAX_GB` (4 GB; a healthy run
+It builds and runs `./build-native/mockic.exe` under `icpp run-native`, icpp-pro's memory
+guard. Never run `mockic.exe` directly: natively nothing caps its memory, so a bug that
+allocates without limit fills the host's memory within minutes. Over `NATIVE_MAX_GB` (4 GB; a healthy run
 peaks at ~1.8 GB), the guard kills it, prints an ERROR and fails the run, in CI too.
 
 **Adding a new test file:**
