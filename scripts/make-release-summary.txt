@@ -1,0 +1,68 @@
+Write the release notes of llama_cpp_canister <tag>. Modelled on upstream llama.cpp's
+scripts/make-release-summary.txt.
+
+Get the commits with `scripts/make-release-desc.sh <tag>`, and read the PR of each one
+(`gh pr view <number>`) and the diff between the previous release and HEAD. Look in
+particular at:
+
+- `src/llama_cpp.did`: the Candid interface;
+- `src/*.cpp`: the behaviour of the endpoints;
+- `docs/` and `README.md`: the model guides and the examples;
+- `version_fork.env`: the pinned llama.cpp fork commit;
+- `requirements.txt`: the pinned icpp-pro version;
+- `scripts/`: the upload, download and monitoring scripts.
+
+Write a summary in these sections. Leave out a section that does not apply:
+
+```
+## Overview
+
+[one paragraph: what this release is about, and for an rc, what it is a candidate for]
+
+### Highlights
+
+[the few changes a user of the canister should know first]
+
+### Behaviour changes for apps
+
+[what an app that already calls the canister must change, with what to do instead]
+
+### Candid API changes
+
+[new, changed and removed endpoints, records and fields in `src/llama_cpp.did`]
+
+### Upgrade notes
+
+[whether an upgrade keeps the models, prompt caches, stored states and settings; changed
+`load_model` arguments; memory limits or cycles to plan for]
+
+### Models and guides
+
+[new or changed model support and guides in `docs/`]
+
+### llama.cpp fork
+
+[if `version_fork.env` changed: the new fork commit, and a link to the upstream llama.cpp
+commits or releases it brings in]
+
+### icpp-pro
+
+[if the pin changed: the new version, with a link to its release on GitHub]
+
+### Scripts and tooling
+
+[changes to `scripts/`, the release zip, CI and the release process that a user notices]
+```
+
+Guidelines:
+
+- Write for a developer who deploys the canister or calls it from an app.
+- Keep every bullet to one line of about 120 characters, without the PR links.
+- Do not wrap or break lines within a bullet or paragraph.
+- End every bullet with the link of its PR, e.g. ([#68](https://github.com/onicai/llama_cpp_canister/pull/68)).
+- Group related changes into one bullet with several PR links; one bullet per topic.
+- Leave out minor changes (tests, refactors, typo fixes): the full list of commits is
+  appended below the summary.
+- Do not add a bullet to say that nothing changed somewhere.
+
+Save the summary, without a markdown fence around it, to `docs/release-notes/<tag>.md`.

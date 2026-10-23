@@ -99,19 +99,38 @@ Show the computed version and tag (e.g., `v0.8.1`, or `v0.23.0rc1`) and ask the 
 confirm before proceeding. A tag with `rc` is published as a prerelease: it does not
 become "Latest" on GitHub.
 
-## 4. Bump version
+## 4. Write the release notes
+
+Every release has notes; `release.yml` refuses a tag without them. They are written like
+upstream llama.cpp's: a summary, then the generated changelog.
+
+1. List the commits since the previous release:
+
+   ```bash
+   scripts/make-release-desc.sh v<NEW_VERSION>
+   ```
+
+2. Write `docs/release-notes/v<NEW_VERSION>.md` following
+   `scripts/make-release-summary.txt`: read each PR and the diff, and fill in the sections
+   that apply. Put what an app must change under "Behaviour changes for apps".
+3. Show the notes to the user and get their approval before going on. Apply their edits.
+
+The workflow publishes the release body as: these notes, then the output of
+`scripts/make-release-desc.sh`, then the "Reproducible build" section.
+
+## 5. Bump version
 
 Update `version.txt` to the new version (just the version string, no trailing newline beyond what was there).
 
-Commit and push:
+Commit it together with the release notes of step 4, and push:
 
 ```bash
-git add version.txt
+git add version.txt docs/release-notes/v<NEW_VERSION>.md
 git commit -m "v<NEW_VERSION>"
 git push origin main
 ```
 
-## 5. Trigger release workflow
+## 6. Trigger release workflow
 
 ```bash
 gh workflow run release.yml --repo onicai/llama_cpp_canister -f tag=v<NEW_VERSION>
@@ -124,7 +143,7 @@ sleep 10
 gh run list --repo onicai/llama_cpp_canister --workflow=release.yml --limit 1 --json databaseId,status --jq '.[0]'
 ```
 
-## 6. Monitor release workflow
+## 7. Monitor release workflow
 
 Poll `gh run view <run_id> --repo onicai/llama_cpp_canister` every 60 seconds for up to 45 minutes.
 
@@ -136,9 +155,9 @@ At each check, report the current status to the user.
 
 If the run fails, report the failure and abort. Include the URL to the failed run.
 
-If the run succeeds, proceed to step 7.
+If the run succeeds, proceed to step 8.
 
-## 7. Verify release
+## 8. Verify release
 
 ```bash
 gh release view v<NEW_VERSION> --repo onicai/llama_cpp_canister
@@ -160,7 +179,18 @@ curl -sL https://github.com/onicai/llama_cpp_canister/releases/download/v<NEW_VE
 The two must be equal, and must equal the hash in the release title. If they differ,
 abort and report -- the release is not trustworthy.
 
-## 8. Summary
+Check the release body: it must start with the notes of step 4, then the changelog, then
+the "Reproducible build" section:
+
+```bash
+gh release view v<NEW_VERSION> --repo onicai/llama_cpp_canister --json body --jq .body > /tmp/rel-body.md
+head -n "$(wc -l < docs/release-notes/v<NEW_VERSION>.md)" /tmp/rel-body.md | diff - docs/release-notes/v<NEW_VERSION>.md && echo "notes ok"
+grep -n -E '^## (Changelog|Reproducible build)' /tmp/rel-body.md
+```
+
+`diff` prints nothing, and `grep` shows the changelog heading before "Reproducible build".
+
+## 9. Summary
 
 Print a summary of what was done:
 - Version bumped from OLD to NEW
