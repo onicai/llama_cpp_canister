@@ -138,6 +138,13 @@ type PromptCacheDetailsInputRecord = record {
 };
 
 // -----------------------------------------------------
+type StampPromptCacheInputRecord = record {
+  promptcache : text;
+  stamp : text;
+  filesha256 : text
+};
+
+// -----------------------------------------------------
 // Access level
 // 0 = only controllers
 // 1 = all except anonymous
@@ -425,6 +432,7 @@ service : {
   download_prompt_cache_chunk : (DownloadPromptCacheInputRecord) -> (FileDownloadRecordResult) query;
   upload_prompt_cache_chunk : (UploadPromptCacheInputRecord) -> (FileUploadRecordResult);
   uploaded_prompt_cache_details : (PromptCacheDetailsInputRecord) -> (FileDetailsRecordResult) query;
+  stamp_uploaded_prompt_cache : (StampPromptCacheInputRecord) -> (StatusCodeRecordResult);
 
   // Files - general utility endpoints exposing std::filesystem functions
   filesystem_remove : (FilesystemRemoveInputRecord) -> (FilesystemRemoveRecordResult);

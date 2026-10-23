@@ -103,3 +103,11 @@ void upload_prompt_cache_chunk()
     WASM_SYMBOL_EXPORTED("canister_update upload_prompt_cache_chunk");
 void uploaded_prompt_cache_details()
     WASM_SYMBOL_EXPORTED("canister_query uploaded_prompt_cache_details");
+
+// Stamps an uploaded prompt cache, so it is loaded instead of discarded, after
+// checking that the upload is complete and intact (filesha256), that the stamp
+// it was downloaded with matches this build, the loaded model and context, and
+// that the head of the session file fits them. The canister writes its own
+// stamp; the client's text is only compared.
+void stamp_uploaded_prompt_cache()
+    WASM_SYMBOL_EXPORTED("canister_update stamp_uploaded_prompt_cache");

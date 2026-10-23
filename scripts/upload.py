@@ -275,6 +275,29 @@ def main() -> int:
         sys.exit(1)
 
     # ---------------------------------------------------------------------------
+    # A prompt cache downloaded with scripts.download comes with its stamp: ask
+    # the canister to check it and stamp the upload, so it is loaded on first
+    # use instead of discarded
+    stamp_path = Path(f"{local_filename_path}.icppfmt")
+    if filetype == "promptcache" and stamp_path.exists():
+        print(f"--\nStamping the prompt cache with {stamp_path}")
+        response = canister_instance.stamp_uploaded_prompt_cache(
+            {
+                "promptcache": canister_filename,
+                "stamp": stamp_path.read_text(encoding="utf-8"),
+                "filesha256": local_file_sha256,
+            },
+            verify_certificate=False,
+        )
+        result = extract_variant(response)
+        if "Ok" in result:
+            print("OK! The prompt cache will be used on its first run.")
+        else:
+            print(f"WARNING - the cache will start cold: {result.get('Err')}")
+    elif filetype == "promptcache":
+        print(f"--\nNo {stamp_path}: the cache is not stamped, " "and will start cold.")
+
+    # ---------------------------------------------------------------------------
     # print success message
     try:
         print("💯 🎉 🏁")

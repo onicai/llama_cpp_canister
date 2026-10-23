@@ -4,8 +4,20 @@
 
 #include "ic_api.h"
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
+
+// A file uploaded to the canister, with metadata (filename, filesize, sha256)
+// to be used for validation
+struct FileMetadata {
+  std::string filename;
+  uint64_t filesize;
+  std::string sha256;
+};
+
+// The upload metadata of a file, while the file exists with its uploaded size.
+std::optional<FileMetadata> get_live_file_metadata(const std::string &filename);
 
 void file_upload_chunk()
     WASM_SYMBOL_EXPORTED("canister_update file_upload_chunk");

@@ -748,9 +748,26 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
     logits_valid =
         prompt_cache_restore_logits(path_session, ctx, session_tokens);
     if (!logits_valid) {
-      LOG_WRN("%s: no valid logits sidecar for the session file; the first "
-              "token is sampled from the context's last logits\n",
-              __func__);
+      // No logits for these bytes (e.g. an uploaded cache): re-decode the last
+      // token, like upstream's "recalculate the cached logits" above. Its
+      // position leaves the memory first, so it is not stored twice.
+      const llama_pos n_keep_pos = (llama_pos)embd_inp.size() - 1;
+      if (llama_memory_seq_rm(mem, -1, n_keep_pos, -1)) {
+        LOG_WRN("%s: no valid logits sidecar for the session file; "
+                "re-decoding its last token\n",
+                __func__);
+        session_tokens.resize(embd_inp.size() - 1);
+        // Count it as decoded, not cached, so the token counts reconcile.
+        n_matching_session_tokens = session_tokens.size();
+      } else {
+        // A recurrent memory cannot drop just the last token: re-decode all.
+        LOG_WRN("%s: no valid logits sidecar for the session file; "
+                "re-decoding the whole session\n",
+                __func__);
+        llama_memory_clear(mem, true);
+        session_tokens.clear();
+        n_matching_session_tokens = 0;
+      }
     }
   }
   // Write the sidecars that describe the session file just saved. If the save

@@ -30,14 +30,6 @@ struct UploadSession {
 // One upload session per filename
 static std::unordered_map<std::string, UploadSession> upload_sessions;
 
-// Maintain a list of files that are uploaded to the canister with metadata
-// (filename, filesize, sha256) to be used for validation
-struct FileMetadata {
-  std::string filename;
-  uint64_t filesize;
-  std::string sha256;
-};
-
 // In-memory cache of file metadata
 static std::vector<FileMetadata> uploaded_files;
 
@@ -170,6 +162,21 @@ std::optional<FileMetadata> get_file_metadata(const std::string &filename) {
     }
   }
   return std::nullopt;
+}
+
+// The metadata only counts while the file still exists with the uploaded size:
+// a remove, or the canister rewriting the file (a prompt cache saved after a
+// run), leaves the stored entry behind.
+std::optional<FileMetadata>
+get_live_file_metadata(const std::string &filename) {
+  auto metadata = get_file_metadata(filename);
+  std::error_code ec;
+  const bool live =
+      metadata.has_value() && std::filesystem::is_regular_file(filename, ec) &&
+      !ec && std::filesystem::file_size(filename, ec) == metadata->filesize &&
+      !ec;
+  if (!live) return std::nullopt;
+  return metadata;
 }
 
 // Delete file metadata by filename. Returns true if a matching record was
@@ -358,16 +365,8 @@ void uploaded_file_details_(IC_API &ic_api, const std::string &filename) {
   std::cout << "llama_cpp:" << std::string(__func__) << "Filename: " << filename
             << std::endl;
 
-  // Get the metadata for the file. It only counts while the file still exists
-  // with the uploaded size: a remove, or the canister rewriting the file (a
-  // prompt cache saved after a run), leaves the stored entry behind.
-  auto metadata = get_file_metadata(filename);
-  std::error_code ec;
-  const bool live =
-      metadata.has_value() && std::filesystem::is_regular_file(filename, ec) &&
-      !ec && std::filesystem::file_size(filename, ec) == metadata->filesize &&
-      !ec;
-  if (!live) {
+  auto metadata = get_live_file_metadata(filename);
+  if (!metadata.has_value()) {
     std::string msg = "Metadata for this file are not found: " + filename;
     ic_api.to_wire(CandidTypeVariant{
         "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +
