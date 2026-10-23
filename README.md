@@ -568,8 +568,9 @@ The other `README-*.md` files, the `Makefile` (`make ...` targets), `docker/`, `
     The response is the `output` of every call concatenated, including the last ingest
     call: the token that `"-n"; "1"` samples at the end of the prompt is the first token
     of the response, and the generate calls continue after it. Every call's `output`
-    holds exactly the `n_tokens_generated` tokens of that call, so the counts of the
-    calls add up to the tokens of the response.
+    holds the text of the `n_tokens_generated` tokens of that call, so the counts of the
+    calls add up to the tokens of the response. A special token sampled without `-sp`
+    is counted but adds no text.
 
     **Query or update?**
 
