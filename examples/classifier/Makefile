@@ -1,4 +1,4 @@
-# The DAO-moderation classifier example: see README-classifier-training.md.
+# The DAO-moderation classifier example: see docs/README-classifier-training.md.
 #
 #   make data      download the dataset from Hugging Face
 #   make train     fine-tune Ettin-encoder-17M (f32) into build/model

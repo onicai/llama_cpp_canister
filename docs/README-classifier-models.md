@@ -6,7 +6,7 @@
 > cheaply and in one call.
 >
 > It runs on the **same `llama_cpp` canister** as the chat models. Follow the main
-> [README.md](README.md) for `# Set up` (icp-cli, Python env, build, deploy, cycles),
+> [README.md](../README.md) for `# Set up` (icp-cli, Python env, build, deploy, cycles),
 > then use the steps here.
 
 This is what upstream llama.cpp does with
@@ -16,8 +16,7 @@ BERT-family GGUF with a classification head works: `llama.cpp`'s
 `convert_hf_to_gguf.py` converts a `...ForSequenceClassification` model, and writes
 its labels into the GGUF (`<arch>.classifier.output_labels`).
 
-To train your own, see [README-classifier-training.md](README-classifier-training.md). That
-guide, `examples/classifier/` and the native tests are in the repo, not in the release zip.
+To train your own, see [README-classifier-training.md](README-classifier-training.md).
 
 ## The example model: DAO-channel moderation
 
@@ -151,7 +150,7 @@ python -m scripts.upload --network local --canister llama_cpp --canister-filenam
 ```
 
 The commands on this page run as the identity that deployed the canister (the default
-one of [README.md](README.md)'s `# Set up`): the endpoints are controller-only by
+one of [README.md](../README.md)'s `# Set up`): the endpoints are controller-only by
 default. To use another identity, add `--identity <name>` to the `icp` and pytest
 commands, and set `ICPP_PRO_TEST_IDENTITY=<name>` for `python -m scripts.upload`, which
 has no `--identity` option.

@@ -13,6 +13,28 @@
 - MIT open source 🧑‍💻 · Well documented 📝 · Fully QA'd via CI/CD ✅
 - Easy to build, test & deploy 🚧 · Smoke-testing framework using pytest 🚬
 
+# Model guides
+
+Each model has its own guide in [docs/](docs/): how to get, upload and load it, its
+measured cost and limits, and what it is good for.
+
+- **Chat models:**
+  - Qwen3-0.6B, the recommended default: this README.
+  - [Qwen2.5-0.5B-Instruct](docs/README-qwen2.5.md), the previous default.
+  - [Qwen3-1.7B](docs/README-qwen3-1.7B.md), an optional larger model.
+  - [LFM2.5-1.2B-Instruct](docs/README-LFM2.5-1.2B.md), a faster replacement for Qwen3-1.7B.
+  - [LFM2.5-2.6B](docs/README-LFM2.5-2.6B.md), an on-device agent model.
+  - [Gemma-3-270M](docs/README-gemma-3.md), the smallest on-chain model.
+  - [Hindi](docs/README-Language-Hindi.md): which model to use.
+- **Decision models (`run_decision`, `run_decision_full`):**
+  - [Decision models](docs/README-decision-models.md): what they are, and the interface.
+  - [Julia-1](docs/README-decision-model-julia-1.md),
+    [Laya](docs/README-decision-model-Laya.md),
+    [Kev-0.8B](docs/README-decision-model-kev-0.8b.md).
+- **Sequence classifiers (`run_classify`, `run_classify_query`):**
+  - [Sequence classifiers](docs/README-classifier-models.md), with the DAO-moderation example.
+  - [Train your own classifier](docs/README-classifier-training.md).
+
 # In the wild
 
 llama_cpp_canister is used as the on-chain LLM brain inside the following projects:
@@ -34,10 +56,10 @@ _(Issue a PR to get your project listed)_
 
 You can just grab the latest [release](https://github.com/onicai/llama_cpp_canister/releases) and unzip it. Then follow the instructions from the README, but skip these steps:
 
-- No need to clone the repo. The zip has what the steps below need: the wasm, `icp.yaml`, `requirements.txt`, the upload/download scripts and the `test/` smoke tests.
+- No need to clone the repo. The zip has what the steps below need: the wasm, `icp.yaml`, `requirements.txt`, the upload, download and log-monitor scripts, the `test/` smoke tests, the model guides in `docs/`, and the classifier example in `examples/classifier/`.
 - No need to build the wasm. It is included in the release zip.
 
-The other `README-*.md` files, the `Makefile` (`make ...` targets), `docker/`, `icpp.toml` and `scripts/monitor_logs.sh` are not in the zip. They are in the [repository](https://github.com/onicai/llama_cpp_canister).
+The build files (`Makefile` and its `make ...` targets, `docker/`, `icpp.toml`, the C++ sources) and the contributor guides are not in the zip. They are in the [repository](https://github.com/onicai/llama_cpp_canister).
 
 # Set up
 
@@ -167,11 +189,11 @@ The other `README-*.md` files, the `Makefile` (`make ...` targets), `docker/`, `
 
     `icp.yaml` defines four canisters that share the same wasm: **`llama_cpp`** (the
     default, serving **Qwen3-0.6B** — the steps below), **`llama_cpp_qwen25`** (the
-    previous default, **Qwen2.5-0.5B** — see [README-qwen2.5.md](README-qwen2.5.md)),
+    previous default, **Qwen2.5-0.5B** — see [docs/README-qwen2.5.md](docs/README-qwen2.5.md)),
     **`llama_cpp_qwen3_17b`** (the larger **Qwen3-1.7B** — see
-    [README-qwen3-1.7B.md](README-qwen3-1.7B.md)), and **`llama_cpp_kev`** (the
+    [docs/README-qwen3-1.7B.md](docs/README-qwen3-1.7B.md)), and **`llama_cpp_kev`** (the
     **Kev-0.8B** decision model — see
-    [README-decision-model-kev-0.8b.md](README-decision-model-kev-0.8b.md)).
+    [docs/README-decision-model-kev-0.8b.md](docs/README-decision-model-kev-0.8b.md)).
     Deploy just the one you need by naming it:
 
     ```bash
@@ -223,10 +245,10 @@ The other `README-*.md` files, the `Makefile` (`make ...` targets), `docker/`, `
   that we run in **non-thinking** mode for clean, multi-turn on-chain inference
   (see the chat steps below). You can use any model available in gguf format.
 
-  _(For the previous default, Qwen2.5-0.5B, see [README-qwen2.5.md](README-qwen2.5.md).)_
+  _(For the previous default, Qwen2.5-0.5B, see [docs/README-qwen2.5.md](docs/README-qwen2.5.md).)_
 
   _(For a larger, stronger model — noticeably better at instruction-following,
-  negation, and secret-keeping — see [README-qwen3-1.7B.md](README-qwen3-1.7B.md).)_
+  negation, and secret-keeping — see [docs/README-qwen3-1.7B.md](docs/README-qwen3-1.7B.md).)_
 
   - Download the model from huggingface: https://huggingface.co/Qwen/Qwen3-0.6B-GGUF
 
@@ -638,7 +660,7 @@ Raise the log memory to its maximum of 2 MiB:
 icp canister settings update llama_cpp --log-memory-limit 2mib -e local
 ```
 
-To keep the log, capture it from outside with `scripts/monitor_logs.sh` (in the repo, not in the release zip):
+To keep the log, capture it from outside with `scripts/monitor_logs.sh`:
 
 ```bash
 # local network, as the test identity (llama-cpp-testing or $ICPP_PRO_TEST_IDENTITY)
@@ -1169,13 +1191,13 @@ _(We have benchmarked other models too — SmolLM2, Llama-3.2, DeepSeek-R1 1.5B,
 NOTEs:
 
 - To experiment with prompt design and determine their exact costs, use [ICGPT](https://icgpt.onicai.com/docs)
-- **`gemma-3-270m-it-Q8_0` is the smallest model we tested** — the b10076 fork loads the `gemma3` architecture. With a **q8_0 KV cache** the measured **generation ceiling is ~55 tokens/call** (55 OK / 60 traps at short context, on a local replica whose instruction limit is the same 40 B as mainnet; ~50 with the default f16 cache), so `max_tokens_update = 44` is a safe value. Use `--temp 0.7` — greedy decoding can end a turn immediately. Its heap peaks at only ~0.9 GiB after load, so the **default `wasm_memory_limit` is enough** (no 3.75 GiB bump). See [README-gemma-3.md](README-gemma-3.md) for the full recipe.
+- **`gemma-3-270m-it-Q8_0` is the smallest model we tested** — the b10076 fork loads the `gemma3` architecture. With a **q8_0 KV cache** the measured **generation ceiling is ~55 tokens/call** (55 OK / 60 traps at short context, on a local replica whose instruction limit is the same 40 B as mainnet; ~50 with the default f16 cache), so `max_tokens_update = 44` is a safe value. Use `--temp 0.7` — greedy decoding can end a turn immediately. Its heap peaks at only ~0.9 GiB after load, so the **default `wasm_memory_limit` is enough** (no 3.75 GiB bump). See [docs/README-gemma-3.md](docs/README-gemma-3.md) for the full recipe.
 - **`qwen2.5-0.5b-instruct-q8_0 is an older model**: 25 tokens/call sustained, 28 first-call ceiling. This is the current model in [funnAI](https://funnai.onicai.com).
 - **`Qwen3-0.6B-Q8_0`**: ~25 tokens/call generation, first-call ceiling ~25-29. It needs `--cache-type-k q8_0 --cache-type-v q8_0 --batch-size 64 --ubatch-size 64 --ctx-size 16384` and a `wasm_memory_limit` of 3.75 GiB; the small batch shrinks the compute buffers so a 16K context fits with ~2 GiB headroom — see [Context size & memory](#appendix-b-context-size--memory) for the mechanism, levers, and risks.
-- **`LFM2.5-1.2B-Instruct-Q4_K_M` is the fastest model that still passes our word-guessing quality gate** — Liquid AI's hybrid architecture (only 6 of 16 blocks are attention; the other 10 are short convolutions). Measured on mainnet at `-c 4096`: **9 tokens/call generation, 11 ingestion**, and **12.4 B cycles per `run_update` versus Qwen3-1.7B's 26.8 B — 2.16x cheaper per call** at 34 % less disk. Note it needs one word ("small") removed from the word-game example prompt, or it copies it into its hints. See [README-LFM2.5-1.2B.md](README-LFM2.5-1.2B.md).
-- **`Qwen3-1.7B-Q4_K_M` is the largest model we tested on-chain so far.** Use Q4_K_M, not Q8_0: a single message can read at most ~2 GiB from stable memory and the Q8_0 gguf (~1.83 GB) trips `IC0524` on load. It needs `--batch-size 8 --ubatch-size 8` and a 3.75 GiB `wasm_memory_limit`, and `--ctx-size 16384` requires v0.16.4 or later. See [README-qwen3-1.7B.md](README-qwen3-1.7B.md).
-- **Decision models (System One)**: `run_decision_full` answers typed `choice` / `score` / yes-no questions about a state with probabilities, instead of generating text, in one update call that yields to itself between its steps. **Julia-1** (144M, 50+ languages) fits ~210 tokens per question per update call (~14.9 B instructions for an 87-token question); **Laya** (421M, English, more precise) fits 33. **Kev-0.8B** (causal, English) stores the state once per caller, ingesting it over as many calls as needed (and only the new part when the state grows), and then answers each question from it at up to ~22 tokens per question: ingest once, ask many. A request with several questions continues over the steps of that one call (for Laya, send one question per request). A caller that serves many users (a gateway) passes a `scope` per user, and each reply reports the instructions it used. See [README-decision-models.md](README-decision-models.md), [README-decision-model-julia-1.md](README-decision-model-julia-1.md), [README-decision-model-Laya.md](README-decision-model-Laya.md) and [README-decision-model-kev-0.8b.md](README-decision-model-kev-0.8b.md).
-- **Sequence classifiers (BERT / ModernBERT)**: `run_classify` and `run_classify_query` return the raw scores of a classification head with its labels for one text, in one forward pass, as upstream `llama-embedding --pooling rank` does. Load the model with `--embedding --pooling rank`, in **f32**, which runs on wasm SIMD (3.6x cheaper than f16). The example, **onicai/dao-moderation-classifier** (Ettin-encoder-17M), moderates a DAO's chat channel: 15 scores per message (kind, toxicity, scam, misleading, respectful, action), 0.07-1.67 B instructions per message, so an OpenChat moderation bot calls it as a query. See [README-classifier-models.md](README-classifier-models.md), and [README-classifier-training.md](README-classifier-training.md) to train your own.
+- **`LFM2.5-1.2B-Instruct-Q4_K_M` is the fastest model that still passes our word-guessing quality gate** — Liquid AI's hybrid architecture (only 6 of 16 blocks are attention; the other 10 are short convolutions). Measured on mainnet at `-c 4096`: **9 tokens/call generation, 11 ingestion**, and **12.4 B cycles per `run_update` versus Qwen3-1.7B's 26.8 B — 2.16x cheaper per call** at 34 % less disk. Note it needs one word ("small") removed from the word-game example prompt, or it copies it into its hints. See [docs/README-LFM2.5-1.2B.md](docs/README-LFM2.5-1.2B.md).
+- **`Qwen3-1.7B-Q4_K_M` is the largest model we tested on-chain so far.** Use Q4_K_M, not Q8_0: a single message can read at most ~2 GiB from stable memory and the Q8_0 gguf (~1.83 GB) trips `IC0524` on load. It needs `--batch-size 8 --ubatch-size 8` and a 3.75 GiB `wasm_memory_limit`, and `--ctx-size 16384` requires v0.16.4 or later. See [docs/README-qwen3-1.7B.md](docs/README-qwen3-1.7B.md).
+- **Decision models (System One)**: `run_decision_full` answers typed `choice` / `score` / yes-no questions about a state with probabilities, instead of generating text, in one update call that yields to itself between its steps. **Julia-1** (144M, 50+ languages) fits ~210 tokens per question per update call (~14.9 B instructions for an 87-token question); **Laya** (421M, English, more precise) fits 33. **Kev-0.8B** (causal, English) stores the state once per caller, ingesting it over as many calls as needed (and only the new part when the state grows), and then answers each question from it at up to ~22 tokens per question: ingest once, ask many. A request with several questions continues over the steps of that one call (for Laya, send one question per request). A caller that serves many users (a gateway) passes a `scope` per user, and each reply reports the instructions it used. See [docs/README-decision-models.md](docs/README-decision-models.md), [docs/README-decision-model-julia-1.md](docs/README-decision-model-julia-1.md), [docs/README-decision-model-Laya.md](docs/README-decision-model-Laya.md) and [docs/README-decision-model-kev-0.8b.md](docs/README-decision-model-kev-0.8b.md).
+- **Sequence classifiers (BERT / ModernBERT)**: `run_classify` and `run_classify_query` return the raw scores of a classification head with its labels for one text, in one forward pass, as upstream `llama-embedding --pooling rank` does. Load the model with `--embedding --pooling rank`, in **f32**, which runs on wasm SIMD (3.6x cheaper than f16). The example, **onicai/dao-moderation-classifier** (Ettin-encoder-17M), moderates a DAO's chat channel: 15 scores per message (kind, toxicity, scam, misleading, respectful, action), 0.07-1.67 B instructions per message, so an OpenChat moderation bot calls it as a query. See [docs/README-classifier-models.md](docs/README-classifier-models.md), and [docs/README-classifier-training.md](docs/README-classifier-training.md) to train your own.
 - During prompt ingestion phase, the max_tokens before hitting the instruction limit is higher as during the generation phase.
 - We use `"--temp"; "0.6"; "--repeat-penalty"; "1.1";`, as recommended on several model cards
 - For each model, we selected a `--cache-type-k` that gives the highest max_tokens while still providing good results.

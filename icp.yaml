@@ -24,14 +24,14 @@ canisters:
   # to borrow ICGPT's production canister (as the IC0522 slice-overrun
   # investigation had to). Same wasm; it differs only in which gguf is uploaded
   # and the settings it is given (3.75 GiB wasm_memory_limit, max_tokens 4).
-  # See README-qwen3-1.7B.md.
+  # See docs/README-qwen3-1.7B.md.
   - name: llama_cpp_qwen3_17b
     build:
       steps:
         - type: pre-built
           path: build/llama_cpp.wasm
   # The Kev-0.8B decision model on mainnet (stored states, run_decision).
-  # Same wasm; see README-decision-model-kev-0.8b.md.
+  # Same wasm; see docs/README-decision-model-kev-0.8b.md.
   - name: llama_cpp_kev
     build:
       steps:

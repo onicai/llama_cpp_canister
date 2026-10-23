@@ -261,7 +261,7 @@ and every model needs more for one question.
 
 The canister build used to exclude `common/jinja/*` and `common/chat*.cpp`
 "for the ICP globals limit" (see `icpp.toml` and
-[README-0003-305ba519.md](README-0003-305ba519.md)). That exclusion was made as
+[README-0003-305ba519.md](../README-0003-305ba519.md)). That exclusion was made as
 a precaution early in upgrade 0003. The same upgrade log shows that the
 post-link step removing exported globals and running the Binaryen optimizer
 brings the module from 1046 defined globals to 1. Since icpp-pro 6.2.0 that

@@ -88,7 +88,7 @@ icp canister call llama_cpp_qwen3_17b set_max_tokens \
 ```
 
 The ceiling shrinks as a conversation grows, and a larger `--ctx-size` lowers it too —
-see [Appendix A: max_tokens](README.md#appendix-a-max_tokens) for why the context you
+see [Appendix A: max_tokens](../README.md#appendix-a-max_tokens) for why the context you
 allocate is a flat tax on every call.
 
 ## The prompt — read this before judging quality

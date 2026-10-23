@@ -9,7 +9,7 @@ The worked example is a **moderation classifier for the public chat channel of a
 for each message it scores what kind of message it is, how toxic, whether it is a scam,
 misleading or respectful, and which moderator action fits. Everything is runnable:
 
-- the code: [examples/classifier](examples/classifier) (`heads.py`, `train.py`,
+- the code: [examples/classifier](../examples/classifier) (`heads.py`, `train.py`,
   `eval.py`, `merge_labels.py`, `Makefile`);
 - the data: [onicai/dao-moderation-classifier](https://huggingface.co/datasets/onicai/dao-moderation-classifier)
   on Hugging Face, 3,381 training and 200 test messages, synthetic;

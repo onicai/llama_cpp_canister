@@ -2,7 +2,7 @@
 
 Runs against the classifier that scripts/qa_deploy_and_pytest.py uploaded as
 models/model.gguf: onicai/dao-moderation-classifier in f32, a ModernBERT classifier
-with 15 labels that helps moderate a DAO's chat channel. See README-classifier-models.md.
+with 15 labels that helps moderate a DAO's chat channel. See docs/README-classifier-models.md.
 
 The reference scores come from upstream llama.cpp, with the f16 GGUF:
   llama-embedding -m <gguf> --pooling rank -p "<text>" --embd-normalize -1
@@ -31,7 +31,7 @@ CANISTER_NAME = "llama_cpp"
 TOL = 0.05
 
 # The documented f32 arguments: -ub 192 keeps the longest text under the 5B
-# instructions of a query (README-classifier-models.md)
+# instructions of a query (docs/README-classifier-models.md)
 LOAD_ARGS = '"--embedding"; "--pooling"; "rank"; "--no-warmup"; "-c"; "192"; "-ub"; "192"'
 
 REFERENCE = {

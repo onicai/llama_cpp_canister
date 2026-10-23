@@ -1,7 +1,7 @@
 # Qwen2.5-0.5B-Instruct (previous default model)
 
 > This was the default reference model up to and including release **v0.12.1**.
-> From **v0.13.0** the default is **Qwen3-0.6B** — see the main [README.md](README.md).
+> From **v0.13.0** the default is **Qwen3-0.6B** — see the main [README.md](../README.md).
 > Qwen2.5-0.5B is kept here (and in `test/test_qwen2.py` / `native/test_qwen2.cpp`)
 > for regression, and remains an excellent, lightweight single-turn model. Follow
 > the main README for `# Set up` (icp, Python env, build & deploy), then use the
@@ -120,7 +120,7 @@ icp canister call llama_cpp_qwen25 -e local run_update_full '(record {
 On a local network, this returned a 299-token answer in one call of 61s (17 chunks),
 with `generated_eog = true` and `partial = opt false`. To show the text while it is being
 generated, use the `run_update` loop instead (see the
-[main README](README.md#set-up)).
+[main README](../README.md#set-up)).
 
 Remove the prompt cache when done:
 

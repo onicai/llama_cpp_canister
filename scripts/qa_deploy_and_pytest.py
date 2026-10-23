@@ -141,7 +141,7 @@ def main() -> int:
             },
             # gemma-3-270M (gemma3 / iSWA architecture, q8_0 KV): exercises the
             # small-max_tokens prompt-cache regression on a real model. Requires the
-            # gemma gguf downloaded (see README-gemma-3.md) and the raised wasm
+            # gemma gguf downloaded (see docs/README-gemma-3.md) and the raised wasm
             # memory limit. test_small_maxtokens loads the model itself.
             {
                 "filename": "models/google/gemma-3-270m-it-GGUF/gemma-3-270m-it-Q8_0.gguf",  # pylint: disable=line-too-long
@@ -173,7 +173,7 @@ def main() -> int:
             # length (default 5, enough to catch this exact bug -- it trapped in
             # cycle 0; raise to >=50 for a pre-release soak).
             # Decision models (System One, run_decision): Julia-1 and Laya, see
-            # README-decision-models.md. DECISION_MODEL selects the per-model
+            # docs/README-decision-models.md. DECISION_MODEL selects the per-model
             # budget and reference answers in test/test_decision.py.
             {
                 "filename": "models/ggml-org/Julia-1-GGUF/Julia-1-Q8_0.gguf",
@@ -198,7 +198,7 @@ def main() -> int:
                 "env": {"DECISION_MODEL": "kev-0.8b"},
                 "test_paths": ["test/test_decision.py"],
             },
-            # A sequence classifier (run_classify): see README-classifier-models.md.
+            # A sequence classifier (run_classify): see docs/README-classifier-models.md.
             {
                 "filename": "models/onicai/dao-moderation-classifier/dao-moderation-f32.gguf",  # pylint: disable=line-too-long
                 "canister_filename": "models/model.gguf",

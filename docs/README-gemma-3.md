@@ -12,7 +12,7 @@
 > measured against the IC's 40 B-instruction limit (below).
 >
 > It runs on the **same `llama_cpp` canister** as the default — just upload this gguf
-> and load it. Follow the main [README.md](README.md) for `# Set up` (icp-cli, Python
+> and load it. Follow the main [README.md](../README.md) for `# Set up` (icp-cli, Python
 > env, build, deploy, cycles), then use the model-specific steps here.
 
 ## Two things to know
@@ -148,7 +148,7 @@ icp canister call llama_cpp run_update_full '(record {
 ```
 
 To show the text while it is being generated, use the `run_update` loop instead (see the
-[main README](README.md#set-up)).
+[main README](../README.md#set-up)).
 
 Remove the prompt cache when done:
 
@@ -178,4 +178,4 @@ Coherent and on-topic — good for a 270M model.
   secret-keeping. On the word-guessing use case it leaks the secret word roughly half
   the time (like Qwen3-0.6B) — enforce secrecy in your app, not the model (see the
   note in the main README). For stronger instruction-following, step up to
-  [Qwen3-0.6B](README.md) or [Qwen3-1.7B](README-qwen3-1.7B.md).
+  [Qwen3-0.6B](../README.md) or [Qwen3-1.7B](README-qwen3-1.7B.md).

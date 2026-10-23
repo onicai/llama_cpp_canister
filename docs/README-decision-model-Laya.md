@@ -10,7 +10,7 @@
 > models are, the `run_decision` interface, and how a request is answered.
 >
 > It runs on the **same `llama_cpp` canister** as the chat models. Follow the main
-> [README.md](README.md) for `# Set up`, then use the steps here.
+> [README.md](../README.md) for `# Set up`, then use the steps here.
 
 ## Headline results (local replica, llama_cpp_canister with llama.cpp b11476)
 
