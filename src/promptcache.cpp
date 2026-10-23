@@ -808,6 +808,15 @@ void stamp_uploaded_prompt_cache() {
     return;
   }
 
+  // A recurrent memory cannot drop the last token of a cache without logits,
+  // so such a model cannot continue an uploaded cache (see main_)
+  if (llama_model_is_recurrent(*g_model) || llama_model_is_hybrid(*g_model)) {
+    send_error("the loaded " + arch +
+               " model keeps a recurrent state, which cannot continue an "
+               "uploaded prompt cache; it starts cold");
+    return;
+  }
+
   // (b) The file was uploaded completely and not changed since
   auto metadata = get_live_file_metadata(filename);
   if (!metadata.has_value()) {

@@ -274,7 +274,8 @@ void expect_refused(MockIC &mockIC, const std::string &name,
 void remove_restore_files(const std::string &dir) {
   for (const std::string name :
        {"orig.cache", "ctrl.cache", "straight.cache", "junk.cache",
-        "badtoken.cache", "x.icppfmt", "x.logits"}) {
+        "badtoken.cache", "x.icppfmt", "x.logits", "lfm.cache",
+        "lfmup.cache"}) {
     std::error_code ec;
     for (const std::string suffix : {"", ".icppfmt", ".logits"}) {
       std::filesystem::remove(dir + name + suffix, ec);
@@ -480,6 +481,56 @@ void test_prompt_cache_restore(MockIC &mockIC) {
     restore_check(straight.output.find(r.output) != std::string::npos,
                   "the straight run '" + straight.output +
                       "' does not continue with '" + r.output + "'");
+  }
+
+  // A hybrid model (LFM2.5: recurrent and attention memory) cannot drop just
+  // the last token, so it refuses to stamp an upload, and refuses a cache
+  // without logits rather than saving a shortened one. Skipped without the
+  // model, as in CI.
+  const std::string lfm =
+      "models/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/"
+      "LFM2.5-1.2B-Instruct-Q4_K_M.gguf";
+  if (!std::filesystem::exists(lfm)) {
+    std::cout << RESTORE << "SKIP the hybrid-model checks: " << lfm
+              << " not found" << std::endl;
+  } else {
+    {
+      std::vector<std::string> a = {"--model", lfm, "--no-warmup",
+                                    "--ctx-size", "512"};
+      CandidTypeRecord in;
+      in.append("args", CandidTypeVecText{a});
+      mockIC.run_test(RESTORE + "load LFM2.5", load_model,
+                      CandidSerialize(in).as_hex_string(), "", true, caller);
+    }
+    r = run(mockIC, "LFM2.5 chat", greedy_args("lfm.cache", "Joe loves"),
+            caller);
+    restore_check(r.label == "Ok", "LFM2.5 chat: " + r.error);
+    const std::string lfm_bytes = read_file(dir + "lfm.cache");
+    const std::string lfm_stamp = read_file(dir + "lfm.cache.icppfmt");
+    restore_check(!lfm_bytes.empty() && !lfm_stamp.empty(),
+                  "LFM2.5 chat: no session saved");
+
+    restore_check(upload(mockIC, "lfmup.cache", lfm_bytes, caller) == "Ok",
+                  "LFM2.5 upload");
+    const std::string reply =
+        stamp_call(mockIC, "stamp an LFM2.5 upload", "lfmup.cache", lfm_stamp,
+                   sha256_hex(lfm_bytes), caller);
+    restore_check(reply.find("recurrent state") != std::string::npos,
+                  "stamping an LFM2.5 upload was not refused: " + reply);
+    restore_check(!std::filesystem::exists(dir + "lfmup.cache.icppfmt"),
+                  "a refused LFM2.5 upload has a stamp");
+
+    std::error_code ec;
+    std::filesystem::remove(dir + "lfm.cache.logits", ec);
+    r = run(mockIC, "LFM2.5 cache without logits", greedy_args("lfm.cache", ""),
+            caller);
+    restore_check(r.label == "Err" &&
+                      r.error.find("recurrent memory") != std::string::npos,
+                  "LFM2.5 continued a cache without logits: " + r.label +
+                      " " + r.error);
+    restore_check(read_file(dir + "lfm.cache") == lfm_bytes &&
+                      read_file(dir + "lfm.cache.icppfmt") == lfm_stamp,
+                  "the refused LFM2.5 cache changed");
   }
 
   remove_restore_files(dir);

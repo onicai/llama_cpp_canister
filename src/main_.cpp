@@ -762,13 +762,18 @@ int main_(int argc, char **argv, std::string principal_id, bool load_model_only,
         // Count it as decoded, not cached, so the token counts reconcile.
         n_matching_session_tokens = session_tokens.size();
       } else {
-        // A recurrent memory cannot drop just the last token: re-decode all.
-        LOG_WRN("%s: no valid logits sidecar for the session file; "
-                "re-decoding the whole session\n",
+        // A recurrent memory cannot drop just the last token. Re-decoding the
+        // whole session may not fit in one call, and a partial one would save
+        // a shortened session: refuse, and leave the cache as it is.
+        LOG_ERR("%s: no valid logits sidecar for the session file, and the "
+                "model's recurrent memory cannot re-decode its last token\n",
                 __func__);
-        llama_memory_clear(mem, true);
-        session_tokens.clear();
-        n_matching_session_tokens = 0;
+        icpp_error_msg = std::format(
+            "{}: error: the prompt cache has no logits, and this model's "
+            "recurrent memory cannot re-decode just its last token; start a "
+            "new chat (new_chat) or remove the prompt cache",
+            __func__);
+        return 1;
       }
     }
   }

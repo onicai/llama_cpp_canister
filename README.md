@@ -962,6 +962,10 @@ mismatch the call returns an `Err` that shows both sides, the cache stays
 unstamped, and its first use discards it and starts cold. A restored cache has
 no `.logits` file, so its first call decodes its last token again.
 
+A model with a recurrent or hybrid memory, such as LFM2.5, cannot decode just the
+last token again, so it cannot restore a cache: `stamp_uploaded_prompt_cache`
+returns an `Err` for it, and the upload starts cold.
+
 The sidecars themselves cannot be uploaded or copied: `upload_prompt_cache_chunk`,
 `copy_prompt_cache` and `remove_prompt_cache` reject names ending in `.icppfmt` or
 `.logits`. `download_prompt_cache_chunk` can download them.
