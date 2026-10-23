@@ -8,6 +8,7 @@
 #include "hash-library/sha256.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -357,9 +358,16 @@ void uploaded_file_details_(IC_API &ic_api, const std::string &filename) {
   std::cout << "llama_cpp:" << std::string(__func__) << "Filename: " << filename
             << std::endl;
 
-  // Get the metadata for the file
+  // Get the metadata for the file. It only counts while the file still exists
+  // with the uploaded size: a remove, or the canister rewriting the file (a
+  // prompt cache saved after a run), leaves the stored entry behind.
   auto metadata = get_file_metadata(filename);
-  if (!metadata.has_value()) {
+  std::error_code ec;
+  const bool live =
+      metadata.has_value() && std::filesystem::is_regular_file(filename, ec) &&
+      !ec && std::filesystem::file_size(filename, ec) == metadata->filesize &&
+      !ec;
+  if (!live) {
     std::string msg = "Metadata for this file are not found: " + filename;
     ic_api.to_wire(CandidTypeVariant{
         "Err", CandidTypeVariant{"Other", CandidTypeText{std::string(__func__) +
