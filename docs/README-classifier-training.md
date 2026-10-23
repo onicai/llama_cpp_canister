@@ -190,7 +190,8 @@ The GGUF holds:
 ## 7. Check the GGUF against PyTorch
 
 Build `llama-embedding` from the fork once, outside the source tree, CPU only like the
-canister. From the repository root:
+canister. From the repository root (from the release zip, use the llama.cpp checkout you
+passed as `LLAMA_CPP` in place of `src/llama_cpp_onicai_fork`):
 
 ```bash
 cmake -S src/llama_cpp_onicai_fork -B build-llama -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF -DGGML_METAL=OFF
