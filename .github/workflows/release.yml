@@ -18,6 +18,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # The release notes are written and committed with the version bump (the
+      # release skill), so a missing file fails here, before any build time.
+      - name: Check the release notes
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ ! -s "docs/release-notes/${TAG}.md" ]; then
+            echo "ERROR: docs/release-notes/${TAG}.md is missing. Write it with"
+            echo "scripts/make-release-summary.txt and commit it with the version bump"
+            echo "(see .claude/skills/llama_cpp_canister-release)."
+            exit 1
+          fi
+
       # BOTH halves of CI must be green. They test different things and neither
       # covers the other:
       #   cicd-linux : all-static + the wasm QA, run against the Docker-built
@@ -153,10 +166,20 @@ jobs:
           cp out/llama_cpp.wasm        llama_cpp.wasm
           cp out/llama_cpp.wasm.sha256 llama_cpp.wasm.sha256
 
+      # The body: the notes committed with the version bump, the commits since the
+      # previous release, then how to reproduce and verify the wasm.
       - name: Write release notes
+        env:
+          TAG: ${{ github.event.inputs.tag }}
         run: |
           set -euo pipefail
-          cat > RELEASE_NOTES.md <<EOF
+          {
+            cat "docs/release-notes/${TAG}.md"
+            echo
+            scripts/make-release-desc.sh "${TAG}"
+            echo
+          } > RELEASE_NOTES.md
+          cat >> RELEASE_NOTES.md <<EOF
           ## Reproducible build
 
           | | |

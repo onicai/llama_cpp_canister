@@ -59,6 +59,8 @@ You can just grab the latest [release](https://github.com/onicai/llama_cpp_canis
 - No need to clone the repo. The zip has what the steps below need: the wasm, `icp.yaml`, `requirements.txt`, the upload, download and log-monitor scripts, the `test/` smoke tests, the model guides in `docs/`, and the classifier example in `examples/classifier/` (its GGUF conversion needs a llama.cpp checkout, see `docs/README-classifier-training.md`).
 - No need to build the wasm. It is included in the release zip.
 
+Each release has notes on its GitHub page: what changed, what an app must change, and the commits since the previous release. The summary part is also in `docs/release-notes/` in the zip and the repository.
+
 The build files (`Makefile` and its `make ...` targets, `docker/`, `icpp.toml`, the C++ sources) and the contributor guides are not in the zip. They are in the [repository](https://github.com/onicai/llama_cpp_canister).
 
 # Set up
