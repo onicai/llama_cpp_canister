@@ -272,10 +272,9 @@ void expect_refused(MockIC &mockIC, const std::string &name,
 // The files of this test, removed before and after it: a cache left by an
 // earlier run would be continued instead of started
 void remove_restore_files(const std::string &dir) {
-  for (const std::string name :
-       {"orig.cache", "ctrl.cache", "straight.cache", "junk.cache",
-        "badtoken.cache", "x.icppfmt", "x.logits", "lfm.cache",
-        "lfmup.cache"}) {
+  for (const std::string name : {"orig.cache", "ctrl.cache", "straight.cache",
+                                 "junk.cache", "badtoken.cache", "x.icppfmt",
+                                 "x.logits", "lfm.cache", "lfmup.cache"}) {
     std::error_code ec;
     for (const std::string suffix : {"", ".icppfmt", ".logits"}) {
       std::filesystem::remove(dir + name + suffix, ec);
@@ -487,16 +486,15 @@ void test_prompt_cache_restore(MockIC &mockIC) {
   // the last token, so it refuses to stamp an upload, and refuses a cache
   // without logits rather than saving a shortened one. Skipped without the
   // model, as in CI.
-  const std::string lfm =
-      "models/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/"
-      "LFM2.5-1.2B-Instruct-Q4_K_M.gguf";
+  const std::string lfm = "models/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/"
+                          "LFM2.5-1.2B-Instruct-Q4_K_M.gguf";
   if (!std::filesystem::exists(lfm)) {
     std::cout << RESTORE << "SKIP the hybrid-model checks: " << lfm
               << " not found" << std::endl;
   } else {
     {
-      std::vector<std::string> a = {"--model", lfm, "--no-warmup",
-                                    "--ctx-size", "512"};
+      std::vector<std::string> a = {"--model", lfm, "--no-warmup", "--ctx-size",
+                                    "512"};
       CandidTypeRecord in;
       in.append("args", CandidTypeVecText{a});
       mockIC.run_test(RESTORE + "load LFM2.5", load_model,
@@ -526,8 +524,8 @@ void test_prompt_cache_restore(MockIC &mockIC) {
             caller);
     restore_check(r.label == "Err" &&
                       r.error.find("recurrent memory") != std::string::npos,
-                  "LFM2.5 continued a cache without logits: " + r.label +
-                      " " + r.error);
+                  "LFM2.5 continued a cache without logits: " + r.label + " " +
+                      r.error);
     restore_check(read_file(dir + "lfm.cache") == lfm_bytes &&
                       read_file(dir + "lfm.cache.icppfmt") == lfm_stamp,
                   "the refused LFM2.5 cache changed");
