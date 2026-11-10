@@ -60,14 +60,14 @@ void test_cycle_balance(MockIC &mockIC) {
   // ACTUAL C++ output of send_access_denied_api_error (matches
   // test_cache_cleanup's hardcoded value).
   const std::string ACCESS_DENIED_API_ERROR =
-      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696"
+      "4449444c026b01c5fed201016b01b0ad8fcd0c71010000000d4163636573732044656e696"
       "564";
   // ACTUAL C++ output of get_cycle_balance at the mock's initial balance and
   // time 123456789: Ok record { cycle_balance = 3_000_000_000_000;
   // updated_at_ns = 123_456_789 }
   const std::string LIVE_BALANCE =
-      "4449444c026c028dc6e9f90578c392f7c6097d6b01bc8a"
-      "010001010015cd5b070000000080e0bcefa757";
+      "4449444c026b01bc8a01016c028dc6e9f90578c392f7c6"
+      "097d01000015cd5b070000000080e0bcefa757";
 
   int extra_failures = 0;
 

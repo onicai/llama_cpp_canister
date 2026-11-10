@@ -8,8 +8,8 @@ python-dotenv
 # toolchain avoids style/check drift across PRs; icpp-pro's
 # `make check-sibling-pins` verifies the pins stay identical. Older
 # pylint+astroid crashed on Python 3.12+ syntax (PEP 695 `type X = ...`).
-black==26.3.1
-pylint==3.3.4
+black==26.10.1
+pylint==4.0.9
 mypy==1.13.0
 
 # Dev/debug only: used by scripts/wasm_harness.py to run canister wasm under a

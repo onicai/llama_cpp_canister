@@ -17,9 +17,8 @@ void test_admin_rbac(MockIC &mockIC) {
 
   // ApiError "Access Denied"
   // didc encode '(variant { Err = variant { Other = "Access Denied" } })'
-  // Note: Actual wire format may have different type table ordering
   const std::string ACCESS_DENIED_API_ERROR =
-      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e6965"
+      "4449444c026b01c5fed201016b01b0ad8fcd0c71010000000d4163636573732044656e6965"
       "64";
 
   // OutputRecordResult Access Denied (status_code = 401)
@@ -27,8 +26,8 @@ void test_admin_rbac(MockIC &mockIC) {
   // output = ""; error = "Access Denied"; status_code = 401; prompt_remaining =
   // ""; generated_eog = false } }
   const std::string ACCESS_DENIED_OUTPUT_RECORD =
-      "4449444c026c06819e846471838fe5800671c897a79907719aa1b2f90c7adb92a2c90d71cd"
-      "d9e6b30e7e6b01c5fed2010001010000000d4163636573732044656e69656491010000";
+      "4449444c026b01c5fed201016c06819e846471838fe5800671c897a79907719aa1b2f90c7a"
+      "db92a2c90d71cdd9e6b30e7e01000000000d4163636573732044656e69656491010000";
 
   // Empty input for parameterless endpoints
   // didc encode '()'

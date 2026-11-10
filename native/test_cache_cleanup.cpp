@@ -120,7 +120,7 @@ void test_cache_cleanup(MockIC &mockIC) {
   const std::string EMPTY_INPUT = "4449444c0000";
   // didc encode '(variant { Err = variant { Other = "Access Denied" } })'
   const std::string ACCESS_DENIED_API_ERROR =
-      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696"
+      "4449444c026b01c5fed201016b01b0ad8fcd0c71010000000d4163636573732044656e696"
       "564";
 
   int extra_failures = 0;

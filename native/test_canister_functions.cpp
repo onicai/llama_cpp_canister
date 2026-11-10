@@ -30,13 +30,13 @@ void test_canister_functions(MockIC &mockIC) {
   // '()' -> '(variant { Ok = record { status_code = 200 : nat16} })'
   mockIC.run_test(std::string(__func__) + ": " + "health", health,
                   "4449444c0000",
-                  "4449444c026c019aa1b2f90c7a6b01bc8a0100010100c800",
+                  "4449444c026b01bc8a01016c019aa1b2f90c7a010000c800",
                   silent_on_trap, anonymous_principal);
 
   // '()' -> '(variant { Err = record { Other = "Model not yet loaded"} })'
   mockIC.run_test(
       std::string(__func__) + ": " + "ready", ready, "4449444c0000",
-      "4449444c026b01b0ad8fcd0c716b01c5fed2010001010000144d6f64656c206e6f7420796574206c6f61646564",
+      "4449444c026b01c5fed201016b01b0ad8fcd0c7101000000144d6f64656c206e6f7420796574206c6f61646564",
       silent_on_trap, anonymous_principal);
 
   // -----------------------------------------------------------------------------
@@ -55,7 +55,7 @@ void test_canister_functions(MockIC &mockIC) {
   mockIC.run_test(
       std::string(__func__) + ": " + "set_access Err", set_access,
       "4449444c016c0184ab8c93077a01000000",
-      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696564",
+      "4449444c026b01c5fed201016b01b0ad8fcd0c71010000000d4163636573732044656e696564",
       silent_on_trap, anonymous_principal);
 
   // Only controller can call get_access
@@ -63,7 +63,7 @@ void test_canister_functions(MockIC &mockIC) {
   mockIC.run_test(
       std::string(__func__) + ": " + "get_access Err", get_access,
       "4449444c0000",
-      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696564",
+      "4449444c026b01c5fed201016b01b0ad8fcd0c71010000000d4163636573732044656e696564",
       silent_on_trap, anonymous_principal);
 
   // '(record { level = 0 : nat16 })' ->
@@ -71,14 +71,14 @@ void test_canister_functions(MockIC &mockIC) {
   mockIC.run_test(
       std::string(__func__) + ": " + "set_access to 0", set_access,
       "4449444c016c0184ab8c93077a01000000",
-      "4449444c026c02d9b2b5ca047184ab8c93077a6b01bc8a0100010100104f6e6c7920636f6e74726f6c6c6572730000",
+      "4449444c026b01bc8a01016c02d9b2b5ca047184ab8c93077a010000104f6e6c7920636f6e74726f6c6c6572730000",
       silent_on_trap, my_principal);
 
   // '()' ->
   // '(variant { Ok = record { level = 0 : nat16; explanation = "Only controllers"; } } )'
   mockIC.run_test(
       std::string(__func__) + ": " + "get_access 0", get_access, "4449444c0000",
-      "4449444c026c02d9b2b5ca047184ab8c93077a6b01bc8a0100010100104f6e6c7920636f6e74726f6c6c6572730000",
+      "4449444c026b01bc8a01016c02d9b2b5ca047184ab8c93077a010000104f6e6c7920636f6e74726f6c6c6572730000",
       silent_on_trap, my_principal);
 
   // '(record { level = 1 : nat16 })' ->
@@ -86,13 +86,13 @@ void test_canister_functions(MockIC &mockIC) {
   mockIC.run_test(
       std::string(__func__) + ": " + "set_access to 1", set_access,
       "4449444c016c0184ab8c93077a01000100",
-      "4449444c026c02d9b2b5ca047184ab8c93077a6b01bc8a010001010014416c6c2065786365707420616e6f6e796d6f75730100",
+      "4449444c026b01bc8a01016c02d9b2b5ca047184ab8c93077a01000014416c6c2065786365707420616e6f6e796d6f75730100",
       silent_on_trap, my_principal);
 
   // '()' ->
   // '(variant { Ok = record { level = 1 : nat16; explanation = "All except anonymous"; } } )'
   mockIC.run_test(
       std::string(__func__) + ": " + "get_access 1", get_access, "4449444c0000",
-      "4449444c026c02d9b2b5ca047184ab8c93077a6b01bc8a010001010014416c6c2065786365707420616e6f6e796d6f75730100",
+      "4449444c026b01bc8a01016c02d9b2b5ca047184ab8c93077a01000014416c6c2065786365707420616e6f6e796d6f75730100",
       silent_on_trap, my_principal);
 }

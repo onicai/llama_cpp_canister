@@ -25,7 +25,7 @@ void test_memory_status(MockIC &mockIC) {
   // ACTUAL C++ output of send_access_denied_api_error (same hardcoded value
   // used by test_cycle_balance / test_cache_cleanup).
   const std::string ACCESS_DENIED_API_ERROR =
-      "4449444c026b01b0ad8fcd0c716b01c5fed20100010100000d4163636573732044656e696"
+      "4449444c026b01c5fed201016b01b0ad8fcd0c71010000000d4163636573732044656e696"
       "564";
 
   std::cout << "\n========== test_memory_status ==========\n";
