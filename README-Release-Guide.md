@@ -13,19 +13,41 @@ How to create a new release of `llama_cpp_canister`.
 
 ## Steps
 
-### 1. Bump the version
+### 1. Open a release pull request
 
-Update `version.txt` in the repo root to the desired release version (e.g. `0.8.0`).
-Commit and push to `main`.
+On a branch `release/v<version>` off `main`:
 
-### 2. Trigger the release workflow
+- update `version.txt` in the repo root to the release version (e.g. `0.8.0`);
+- add the release notes, `docs/release-notes/v<version>.md`, written with
+  `scripts/make-release-summary.txt` (the release workflow refuses a tag without them).
+
+Commit both and open a pull request into `main`.
+
+### 2. Review the release pull request
+
+Before it is merged, the release pull request gets:
+
+- the reviews in the README's [Contributing](README.md#contributing) section;
+- a deep code review, `/code-review ultra` on the pull request, started by a maintainer
+  (it is billed);
+- a Claude Security scan, `/claude-security` "Scan changes" at high effort, of the release's
+  changes: the range from the previous release tag to the release branch. The pull request
+  itself only changes `version.txt` and the notes.
+
+Fix their findings before merging; a code fix goes through its own pull request into `main`,
+and the release branch is then rebased on it.
+
+Squash-merge with the commit subject exactly `v<version>`, without the `(#NN)` suffix:
+`scripts/make-release-desc.sh` leaves bare version commits out of the next changelog.
+
+### 3. Trigger the release workflow
 
 1. Go to **Actions** > **Release llama_cpp_canister** in the GitHub UI.
 2. Click **Run workflow**.
 3. Enter the tag for the release (e.g. `v0.8.0`).
 4. Click **Run workflow** to start.
 
-### 3. What the workflow does
+### 4. What the workflow does
 
 | Step                      | Description                                                                                  |
 | ------------------------- | -------------------------------------------------------------------------------------------- |
@@ -43,7 +65,7 @@ of which this workflow is gated on.
 The release page shows, at the top, the wasm sha256 and the two commits it was built from
 (this repo, and the pinned `llama_cpp_onicai_fork`), plus the commands to reproduce it.
 
-### 4. Post-release verification
+### 5. Post-release verification
 
 After the workflow completes:
 

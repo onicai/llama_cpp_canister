@@ -3,7 +3,7 @@ name: new-feature-development
 description: End-to-end lifecycle for adding a new capability to llama_cpp_canister — design, implement, test, document, and verify with no regressions
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Bash, Read, Edit, Write, AskUserQuestion
+allowed-tools: Bash, Read, Edit, Write, AskUserQuestion, Skill
 ---
 
 # New Feature Development for llama_cpp_canister
@@ -154,3 +154,19 @@ self-attribution, never `--no-verify`.
 ```bash
 git add -A && git commit -m "<concise single-line summary>"
 ```
+
+## 11. Review and open the pull request
+
+Before every push to the PR, run the reviews in the README's Contributing
+section, in this order, each until it has nothing left to address:
+
+1. `/simplify` first, on a larger change.
+2. `coderabbit review --base main --agent` (never `--use-credits`: it bills).
+3. `/code-review` on the branch diff.
+4. `/security-review` on the branch diff.
+
+Then push and open the PR into `main`; its description lists what each review
+found and what was done about it. CodeRabbit also reviews the PR on GitHub:
+handle its comments with `/coderabbit:autofix`, and let it review each update.
+When the change touches `CLAUDE.md`, skills or other instruction files, also run
+`/claude-api prompt-audit` on them.

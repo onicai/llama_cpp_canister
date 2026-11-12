@@ -4,7 +4,7 @@ description: Create a new GitHub release for llama_cpp_canister
 disable-model-invocation: false
 user-invocable: true
 argument-hint: <new-version> [major|minor|patch|rc|final]
-allowed-tools: Bash, Read, Edit, Write, AskUserQuestion
+allowed-tools: Bash, Read, Edit, Write, AskUserQuestion, Skill
 ---
 
 # Release llama_cpp_canister
@@ -118,19 +118,44 @@ upstream llama.cpp's: a summary, then the generated changelog.
 The workflow publishes the release body as: these notes, then the output of
 `scripts/make-release-desc.sh`, then the "Reproducible build" section.
 
-## 5. Bump version
+## 5. Open the release PR
 
 Update `version.txt` to the new version (just the version string, no trailing newline beyond what was there).
 
-Commit it together with the release notes of step 4, and push:
+Commit it together with the release notes of step 4 on a release branch, push, and open a PR:
 
 ```bash
+git checkout -b release/v<NEW_VERSION>
 git add version.txt docs/release-notes/v<NEW_VERSION>.md
 git commit -m "v<NEW_VERSION>"
-git push origin main
+git push -u origin release/v<NEW_VERSION>
+gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION>" --body-file docs/release-notes/v<NEW_VERSION>.md
 ```
 
-## 6. Trigger release workflow
+## 6. Review and merge the release PR
+
+1. The PR needs the reviews listed in the README's Contributing section before it is merged.
+2. Ask the user to run `/code-review ultra <PR#>` on it: it is billed and only the user can
+   start it.
+3. Run `/claude-security` "Scan changes" at high effort on the release's changes: the range
+   `<PREV>..release/v<NEW_VERSION>`, where `<PREV>` is the previous release named in the
+   changelog heading of step 4. The PR diff alone is only `version.txt` and the notes.
+4. Fix the findings of both like the other reviews'. A code fix goes through its own PR into
+   `main`; then rebase the release branch on `main`, and update the notes if the fix changes them.
+5. Do not merge it yourself unless the user says so. Squash-merge with the bare tag as the
+   subject, so `scripts/make-release-desc.sh` leaves it out of the next changelog:
+
+   ```bash
+   gh pr merge <PR#> --repo onicai/llama_cpp_canister --squash --subject "v<NEW_VERSION>" --body "" --delete-branch
+   git checkout main
+   git pull origin main
+   ```
+
+The merge commit triggers no CI (`version.txt` and `docs/` are in neither workflow's path
+filter). If a fix PR was merged into `main` during the review, wait for its CI runs and
+repeat step 2 before going on.
+
+## 7. Trigger release workflow
 
 ```bash
 gh workflow run release.yml --repo onicai/llama_cpp_canister -f tag=v<NEW_VERSION>
@@ -143,7 +168,7 @@ sleep 10
 gh run list --repo onicai/llama_cpp_canister --workflow=release.yml --limit 1 --json databaseId,status --jq '.[0]'
 ```
 
-## 7. Monitor release workflow
+## 8. Monitor release workflow
 
 Poll `gh run view <run_id> --repo onicai/llama_cpp_canister` every 60 seconds for up to 45 minutes.
 
@@ -155,9 +180,9 @@ At each check, report the current status to the user.
 
 If the run fails, report the failure and abort. Include the URL to the failed run.
 
-If the run succeeds, proceed to step 8.
+If the run succeeds, proceed to step 9.
 
-## 8. Verify release
+## 9. Verify release
 
 ```bash
 gh release view v<NEW_VERSION> --repo onicai/llama_cpp_canister
@@ -190,11 +215,12 @@ grep -n -E '^## (Changelog|Reproducible build)' /tmp/rel-body.md
 
 `diff` prints nothing, and `grep` shows the changelog heading before "Reproducible build".
 
-## 9. Summary
+## 10. Summary
 
 Print a summary of what was done:
 - Version bumped from OLD to NEW
 - Tag: v<NEW_VERSION>, and whether it is a prerelease
+- The release PR URL, and what each review found and what was done about it
 - Release URL
 - Zip download URL
 - wasm sha256, the commit it was built from, and the pinned fork commit
