@@ -165,8 +165,9 @@ has nothing left to address:
 2. `/code-review` on the branch diff.
 3. `/security-review` on the branch diff.
 
-Then push and open the PR into `main`; its description lists what each review
-found and what was done about it. CodeRabbit also reviews the PR on GitHub:
+Commit the fixes they make, then push and open the PR into `main`
+(`git push -u origin feature/<name>`, `gh pr create`); its description lists
+what each review found and what was done about it. CodeRabbit also reviews the PR on GitHub:
 handle its comments with `/coderabbit:autofix`, and let it review each update.
 When the change touches `CLAUDE.md`, skills or other instruction files, also run
 `/claude-api prompt-audit` on them.
