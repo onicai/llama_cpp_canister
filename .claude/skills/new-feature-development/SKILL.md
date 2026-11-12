@@ -96,8 +96,8 @@ source /opt/miniconda3/etc/profile.d/conda.sh && conda activate llama_cpp_canist
 # Format the new files with the repo's clang-format:
 "$HOME/.icpp/wasi-sdk/wasi-sdk-25.0/bin/clang-format" --style=file -i src/<feature>.* native/test_<feature>.*
 
-# Native unit tests:
-icpp build-native && ./build-native/mockic.exe
+# Native unit tests (under icpp run-native's memory guard; never run mockic.exe directly):
+make test-llm-native
 
 # WASM build + local deploy (regenerates declarations):
 # Deploy as the identity the tests call as: since icpp-pro 6.0.0 pytest is told
@@ -157,13 +157,13 @@ git add -A && git commit -m "<concise single-line summary>"
 
 ## 11. Review and open the pull request
 
-Before every push to the PR, run the reviews in the README's Contributing
-section, in this order, each until it has nothing left to address:
+Before every push to the PR, on a larger change run `/simplify` first. Then run
+the reviews of the README's Contributing section in this order, each until it
+has nothing left to address:
 
-1. `/simplify` first, on a larger change.
-2. `coderabbit review --base main --agent` (never `--use-credits`: it bills).
-3. `/code-review` on the branch diff.
-4. `/security-review` on the branch diff.
+1. `coderabbit review --base main --agent` (never `--use-credits`: it bills).
+2. `/code-review` on the branch diff.
+3. `/security-review` on the branch diff.
 
 Then push and open the PR into `main`; its description lists what each review
 found and what was done about it. CodeRabbit also reviews the PR on GitHub:

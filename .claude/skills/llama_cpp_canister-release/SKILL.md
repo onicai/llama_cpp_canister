@@ -134,46 +134,55 @@ gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION
 
 ## 6. Review and merge the release PR
 
+When the user resumes a release here, after a fix PR for example, skip steps 1-5 and check
+out the release branch: `git checkout release/v<NEW_VERSION>`.
+
 1. The PR needs the reviews listed in the README's Contributing section before it is merged.
+   It changes no code, so the tests are the CI runs of step 2 on `main`.
 2. Ask the user to run `/code-review ultra <PR#>` on it: it is billed and only the user can
    start it.
 3. Run `/claude-security` "Scan changes" at high effort on the release's changes: the range
-   `<PREV>..release/v<NEW_VERSION>`, where `<PREV>` is the previous release named in the
-   changelog heading of step 4. The PR diff alone is only `version.txt` and the notes.
+   `<PREV>..origin/release/v<NEW_VERSION>`, where `<PREV>` is the previous release named in the
+   changelog heading of step 4. The PR diff alone is only `version.txt` and the notes. When
+   step 4 found no previous release, run "Scan codebase" at high effort instead. Note the
+   scanned base, the `main` commit the scan covered up to:
+
+   ```bash
+   git fetch origin
+   git merge-base origin/main origin/release/v<NEW_VERSION>   # the scanned base
+   ```
 4. Fix the findings of both like the other reviews'. A code fix goes through its own PR into
-   `main`; then rebase the release branch on `main`, update the notes if the fix changes them,
-   and push the branch, so the PR carries what will be merged:
+   `main`. Then rebase the release branch, update the notes if the fix changes them, push, and
+   scan what came in from `main`:
 
    ```bash
    git checkout release/v<NEW_VERSION>
-   git fetch origin main
+   git fetch origin
    git rebase origin/main
    git push --force-with-lease origin release/v<NEW_VERSION>
    ```
 
-   Then run the `/claude-security` scan again on the commits the rebase added
-   (`<old base>..origin/main`), and fix its findings the same way.
-5. Right before merging, check that nothing landed on `main` since the last rebase:
+   Run the `/claude-security` scan on `<scanned base>..origin/main`, fix its findings the same
+   way, and note `origin/main` as the new scanned base.
+5. Post what each review found and what was done about it as a PR comment
+   (`gh pr comment <PR#> --body-file <file>`).
+6. Do not merge it yourself unless the user says so. Right before merging, check that the PR
+   branch on GitHub is the one you scanned, and that `main` has not moved past the scanned base:
 
    ```bash
-   git fetch origin main
-   git merge-base --is-ancestor origin/main release/v<NEW_VERSION> && echo "up to date"
-   git rev-parse origin/main   # note it: the scanned base
+   git fetch origin
+   test "$(git rev-parse origin/release/v<NEW_VERSION>)" = "$(git rev-parse release/v<NEW_VERSION>)" && echo "branch ok"
+   test "$(git rev-parse origin/main)" = "<scanned base>" && echo "main ok"
    ```
 
-   If it is not up to date, go back to item 4: rebase, push, and scan the new commits.
-6. Do not merge it yourself unless the user says so. Squash-merge with the bare tag as the
-   subject, so `scripts/make-release-desc.sh` leaves it out of the next changelog:
+   If either fails, go back to item 4. Then squash-merge with the bare tag as the subject, so
+   `scripts/make-release-desc.sh` leaves it out of the next changelog:
 
    ```bash
    gh pr merge <PR#> --repo onicai/llama_cpp_canister --squash --subject "v<NEW_VERSION>" --body "" --delete-branch
    git checkout main
    git pull origin main
-   git log --oneline <scanned base>..HEAD   # must show only the v<NEW_VERSION> commit
    ```
-
-   If anything else landed between the check and the merge, scan it as in item 4 before
-   going on.
 
 The merge commit triggers no CI (`version.txt` and `docs/` are in neither workflow's path
 filter). If a fix PR was merged into `main` during the review, wait for its CI runs and
@@ -181,12 +190,19 @@ repeat step 2 before going on.
 
 ## 7. Trigger release workflow
 
-The workflow builds the head of `main` at dispatch time. Check it is still the release
-commit of step 6, then dispatch:
+The workflow builds the head of `main` at dispatch time. Every commit on `main` past the
+scanned base, other than the `v<NEW_VERSION>` commit, must have been scanned:
 
 ```bash
 git fetch origin main
-git log --oneline -1 origin/main   # must be the v<NEW_VERSION> commit of step 6
+git log --oneline <scanned base>..origin/main
+```
+
+If anything else is listed, scan it as in step 6 item 4 and note `origin/main` as the new
+scanned base. When the scan needs a fix, ask the user before going on: the fix goes into `main`
+through its own PR, then this check and step 2 are repeated. Only then dispatch:
+
+```bash
 gh workflow run release.yml --repo onicai/llama_cpp_canister -f tag=v<NEW_VERSION>
 ```
 
@@ -252,5 +268,5 @@ Print a summary of what was done:
 - The release PR URL, and what each review found and what was done about it
 - Release URL
 - Zip download URL
-- wasm sha256, the commit it was built from (must be the release commit of step 6), and the
+- wasm sha256, the commit it was built from (the `main` head checked in step 7), and the
   pinned fork commit

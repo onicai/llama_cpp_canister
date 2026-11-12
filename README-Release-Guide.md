@@ -31,18 +31,24 @@ Before it is merged, the release pull request gets:
 - a deep code review, `/code-review ultra` on the pull request, started by a maintainer
   (it is billed);
 - a Claude Security scan, `/claude-security` "Scan changes" at high effort, of the release's
-  changes: the range from the previous release tag to the release branch. The pull request
-  itself only changes `version.txt` and the notes.
+  changes: the range from the previous release tag to the release branch (with no previous
+  release, a "Scan codebase" instead). The pull request itself only changes `version.txt` and
+  the notes.
 
 Fix their findings before merging; a code fix goes through its own pull request into `main`,
 and the release branch is then rebased on it. Whatever a rebase adds from `main`, a fix or any
 other merge, gets the Claude Security scan too, and the release branch must be up to date with
-`main` when it is merged, so the release contains only scanned code.
+`main` when it is merged, so the release contains only scanned code. The pull request lists
+what each review found and what was done about it.
 
 Squash-merge with the commit subject exactly `v<version>`, without the `(#NN)` suffix:
 `scripts/make-release-desc.sh` leaves bare version commits out of the next changelog.
 
 ### 3. Trigger the release workflow
+
+The workflow builds the head of `main` at the moment it starts. Before starting it, check that
+every commit on `main` since the scanned code, other than the `v<version>` commit, has had the
+Claude Security scan too; scan whatever has not.
 
 1. Go to **Actions** > **Release llama_cpp_canister** in the GitHub UI.
 2. Click **Run workflow**.
