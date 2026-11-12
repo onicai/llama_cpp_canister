@@ -145,6 +145,7 @@ gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION
    and push the branch, so the PR carries what will be merged:
 
    ```bash
+   git checkout release/v<NEW_VERSION>
    git fetch origin main
    git rebase origin/main
    git push --force-with-lease origin release/v<NEW_VERSION>
@@ -157,6 +158,7 @@ gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION
    ```bash
    git fetch origin main
    git merge-base --is-ancestor origin/main release/v<NEW_VERSION> && echo "up to date"
+   git rev-parse origin/main   # note it: the scanned base
    ```
 
    If it is not up to date, go back to item 4: rebase, push, and scan the new commits.
@@ -167,7 +169,11 @@ gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION
    gh pr merge <PR#> --repo onicai/llama_cpp_canister --squash --subject "v<NEW_VERSION>" --body "" --delete-branch
    git checkout main
    git pull origin main
+   git log --oneline <scanned base>..HEAD   # must show only the v<NEW_VERSION> commit
    ```
+
+   If anything else landed between the check and the merge, scan it as in item 4 before
+   going on.
 
 The merge commit triggers no CI (`version.txt` and `docs/` are in neither workflow's path
 filter). If a fix PR was merged into `main` during the review, wait for its CI runs and
@@ -175,7 +181,12 @@ repeat step 2 before going on.
 
 ## 7. Trigger release workflow
 
+The workflow builds the head of `main` at dispatch time. Check it is still the release
+commit of step 6, then dispatch:
+
 ```bash
+git fetch origin main
+git log --oneline -1 origin/main   # must be the v<NEW_VERSION> commit of step 6
 gh workflow run release.yml --repo onicai/llama_cpp_canister -f tag=v<NEW_VERSION>
 ```
 
@@ -241,4 +252,5 @@ Print a summary of what was done:
 - The release PR URL, and what each review found and what was done about it
 - Release URL
 - Zip download URL
-- wasm sha256, the commit it was built from, and the pinned fork commit
+- wasm sha256, the commit it was built from (must be the release commit of step 6), and the
+  pinned fork commit
