@@ -35,7 +35,9 @@ Before it is merged, the release pull request gets:
   itself only changes `version.txt` and the notes.
 
 Fix their findings before merging; a code fix goes through its own pull request into `main`,
-and the release branch is then rebased on it.
+and the release branch is then rebased on it. Whatever a rebase adds from `main`, a fix or any
+other merge, gets the Claude Security scan too, and the release branch must be up to date with
+`main` when it is merged, so the release contains only scanned code.
 
 Squash-merge with the commit subject exactly `v<version>`, without the `(#NN)` suffix:
 `scripts/make-release-desc.sh` leaves bare version commits out of the next changelog.

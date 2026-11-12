@@ -149,7 +149,18 @@ gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION
    git rebase origin/main
    git push --force-with-lease origin release/v<NEW_VERSION>
    ```
-5. Do not merge it yourself unless the user says so. Squash-merge with the bare tag as the
+
+   Then run the `/claude-security` scan again on the commits the rebase added
+   (`<old base>..origin/main`), and fix its findings the same way.
+5. Right before merging, check that nothing landed on `main` since the last rebase:
+
+   ```bash
+   git fetch origin main
+   git merge-base --is-ancestor origin/main release/v<NEW_VERSION> && echo "up to date"
+   ```
+
+   If it is not up to date, go back to item 4: rebase, push, and scan the new commits.
+6. Do not merge it yourself unless the user says so. Squash-merge with the bare tag as the
    subject, so `scripts/make-release-desc.sh` leaves it out of the next changelog:
 
    ```bash
