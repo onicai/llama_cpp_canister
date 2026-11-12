@@ -141,7 +141,14 @@ gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION
    `<PREV>..release/v<NEW_VERSION>`, where `<PREV>` is the previous release named in the
    changelog heading of step 4. The PR diff alone is only `version.txt` and the notes.
 4. Fix the findings of both like the other reviews'. A code fix goes through its own PR into
-   `main`; then rebase the release branch on `main`, and update the notes if the fix changes them.
+   `main`; then rebase the release branch on `main`, update the notes if the fix changes them,
+   and push the branch, so the PR carries what will be merged:
+
+   ```bash
+   git fetch origin main
+   git rebase origin/main
+   git push --force-with-lease origin release/v<NEW_VERSION>
+   ```
 5. Do not merge it yourself unless the user says so. Squash-merge with the bare tag as the
    subject, so `scripts/make-release-desc.sh` leaves it out of the next changelog:
 

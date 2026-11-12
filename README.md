@@ -1313,7 +1313,7 @@ Then rebuild with `icpp build-wasm`.
   - a local CodeRabbit review of the branch: `coderabbit review --base main --agent`;
   - a code review and a security review of the branch (in Claude Code: `/code-review` and `/security-review`);
   - CodeRabbit's review on GitHub, with each comment fixed or answered;
-  - all tests pass: `make test-llm-native`, `make test-llm-wasm`, and the `cicd-linux` and `cicd-mac` CI runs.
+  - all tests pass: `make test-llm-native`, `make test-llm-wasm`, and the `cicd-linux` and `cicd-mac` CI runs the change triggers (a release pull request, which changes only `version.txt` and its notes, triggers none: it relies on the runs on `main`).
 
   Each review is repeated until it has nothing left to address. The pull request lists each review's findings and what was done about them.
 - A release pull request also gets a deep code review (`/code-review ultra`) and a Claude Security scan of the release's changes (`/claude-security` "Scan changes", high effort), see [README-Release-Guide.md](README-Release-Guide.md).
