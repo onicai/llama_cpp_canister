@@ -6,8 +6,8 @@ on:
     # The release skill's branches: release/v* holds only main plus the version
     # bump, release-base/v* an old release. Neither needs CI of its own.
     branches-ignore:
-      - "release/v*"
-      - "release-base/v*"
+      - "release/v[0-9]*"
+      - "release-base/v[0-9]*"
     paths:
       - "scripts/**"
       - "native/**"

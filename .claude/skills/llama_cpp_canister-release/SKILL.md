@@ -216,7 +216,9 @@ git log --oneline <scanned base>..HEAD               # must list only the v<NEW_
 merged after the scan: run `/claude-security` "Scan changes" at high effort on
 `<scanned base>..HEAD`, record `HEAD` as the new scanned base on the release PR, and fix the
 findings like the other reviews', after asking the user. Each fix goes into `main` through its
-own PR; then pull again, take the new head as `S`, and scan it the same way.
+own PR; the release branch is gone by now, so a fix that changes what an app must know also
+updates `docs/release-notes/v<NEW_VERSION>.md` in that PR. Then pull again, take the new head
+as `S`, and scan it the same way.
 
 Then, in this order:
 
