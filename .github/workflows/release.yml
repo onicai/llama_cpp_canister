@@ -21,10 +21,14 @@ jobs:
       # The release builds the head of main at dispatch time. It must be the commit
       # the release skill reviewed and scanned: a merge that lands in between would
       # otherwise ship unscanned code.
-      - name: Check the commit is the scanned one
+      - name: Check the commit is the scanned one on main
         env:
           EXPECTED_SHA: ${{ github.event.inputs.expected_sha }}
         run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "ERROR: dispatched on ${GITHUB_REF}; a release is built from main only."
+            exit 1
+          fi
           if [ "${GITHUB_SHA}" != "${EXPECTED_SHA}" ]; then
             echo "ERROR: main is at ${GITHUB_SHA}, but the release was scanned at ${EXPECTED_SHA}."
             echo "Scan the commits in between, then dispatch again."

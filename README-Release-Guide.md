@@ -45,7 +45,8 @@ Take the head of `main` after the merge as `S`, and run a Claude Security scan,
 to `S` (with no previous release, a "Scan codebase" instead). Fix its findings through their
 own pull requests into `main`, then scan what they added and take the new head as `S`.
 
-Then trigger the workflow with `S`; it refuses to build when `main` has moved past it, so the
+Wait until the `cicd-linux` and `cicd-mac` runs on `main` have finished and succeeded (a scan
+fix triggers them), then trigger the workflow from `main` with `S`; it refuses to build when `main` has moved past it, so the
 release contains only scanned code:
 
 1. Go to **Actions** > **Release llama_cpp_canister** in the GitHub UI.
