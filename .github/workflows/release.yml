@@ -13,6 +13,11 @@ on:
 permissions:
   contents: write  # to create the release
 
+# One release at a time, so two runs cannot both find a tag new and publish under it.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   check-ci-status:
     name: Check if CI succeeded
@@ -44,8 +49,14 @@ jobs:
         env:
           TAG: ${{ github.event.inputs.tag }}
         run: |
-          if [ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]; then
+          # --exit-code: 0 = found, 2 = not found, anything else = the lookup failed.
+          rc=0
+          git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null || rc=$?
+          if [ "$rc" -eq 0 ]; then
             echo "ERROR: tag ${TAG} already exists."
+            exit 1
+          elif [ "$rc" -ne 2 ]; then
+            echo "ERROR: could not look up tag ${TAG} (git ls-remote exit ${rc})."
             exit 1
           fi
 
