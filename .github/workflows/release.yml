@@ -59,17 +59,7 @@ jobs:
       # A release makes a new tag. An existing one may point at another commit, and
       # the release step would publish this build under it.
       - name: Check the tag is new
-        run: |
-          # --exit-code: 0 = found, 2 = not found, anything else = the lookup failed.
-          rc=0
-          git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null || rc=$?
-          if [ "$rc" -eq 0 ]; then
-            echo "ERROR: tag ${TAG} already exists."
-            exit 1
-          elif [ "$rc" -ne 2 ]; then
-            echo "ERROR: could not look up tag ${TAG} (git ls-remote exit ${rc})."
-            exit 1
-          fi
+        run: scripts/check-tag-new.sh "${TAG}"
 
       # version.txt is bumped by the release PR; dispatching before it merged, or
       # with another tag, would ship a zip whose version.txt does not match.
@@ -292,15 +282,7 @@ jobs:
       # The tag check ran before the build; a tag made since then (by hand, say) would
       # get this build published under it.
       - name: Check the tag is still new
-        env:
-          TAG: ${{ github.event.inputs.tag }}
-        run: |
-          rc=0
-          git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null || rc=$?
-          if [ "$rc" -ne 2 ]; then
-            echo "ERROR: tag ${TAG} exists now, or the lookup failed (exit ${rc})."
-            exit 1
-          fi
+        run: scripts/check-tag-new.sh "${{ github.event.inputs.tag }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

@@ -157,9 +157,10 @@ A resumed release runs step 1's account check, and continues here on the release
    code, so its tests are the CI runs of step 2 on `main`.
 2. Ask the user to run `/code-review ultra <review PR#>`: it is billed and only the user can
    start it.
-3. Run `/claude-security` "Scan changes" at high effort on the review PR. Record the commit of
-   `main` the release branch is based on as a comment on the release PR
-   (`scanned base: <sha>`, from `git merge-base origin/main release/v<NEW_VERSION>`).
+3. Note the commit of `main` the release branch is based on
+   (`git merge-base origin/main origin/release/v<NEW_VERSION>`) before you start, then run
+   `/claude-security` "Scan changes" at high effort on the review PR. Record the noted sha as
+   `scanned base: <sha>` in a comment on the release PR.
 4. Fix the findings of both like the other reviews'. A code fix goes through its own PR into
    `main`; it leaves the release notes alone, which live on the release branch. Then rebase the
    release branch on it, and update the notes there when the fix changes what an app must know:
@@ -217,10 +218,14 @@ merged after the scan: run `/claude-security` "Scan changes" at high effort on
 findings like the other reviews', after asking the user. Each fix goes into `main` through its
 own PR; then pull again, take the new head as `S`, and scan it the same way.
 
-When a fix merged, wait until the CI runs it triggers are listed
-(`gh run list --repo onicai/llama_cpp_canister --commit <S>`): until then step 2 still sees
-the previous run. The path filters decide which run; a fix outside them triggers none. Repeat step 2. Then dispatch with the full sha of `S`; `release.yml` refuses to build when
-`main` has moved past it, or while CI on `main` is still running:
+Then, in this order:
+
+1. When a fix merged, wait until the CI runs it triggers are listed
+   (`gh run list --repo onicai/llama_cpp_canister --commit <S>`): until then step 2 still sees
+   the previous run. The path filters decide which runs; a fix outside them triggers none.
+2. Repeat step 2.
+3. Dispatch with the full sha of `S`. `release.yml` refuses to build when `main` has moved
+   past it, or while CI on `main` is still running:
 
 ```bash
 gh workflow run release.yml --repo onicai/llama_cpp_canister -f tag=v<NEW_VERSION> -f expected_sha=<S>

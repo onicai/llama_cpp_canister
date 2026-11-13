@@ -3,11 +3,11 @@ name: cicd-linux
 on:
   workflow_dispatch:
   push:
-    # The release process's branches: release/* holds only main plus the version
-    # bump, release-base/* an old release. Neither needs CI of its own.
+    # The release skill's branches: release/v* holds only main plus the version
+    # bump, release-base/v* an old release. Neither needs CI of its own.
     branches-ignore:
-      - "release/**"
-      - "release-base/**"
+      - "release/v*"
+      - "release-base/v*"
     paths:
       - "scripts/**"
       - "src/**"

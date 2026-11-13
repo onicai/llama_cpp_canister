@@ -58,8 +58,10 @@ release contains only scanned code:
 3. Enter the tag for the release (e.g. `v0.8.0`) and the full sha of `S`.
 4. Click **Run workflow** to start.
 
-When a run fails after it created the release, the tag exists and a new run refuses it: delete
-the partial release and its tag (`gh release delete v<version> --repo onicai/llama_cpp_canister --cleanup-tag`) before retrying.
+When a run fails in its last step, after it created the release, the tag exists and a new run
+refuses it. Check that the release is partial (assets missing) and that nobody has used it yet,
+then delete it with its tag (`gh release delete v<version> --repo onicai/llama_cpp_canister --cleanup-tag`)
+before retrying.
 
 ### 4. What the workflow does
 
