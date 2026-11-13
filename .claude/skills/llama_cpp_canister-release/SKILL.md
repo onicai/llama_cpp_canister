@@ -172,8 +172,9 @@ A resumed release runs step 1's account check, and continues here on the release
    ```
 
    Note `git rev-parse origin/main`, run the `/claude-security` scan on what the rebase brought
-   in (`<scanned base>..<that sha>`), fix its findings the same way, and record that sha as the
-   new scanned base on the release PR. Run the local
+   in, the commit range `<scanned base>..<that sha>` (commits already on `main`, so the push
+   does not matter to it), fix its findings the same way, and record that sha as the new
+   scanned base on the release PR. Run the local
    reviews again, then push (both PRs follow the branch) and refresh the release PR body:
 
    ```bash
