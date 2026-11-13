@@ -13,7 +13,7 @@ How to create a new release of `llama_cpp_canister`.
 
 ## Steps
 
-### 1. Open a release pull request
+### 1. Open the release pull request and the review pull request
 
 On a branch `release/v<version>` off `main`:
 
@@ -21,32 +21,35 @@ On a branch `release/v<version>` off `main`:
 - add the release notes, `docs/release-notes/v<version>.md`, written with
   `scripts/make-release-summary.txt` (the release workflow refuses a tag without them).
 
-Commit both and open a pull request into `main`.
+Commit both, and open two pull requests from the branch:
+
+- the **release pull request** into `main`;
+- a draft **review pull request** into `release-base/<prev>`, a branch pushed at the previous
+  release tag (rc included). Its diff is everything the release ships. It is for review only,
+  and is closed, not merged.
 
 ### 2. Review and merge the release pull request
 
-Before it is merged, the release pull request gets:
-
-- the reviews in the README's [Contributing](README.md#contributing) section;
-- a deep code review, `/code-review ultra` on the pull request, started by a maintainer
-  (it is billed).
+- The release pull request gets the reviews in the README's [Contributing](README.md#contributing)
+  section.
+- The review pull request gets a deep code review, `/code-review ultra`, started by a
+  maintainer (it is billed), and a Claude Security scan, `/claude-security` "Scan changes" at
+  high effort. Record the `main` commit the scan covered (`scanned base: <sha>`) on it.
 
 Fix their findings before merging; a code fix goes through its own pull request into `main`,
-and the release branch is then rebased on it. The pull request lists what each review found
-and what was done about it.
+the release branch is then rebased on it, and what the rebase brought in is scanned too. The
+release pull request lists what each review found and what was done about it.
 
 Squash-merge with the commit subject exactly `v<version>`, without the `(#NN)` suffix:
-`scripts/make-release-desc.sh` leaves bare version commits out of the next changelog.
+`scripts/make-release-desc.sh` leaves bare version commits out of the next changelog. Close the
+review pull request and delete `release-base/<prev>`.
 
-### 3. Scan the release and trigger the release workflow
+### 3. Trigger the release workflow
 
-Take the head of `main` after the merge as `S`, and run a Claude Security scan,
-`/claude-security` "Scan changes" at high effort, on the range from the previous release tag
-to `S` (with no previous release, a "Scan codebase" instead). Fix its findings through their
-own pull requests into `main`, then scan what they added and take the new head as `S`.
-
-Wait until the `cicd-linux` and `cicd-mac` runs on `main` have finished and succeeded (a scan
-fix triggers them), then trigger the workflow from `main` with `S`; it refuses to build when `main` has moved past it, so the
+Take the head of `main` as `S`. Everything between the scanned base and `S`, other than the
+`v<version>` commit, must have been scanned; scan what merged after the scan. Wait until the
+`cicd-linux` and `cicd-mac` runs on `main` have finished and succeeded, then trigger the
+workflow from `main` with `S`. It refuses to build when `main` has moved past `S`, so the
 release contains only scanned code:
 
 1. Go to **Actions** > **Release llama_cpp_canister** in the GitHub UI.

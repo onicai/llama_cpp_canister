@@ -1,4 +1,6 @@
 name: Release llama_cpp_canister
+# The release skill finds its run by this name.
+run-name: Release ${{ inputs.tag }}
 
 on:
   workflow_dispatch:
@@ -113,7 +115,7 @@ jobs:
           for wf in cicd-linux.yml cicd-mac.yml; do
             latest_run=$(gh run list --repo ${{ github.repository }} \
               --workflow="$wf" --branch main --limit 1 \
-              --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"')
+              --json status,conclusion --jq '.[0] // empty | "\(.status) \(.conclusion)"')
             echo "$wf (latest run on main): ${latest_run:-<no runs>}"
             if [ "$latest_run" != "completed success" ]; then
               echo "  ERROR: the latest $wf run has not finished successfully."
