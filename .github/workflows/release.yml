@@ -14,6 +14,7 @@ permissions:
   contents: write  # to create the release
 
 # One release at a time, so two runs cannot both find a tag new and publish under it.
+# GitHub keeps one pending run per group: a newer dispatch replaces a pending one.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -32,6 +33,10 @@ jobs:
         run: |
           if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
             echo "ERROR: dispatched on ${GITHUB_REF}; a release is built from main only."
+            exit 1
+          fi
+          if [[ ! "${EXPECTED_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "ERROR: expected_sha must be the full 40-character lower-case sha, got '${EXPECTED_SHA}'."
             exit 1
           fi
           if [ "${GITHUB_SHA}" != "${EXPECTED_SHA}" ]; then
@@ -60,6 +65,17 @@ jobs:
             exit 1
           fi
 
+      # version.txt is bumped by the release PR; dispatching before it merged, or
+      # with another tag, would ship a zip whose version.txt does not match.
+      - name: Check version.txt matches the tag
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ "v$(tr -d '[:space:]' < version.txt)" != "${TAG}" ]; then
+            echo "ERROR: version.txt is $(cat version.txt), but the tag is ${TAG}."
+            exit 1
+          fi
+
       # The release notes are written and committed with the version bump (the
       # release skill), so a missing file fails here, before any build time.
       - name: Check the release notes
@@ -85,22 +101,22 @@ jobs:
         run: |
           set -euo pipefail
           rc=0
-          # --branch main and --status completed are both load-bearing. Without
-          # them this reads the newest run on ANY branch: an in-flight PR run
-          # returns an empty conclusion (reported as <no runs>) and blocks the
-          # release, and a finished PR run would satisfy the gate with CI that
-          # never ran on main.
+          # --branch main is load-bearing. Without it this reads the newest run
+          # on ANY branch, and a finished PR run would satisfy the gate with CI
+          # that never ran on main. The newest run on main must have finished: a
+          # run still in progress or queued (a scan fix just merged) blocks the
+          # release, rather than an older green run letting it through.
           #
           # Deliberately NOT matched against github.sha: version.txt is in
           # neither workflow's path filter, so the release's own version-bump
           # commit triggers no CI and an exact-sha check would never pass.
           for wf in cicd-linux.yml cicd-mac.yml; do
             latest_run=$(gh run list --repo ${{ github.repository }} \
-              --workflow="$wf" --branch main --status completed --limit 1 \
-              --json conclusion --jq '.[0].conclusion')
-            echo "$wf (latest completed run on main): ${latest_run:-<no runs>}"
-            if [ "$latest_run" != "success" ]; then
-              echo "  ERROR: the latest $wf run was not successful."
+              --workflow="$wf" --branch main --limit 1 \
+              --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"')
+            echo "$wf (latest run on main): ${latest_run:-<no runs>}"
+            if [ "$latest_run" != "completed success" ]; then
+              echo "  ERROR: the latest $wf run has not finished successfully."
               rc=1
             fi
           done

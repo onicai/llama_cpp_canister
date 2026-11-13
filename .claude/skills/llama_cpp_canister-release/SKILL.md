@@ -53,14 +53,15 @@ exact-token tests on x86_64 macOS, the baseline CI enforces.
 
 ```bash
 for wf in cicd-linux.yml cicd-mac.yml; do
-  echo "$wf: $(gh run list --repo onicai/llama_cpp_canister --workflow=$wf --branch main --status completed --limit 1 --json conclusion --jq '.[0].conclusion')"
+  echo "$wf: $(gh run list --repo onicai/llama_cpp_canister --workflow=$wf --branch main --limit 1 --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"')"
 done
 ```
 
-`--branch main --status completed` matches the gate in `release.yml`: without them, the
-newest run on any branch, or one still in progress, decides.
+This is the gate in `release.yml`: the newest run on `main` decides, and it must have
+finished. Without `--branch main`, the newest run on any branch would decide.
 
-If either result is not `success`, abort immediately with: "CI is not green. Latest <workflow> conclusion: <result>. Fix CI before releasing."
+If either result is not `completed success`: while a run is still in progress or queued, wait
+for it and check again; otherwise abort with: "CI is not green. Latest <workflow> run: <result>. Fix CI before releasing."
 
 ## 3. Determine version
 
@@ -149,8 +150,8 @@ gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION
 
    ```bash
    git checkout release/v<NEW_VERSION>
-   git fetch origin main:main
-   git rebase main
+   git fetch origin
+   git rebase origin/main
    ```
 
    When the notes changed, run the local reviews again before the push. Push, and refresh the
@@ -176,7 +177,10 @@ gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION
 
 ## 7. Scan the release and trigger the release workflow
 
-A resumed release runs step 1's checks, then continues at step 6 before the merge, or here after it.
+A resumed release runs step 1's account check. Before the merge it continues at step 6, on the
+release branch (`git checkout release/v<NEW_VERSION>`). After the merge it runs all of step 1
+and continues here: when the release PR has a `scanned: <S>` comment, the latest one is `S`,
+and the commits on `main` after it still need the scan below (`<S>..HEAD`).
 
 ```bash
 git checkout main
@@ -193,8 +197,8 @@ Fix its findings like the other reviews', after asking the user: each fix goes i
 through its own PR. Then pull `main` again, take its head as the new `S`, scan
 `<old S>..<new S>`, and record the new `S`.
 
-Repeat step 2, after any CI run on `main` still in progress has finished. Then dispatch with
-the scanned commit; `release.yml` refuses to build when `main` has moved past it:
+Repeat step 2. Then dispatch with the full sha of the scanned commit; `release.yml` refuses to
+build when `main` has moved past it, or while CI on `main` is still running:
 
 ```bash
 gh workflow run release.yml --repo onicai/llama_cpp_canister -f tag=v<NEW_VERSION> -f expected_sha=<S>
