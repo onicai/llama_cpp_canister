@@ -15,7 +15,8 @@ on:
 permissions:
   contents: write  # to create the release
 
-# A second dispatch of the same tag waits for the first, then fails its tag check.
+# Runs for the same tag go one at a time, so a second one cannot pass the tag
+# check while the first is still building. GitHub keeps one pending run per group.
 concurrency:
   group: release-${{ github.event.inputs.tag }}
   cancel-in-progress: false
@@ -287,6 +288,19 @@ jobs:
           call; it fails with IC0542 for anyone else.)
           EOF
           cat RELEASE_NOTES.md
+
+      # The tag check ran before the build; a tag made since then (by hand, say) would
+      # get this build published under it.
+      - name: Check the tag is still new
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          rc=0
+          git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null || rc=$?
+          if [ "$rc" -ne 2 ]; then
+            echo "ERROR: tag ${TAG} exists now, or the lookup failed (exit ${rc})."
+            exit 1
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

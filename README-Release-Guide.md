@@ -59,7 +59,7 @@ release contains only scanned code:
 4. Click **Run workflow** to start.
 
 When a run fails after it created the release, the tag exists and a new run refuses it: delete
-the partial release and its tag (`gh release delete v<version> --cleanup-tag`) before retrying.
+the partial release and its tag (`gh release delete v<version> --repo onicai/llama_cpp_canister --cleanup-tag`) before retrying.
 
 ### 4. What the workflow does
 
