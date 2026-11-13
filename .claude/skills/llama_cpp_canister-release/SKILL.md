@@ -140,89 +140,68 @@ gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION
 
 ## 6. Review and merge the release PR
 
-When the user resumes a release here, after a fix PR for example, run step 1's account and
-clean-tree checks (not the one for `main`), skip steps 2-5, check out the release branch
-(`git checkout release/v<NEW_VERSION>`), and read the latest scanned base from the PR comments.
-
 1. The PR needs the reviews listed in the README's Contributing section before it is merged.
    It changes no code, so the tests are the CI runs of step 2 on `main`.
 2. Ask the user to run `/code-review ultra <PR#>` on it: it is billed and only the user can
    start it.
-3. Run `/claude-security` "Scan changes" at high effort on the release's changes: the range
-   `<PREV>..origin/release/v<NEW_VERSION>`, where `<PREV>` is the previous release named in the
-   changelog heading of step 4. The PR diff alone is only `version.txt` and the notes. When
-   step 4 found no previous release, run "Scan codebase" at high effort instead. Record the
-   scanned base, the `main` commit the scan covered up to, as a PR comment
-   (`scanned base: <sha>`), so a resumed session finds it:
-
-   ```bash
-   git fetch origin
-   git merge-base origin/main origin/release/v<NEW_VERSION>   # the scanned base
-   ```
-4. Fix the findings of both like the other reviews'. A code fix goes through its own PR into
-   `main`. Then rebase the release branch and update the notes if the fix changes them:
+3. Fix the findings like the other reviews'. A code fix goes through its own PR into `main`.
+   Then rebase the release branch on it, and update the notes if the fix changes them:
 
    ```bash
    git checkout release/v<NEW_VERSION>
-   git fetch origin
-   git rebase origin/main
+   git fetch origin main:main
+   git rebase main
    ```
 
-   When the notes changed, run the local reviews again before the push; the rebase alone
-   brings only commits reviewed in their own PRs. Push, and refresh the PR body:
+   When the notes changed, run the local reviews again before the push. Push, and refresh the
+   PR body:
 
    ```bash
    git push --force-with-lease origin release/v<NEW_VERSION>
    gh pr edit <PR#> --repo onicai/llama_cpp_canister --body-file docs/release-notes/v<NEW_VERSION>.md
    ```
-
-   Run the `/claude-security` scan on `<scanned base>..origin/main`, fix its findings the same
-   way, and record `origin/main` as the new scanned base in a PR comment.
-5. Post what each review found and what was done about it as a PR comment
+4. Post what each review found and what was done about it as a PR comment
    (`gh pr comment <PR#> --body-file <file>`).
-6. Do not merge it yourself unless the user says so. Right before merging, check that the PR
-   branch on GitHub is the one you scanned, and that `main` has not moved past the scanned base:
-
-   ```bash
-   git fetch origin
-   git rev-parse origin/release/v<NEW_VERSION> release/v<NEW_VERSION>   # must be equal
-   git rev-parse origin/main                                            # must be the scanned base
-   ```
-
-   If either differs, go back to item 4. Then squash-merge with the bare tag as the subject, so
-   `scripts/make-release-desc.sh` leaves it out of the next changelog. When the user merges in
-   the GitHub UI instead, tell them to replace the default subject `v<NEW_VERSION> (#NN)` with
-   `v<NEW_VERSION>`.
+5. Do not merge it yourself unless the user says so. Squash-merge with the bare tag as the
+   subject, so `scripts/make-release-desc.sh` leaves it out of the next changelog. When the
+   user merges in the GitHub UI instead, tell them to replace the default subject
+   `v<NEW_VERSION> (#NN)` with `v<NEW_VERSION>`.
 
    ```bash
    gh pr merge <PR#> --repo onicai/llama_cpp_canister --squash --subject "v<NEW_VERSION>" --body "" --delete-branch
-   git checkout main
-   git pull origin main
-   git log -1 --format=%s   # must be exactly v<NEW_VERSION>
    ```
 
-The merge commit triggers no CI (`version.txt` and `docs/` are in neither workflow's path
-filter). If a fix PR was merged into `main` during the review, wait for its CI runs and
-repeat step 2 before going on.
+   If the merged subject still ends in `(#NN)`, tell the user: that commit will show up in
+   the next release's changelog and has to be removed from it by hand.
 
-## 7. Trigger release workflow
+## 7. Scan the release and trigger the release workflow
 
-The workflow builds the head of `main` at dispatch time. Every commit on `main` past the
-scanned base, other than the `v<NEW_VERSION>` commit, must have been scanned:
+A resumed release runs step 1's checks, then continues at step 6 before the merge, or here after it.
 
 ```bash
-git fetch origin main
-git log --oneline <scanned base>..origin/main
+git checkout main
+git pull origin main
+git rev-parse HEAD   # S: the commit to scan and release
 ```
 
-If anything else is listed, scan it as in step 6 item 4 and record `origin/main` as the new
-scanned base. When the scan needs a fix, ask the user before going on: the fix goes into `main`
-through its own PR, then this check is repeated. Repeat step 2 too, after any CI run on `main`
-still in progress has finished. Only then dispatch, and note the `main` head you checked:
+Run `/claude-security` "Scan changes" at high effort on `<PREV>..<S>`, where `<PREV>` is the
+previous release named in the changelog heading of `scripts/make-release-desc.sh v<NEW_VERSION>`.
+When there is no previous release, run "Scan codebase" at high effort instead. Record
+`scanned: <S>` as a comment on the release PR.
+
+Fix its findings like the other reviews', after asking the user: each fix goes into `main`
+through its own PR. Then pull `main` again, take its head as the new `S`, scan
+`<old S>..<new S>`, and record the new `S`.
+
+Repeat step 2, after any CI run on `main` still in progress has finished. Then dispatch with
+the scanned commit; `release.yml` refuses to build when `main` has moved past it:
 
 ```bash
-gh workflow run release.yml --repo onicai/llama_cpp_canister -f tag=v<NEW_VERSION>
+gh workflow run release.yml --repo onicai/llama_cpp_canister -f tag=v<NEW_VERSION> -f expected_sha=<S>
 ```
+
+If the run fails on that check, something merged after the scan: scan it as above and
+dispatch again with the new `S`.
 
 Wait 10 seconds, then find the run ID:
 
@@ -267,10 +246,6 @@ curl -sL https://github.com/onicai/llama_cpp_canister/releases/download/v<NEW_VE
 The two must be equal, and must equal the hash in the release title. If they differ,
 abort and report -- the release is not trustworthy.
 
-The commit the release page says it was built from must be the `main` head checked in step 7.
-If it is a later one, something merged in between: tell the user, and scan the commits after
-the checked head before the release is announced.
-
 Check the release body: it must start with the notes of step 4, then the changelog, then
 the "Reproducible build" section:
 
@@ -290,5 +265,4 @@ Print a summary of what was done:
 - The release PR URL, and what each review found and what was done about it
 - Release URL
 - Zip download URL
-- wasm sha256, the commit it was built from (the `main` head checked in step 7), and the
-  pinned fork commit
+- wasm sha256, the commit it was built from (the scanned `S`), and the pinned fork commit

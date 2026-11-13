@@ -6,6 +6,9 @@ on:
       tag:
         description: "Tag for the release (e.g., v0.16.5, or v0.23.0rc1 for a prerelease)"
         required: true
+      expected_sha:
+        description: "Full sha of the main commit the release was reviewed and scanned at"
+        required: true
 
 permissions:
   contents: write  # to create the release
@@ -15,6 +18,19 @@ jobs:
     name: Check if CI succeeded
     runs-on: ubuntu-latest
     steps:
+      # The release builds the head of main at dispatch time. It must be the commit
+      # the release skill reviewed and scanned: a merge that lands in between would
+      # otherwise ship unscanned code.
+      - name: Check the commit is the scanned one
+        env:
+          EXPECTED_SHA: ${{ github.event.inputs.expected_sha }}
+        run: |
+          if [ "${GITHUB_SHA}" != "${EXPECTED_SHA}" ]; then
+            echo "ERROR: main is at ${GITHUB_SHA}, but the release was scanned at ${EXPECTED_SHA}."
+            echo "Scan the commits in between, then dispatch again."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -236,6 +252,8 @@ jobs:
             llama_cpp.wasm
             llama_cpp.wasm.sha256
           tag_name: ${{ github.event.inputs.tag }}
+          # Tag the commit that was built, not whatever main is when the build ends.
+          target_commitish: ${{ github.sha }}
           # The hash is in the title as well as the body, so it is visible in the
           # releases LIST, not only on the detail page.
           name: "${{ github.event.inputs.tag }} — wasm ${{ steps.hashes.outputs.wasm_sha256 }}"
