@@ -138,12 +138,13 @@ Then push, and open two PRs from the release branch:
 - the **release PR** into `main`, which is merged;
 - a draft **review PR** into a branch at the previous release, `<PREV>`: the newest published
   release tag, rc included (`gh release list --repo onicai/llama_cpp_canister --exclude-drafts --limit 1`).
-  Its diff is everything this release ships, for the deep reviews of step 6. It is never merged.
+  Its diff is everything since that release, for the deep reviews of step 6. It is never merged.
 
 ```bash
 git push -u origin release/v<NEW_VERSION>
 gh pr create --repo onicai/llama_cpp_canister --base main --title "v<NEW_VERSION>" --body-file docs/release-notes/v<NEW_VERSION>.md
-git push origin <PREV>:refs/heads/release-base/<PREV>
+git fetch --tags origin
+git push origin "<PREV>^{commit}:refs/heads/release-base/<PREV>"
 gh pr create --repo onicai/llama_cpp_canister --draft --base release-base/<PREV> --title "Review v<NEW_VERSION> (do not merge)" --body "Review-only PR: the changes since <PREV> that v<NEW_VERSION> ships."
 ```
 
@@ -169,8 +170,8 @@ A resumed release runs step 1's account check, and continues here on the release
    git rebase origin/main
    ```
 
-   When the notes changed, run the local reviews again before the push. Push (both PRs
-   follow the branch), and refresh the release PR body:
+   Run the local reviews again before the push. Push (both PRs follow the branch), and
+   refresh the release PR body:
 
    ```bash
    git push --force-with-lease origin release/v<NEW_VERSION>
@@ -186,10 +187,12 @@ A resumed release runs step 1's account check, and continues here on the release
    user merges in the GitHub UI instead, tell them to replace the default subject
    `v<NEW_VERSION> (#NN)` with `v<NEW_VERSION>`.
 
+   Close the review PR first: the merge deletes the branch it is opened from.
+
    ```bash
-   gh pr merge <release PR#> --repo onicai/llama_cpp_canister --squash --subject "v<NEW_VERSION>" --body "" --delete-branch
    gh pr close <review PR#> --repo onicai/llama_cpp_canister
    git push origin --delete release-base/<PREV>
+   gh pr merge <release PR#> --repo onicai/llama_cpp_canister --squash --subject "v<NEW_VERSION>" --body "" --delete-branch
    ```
 
    If the merged subject still ends in `(#NN)`, tell the user: that commit will show up in
@@ -221,11 +224,12 @@ gh workflow run release.yml --repo onicai/llama_cpp_canister -f tag=v<NEW_VERSIO
 If the run fails on that check, something merged after `S`: scan it as above and dispatch
 again with the new `S`.
 
-Wait 10 seconds, then find the run, by its name:
+Wait 10 seconds, then find the run, by its name; an earlier run for the same tag has
+completed, so it is skipped. When nothing is listed yet, wait and look again:
 
 ```bash
 sleep 10
-gh run list --repo onicai/llama_cpp_canister --workflow=release.yml --limit 5 --json databaseId,status,displayTitle --jq '.[] | select(.displayTitle == "Release v<NEW_VERSION>")' | head -1
+gh run list --repo onicai/llama_cpp_canister --workflow=release.yml --limit 5 --json databaseId,status,displayTitle --jq '.[] | select(.displayTitle == "Release v<NEW_VERSION>" and .status != "completed")' | head -1
 ```
 
 ## 8. Monitor release workflow
@@ -238,7 +242,9 @@ image step alone takes ~10 minutes on a cold cache.
 
 At each check, report the current status to the user.
 
-If the run fails, report the failure and abort. Include the URL to the failed run.
+If the run fails, report the failure and abort. Include the URL to the failed run. When it
+failed after the release was created, the tag exists and a new run refuses it: ask the user
+before removing the partial release with `gh release delete v<NEW_VERSION> --repo onicai/llama_cpp_canister --cleanup-tag`.
 
 If the run succeeds, proceed to step 9.
 

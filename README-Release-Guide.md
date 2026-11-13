@@ -25,7 +25,7 @@ Commit both, and open two pull requests from the branch:
 
 - the **release pull request** into `main`;
 - a draft **review pull request** into `release-base/<prev>`, a branch pushed at the previous
-  release tag (rc included). Its diff is everything the release ships. It is for review only,
+  release tag (rc included). Its diff is everything since that release. It is for review only,
   and is closed, not merged.
 
 ### 2. Review and merge the release pull request
@@ -57,11 +57,14 @@ release contains only scanned code:
 3. Enter the tag for the release (e.g. `v0.8.0`) and the full sha of `S`.
 4. Click **Run workflow** to start.
 
+When a run fails after it created the release, the tag exists and a new run refuses it: delete
+the partial release and its tag (`gh release delete v<version> --cleanup-tag`) before retrying.
+
 ### 4. What the workflow does
 
 | Step                      | Description                                                                                  |
 | ------------------------- | -------------------------------------------------------------------------------------------- |
-| **check-ci-status**       | Verifies the latest `cicd-linux.yml` AND `cicd-mac.yml` runs both succeeded                    |
+| **check-ci-status**       | Refuses unless: dispatched from `main` at the given sha; the tag is new; `version.txt` matches the tag; the release notes exist; the newest `cicd-linux.yml` AND `cicd-mac.yml` runs on `main` have finished green |
 | **docker build**          | Builds the wasm in the pinned `linux/amd64` image (`make docker-build-base`, `docker-build-wasm`) |
 | **compute hashes**        | sha256 of `out/llama_cpp.wasm`; also written to the run summary                                 |
 | **zip release files**     | Packages `build/`, `scripts/`, `test/`, `icp.yaml`, `version.txt`, `BUILD-PROVENANCE.txt`, etc. |

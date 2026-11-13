@@ -118,7 +118,8 @@ jobs:
               --json status,conclusion --jq '.[0] // empty | "\(.status) \(.conclusion)"')
             echo "$wf (latest run on main): ${latest_run:-<no runs>}"
             if [ "$latest_run" != "completed success" ]; then
-              echo "  ERROR: the latest $wf run has not finished successfully."
+              echo "  ERROR: the latest $wf run has not finished successfully. If it was"
+              echo "  cancelled or skipped, run $wf on main again (Actions > Run workflow)."
               rc=1
             fi
           done
