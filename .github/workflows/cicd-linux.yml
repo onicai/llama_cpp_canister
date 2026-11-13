@@ -22,8 +22,8 @@ on:
 # account's repos.
 #
 # The guard matters: runs on main are NEVER cancelled, so merge-commit CI and
-# the evidence behind a release stay intact. release.yml has its own group,
-# `release`, which runs one release at a time and never cancels a running one.
+# the evidence behind a release stay intact. release.yml deliberately has no
+# concurrency block at all.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}

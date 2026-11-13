@@ -15,16 +15,12 @@ on:
 permissions:
   contents: write  # to create the release
 
-# One release at a time, so two runs cannot both find a tag new and publish under it.
-# GitHub keeps one pending run per group: a newer dispatch replaces a pending one.
-concurrency:
-  group: release
-  cancel-in-progress: false
-
 jobs:
   check-ci-status:
     name: Check if CI succeeded
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag }}
     steps:
       # The release builds the head of main at dispatch time. It must be the commit
       # the release skill reviewed and scanned: a merge that lands in between would
@@ -53,8 +49,6 @@ jobs:
       # A release makes a new tag. An existing one may point at another commit, and
       # the release step would publish this build under it.
       - name: Check the tag is new
-        env:
-          TAG: ${{ github.event.inputs.tag }}
         run: |
           # --exit-code: 0 = found, 2 = not found, anything else = the lookup failed.
           rc=0
@@ -70,8 +64,6 @@ jobs:
       # version.txt is bumped by the release PR; dispatching before it merged, or
       # with another tag, would ship a zip whose version.txt does not match.
       - name: Check version.txt matches the tag
-        env:
-          TAG: ${{ github.event.inputs.tag }}
         run: |
           if [ "v$(tr -d '[:space:]' < version.txt)" != "${TAG}" ]; then
             echo "ERROR: version.txt is $(cat version.txt), but the tag is ${TAG}."
@@ -81,8 +73,6 @@ jobs:
       # The release notes are written and committed with the version bump (the
       # release skill), so a missing file fails here, before any build time.
       - name: Check the release notes
-        env:
-          TAG: ${{ github.event.inputs.tag }}
         run: |
           if [ ! -s "docs/release-notes/${TAG}.md" ]; then
             echo "ERROR: docs/release-notes/${TAG}.md is missing. Write it with"

@@ -137,7 +137,7 @@ Then push, and open two PRs from the release branch:
 
 - the **release PR** into `main`, which is merged;
 - a draft **review PR** into a branch at the previous release, `<PREV>`: the newest published
-  release tag, rc included (`gh release list --repo onicai/llama_cpp_canister --exclude-drafts --limit 1`).
+  release tag, rc included (`gh release list --repo onicai/llama_cpp_canister --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName'`).
   Its diff is everything since that release, for the deep reviews of step 6. It is never merged.
 
 ```bash
@@ -179,7 +179,8 @@ A resumed release runs step 1's account check, and continues here on the release
    ```
 
    Run the `/claude-security` scan on what the rebase brought in (`<scanned base>..origin/main`),
-   fix its findings the same way, and record the new scanned base.
+   fix its findings the same way, and record the new scanned base: the `origin/main` the
+   branch was rebased on (`git merge-base origin/main release/v<NEW_VERSION>`).
 5. Post what each review found and what was done about it as a comment on the release PR
    (`gh pr comment <release PR#> --body-file <file>`).
 6. Do not merge it yourself unless the user says so. Squash-merge with the bare tag as the
@@ -187,12 +188,13 @@ A resumed release runs step 1's account check, and continues here on the release
    user merges in the GitHub UI instead, tell them to replace the default subject
    `v<NEW_VERSION> (#NN)` with `v<NEW_VERSION>`.
 
-   Close the review PR first: the merge deletes the branch it is opened from.
+   Merge, then close the review PR (its `scanned base` comments stay readable) and delete both
+   branches:
 
    ```bash
+   gh pr merge <release PR#> --repo onicai/llama_cpp_canister --squash --subject "v<NEW_VERSION>" --body ""
    gh pr close <review PR#> --repo onicai/llama_cpp_canister
-   git push origin --delete release-base/<PREV>
-   gh pr merge <release PR#> --repo onicai/llama_cpp_canister --squash --subject "v<NEW_VERSION>" --body "" --delete-branch
+   git push origin --delete release/v<NEW_VERSION> release-base/<PREV>
    ```
 
    If the merged subject still ends in `(#NN)`, tell the user: that commit will show up in
@@ -200,7 +202,8 @@ A resumed release runs step 1's account check, and continues here on the release
 
 ## 7. Trigger release workflow
 
-A resumed release runs all of step 1 and continues here.
+A resumed release checks out `main` (`git checkout main`), runs all of step 1, and continues
+here.
 
 ```bash
 git checkout main
@@ -214,7 +217,9 @@ merged after the scan: run `/claude-security` "Scan changes" at high effort on
 `<scanned base>..HEAD`, and fix its findings like the other reviews', after asking the user.
 Each fix goes into `main` through its own PR; then pull again, and take the new head as `S`.
 
-Repeat step 2. Then dispatch with the full sha of `S`; `release.yml` refuses to build when
+When a fix merged, wait until its CI runs on `main` are listed
+(`gh run list --repo onicai/llama_cpp_canister --commit <S>`): until then step 2 still sees
+the previous run. Repeat step 2. Then dispatch with the full sha of `S`; `release.yml` refuses to build when
 `main` has moved past it, or while CI on `main` is still running:
 
 ```bash
@@ -224,12 +229,13 @@ gh workflow run release.yml --repo onicai/llama_cpp_canister -f tag=v<NEW_VERSIO
 If the run fails on that check, something merged after `S`: scan it as above and dispatch
 again with the new `S`.
 
-Wait 10 seconds, then find the run, by its name; an earlier run for the same tag has
-completed, so it is skipped. When nothing is listed yet, wait and look again:
+Note the time just before the dispatch (`date -u +%Y-%m-%dT%H:%M:%SZ`). Wait 10 seconds,
+then find the run by its name and start time; an earlier run for the same tag started before.
+When nothing is listed yet, wait and look again:
 
 ```bash
 sleep 10
-gh run list --repo onicai/llama_cpp_canister --workflow=release.yml --limit 5 --json databaseId,status,displayTitle --jq '.[] | select(.displayTitle == "Release v<NEW_VERSION>" and .status != "completed")' | head -1
+gh run list --repo onicai/llama_cpp_canister --workflow=release.yml --limit 5 --json databaseId,status,conclusion,displayTitle,createdAt --jq '.[] | select(.displayTitle == "Release v<NEW_VERSION>" and .createdAt >= "<dispatch time>")' | head -1
 ```
 
 ## 8. Monitor release workflow

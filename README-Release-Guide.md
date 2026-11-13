@@ -41,8 +41,8 @@ the release branch is then rebased on it, and what the rebase brought in is scan
 release pull request lists what each review found and what was done about it.
 
 Squash-merge with the commit subject exactly `v<version>`, without the `(#NN)` suffix:
-`scripts/make-release-desc.sh` leaves bare version commits out of the next changelog. Close the
-review pull request and delete `release-base/<prev>`.
+`scripts/make-release-desc.sh` leaves bare version commits out of the next changelog. Then close
+the review pull request, and delete the release branch and `release-base/<prev>`.
 
 ### 3. Trigger the release workflow
 
