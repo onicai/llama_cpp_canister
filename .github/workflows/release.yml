@@ -15,6 +15,11 @@ on:
 permissions:
   contents: write  # to create the release
 
+# A second dispatch of the same tag waits for the first, then fails its tag check.
+concurrency:
+  group: release-${{ github.event.inputs.tag }}
+  cancel-in-progress: false
+
 jobs:
   check-ci-status:
     name: Check if CI succeeded
@@ -46,13 +51,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # The same form scripts/make-release-desc.sh accepts.
+      # scripts/make-release-desc.sh owns the tag form (vX.Y.Z or vX.Y.ZrcN).
       - name: Check the tag form
-        run: |
-          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$ ]]; then
-            echo "ERROR: tag '${TAG}' is not vX.Y.Z or vX.Y.ZrcN."
-            exit 1
-          fi
+        run: scripts/make-release-desc.sh "${TAG}" > /dev/null
 
       # A release makes a new tag. An existing one may point at another commit, and
       # the release step would publish this build under it.

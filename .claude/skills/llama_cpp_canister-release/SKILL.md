@@ -158,11 +158,11 @@ A resumed release runs step 1's account check, and continues here on the release
 2. Ask the user to run `/code-review ultra <review PR#>`: it is billed and only the user can
    start it.
 3. Run `/claude-security` "Scan changes" at high effort on the review PR. Record the commit of
-   `main` the release branch is based on as a comment on the review PR
+   `main` the release branch is based on as a comment on the release PR
    (`scanned base: <sha>`, from `git merge-base origin/main release/v<NEW_VERSION>`).
 4. Fix the findings of both like the other reviews'. A code fix goes through its own PR into
-   `main`; when it changes what an app must know, it updates the release notes too. Then
-   rebase the release branch on it:
+   `main`; it leaves the release notes alone, which live on the release branch. Then rebase the
+   release branch on it, and update the notes there when the fix changes what an app must know:
 
    ```bash
    git checkout release/v<NEW_VERSION>
@@ -170,9 +170,9 @@ A resumed release runs step 1's account check, and continues here on the release
    git rebase origin/main
    ```
 
-   Run the `/claude-security` scan on what the rebase brought in (`<scanned base>..origin/main`),
-   fix its findings the same way, and record the new scanned base: the `origin/main` the
-   branch was rebased on (`git merge-base origin/main release/v<NEW_VERSION>`). Run the local
+   Note `git rev-parse origin/main`, run the `/claude-security` scan on what the rebase brought
+   in (`<scanned base>..<that sha>`), fix its findings the same way, and record that sha as the
+   new scanned base on the release PR. Run the local
    reviews again, then push (both PRs follow the branch) and refresh the release PR body:
 
    ```bash
@@ -186,13 +186,14 @@ A resumed release runs step 1's account check, and continues here on the release
    user merges in the GitHub UI instead, tell them to replace the default subject
    `v<NEW_VERSION> (#NN)` with `v<NEW_VERSION>`.
 
-   Merge, then close the review PR (its `scanned base` comments stay readable) and delete both
-   branches; skip what GitHub already closed or deleted:
+   Merge, then close the review PR and delete both branches; skip what GitHub already closed
+   or deleted:
 
    ```bash
    gh pr merge <release PR#> --repo onicai/llama_cpp_canister --squash --subject "v<NEW_VERSION>" --body ""
    gh pr close <review PR#> --repo onicai/llama_cpp_canister
-   git push origin --delete release/v<NEW_VERSION> release-base/<PREV>
+   git push origin --delete release/v<NEW_VERSION>
+   git push origin --delete release-base/<PREV>
    ```
 
    If the merged subject still ends in `(#NN)`, tell the user: that commit will show up in
@@ -210,10 +211,11 @@ git rev-parse HEAD                                   # S: the commit to release
 git log --oneline <scanned base>..HEAD               # must list only the v<NEW_VERSION> commit
 ```
 
-`<scanned base>` is the latest one recorded on the review PR. When anything else is listed, it
+`<scanned base>` is the latest one recorded on the release PR. When anything else is listed, it
 merged after the scan: run `/claude-security` "Scan changes" at high effort on
-`<scanned base>..HEAD`, and fix its findings like the other reviews', after asking the user.
-Each fix goes into `main` through its own PR; then pull again, and take the new head as `S`.
+`<scanned base>..HEAD`, record `HEAD` as the new scanned base on the release PR, and fix the
+findings like the other reviews', after asking the user. Each fix goes into `main` through its
+own PR; then pull again, take the new head as `S`, and scan it the same way.
 
 When a fix merged, wait until the CI runs it triggers are listed
 (`gh run list --repo onicai/llama_cpp_canister --commit <S>`): until then step 2 still sees

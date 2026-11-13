@@ -34,7 +34,8 @@ Commit both, and open two pull requests from the branch:
   section.
 - The review pull request gets a deep code review, `/code-review ultra`, started by a
   maintainer (it is billed), and a Claude Security scan, `/claude-security` "Scan changes" at
-  high effort. Record the `main` commit the scan covered (`scanned base: <sha>`) on it.
+  high effort. Record the `main` commit the scan covered (`scanned base: <sha>`) on the release
+  pull request.
 
 Fix their findings before merging; a code fix goes through its own pull request into `main`,
 the release branch is then rebased on it, and what the rebase brought in is scanned too. The
