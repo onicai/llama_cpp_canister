@@ -38,6 +38,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # A release makes a new tag. An existing one may point at another commit, and
+      # the release step would publish this build under it.
+      - name: Check the tag is new
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]; then
+            echo "ERROR: tag ${TAG} already exists."
+            exit 1
+          fi
+
       # The release notes are written and committed with the version bump (the
       # release skill), so a missing file fails here, before any build time.
       - name: Check the release notes
