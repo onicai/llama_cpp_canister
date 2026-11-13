@@ -62,13 +62,17 @@ the partial release and its tag (`gh release delete v<version> --cleanup-tag`) b
 
 ### 4. What the workflow does
 
-| Step                      | Description                                                                                  |
-| ------------------------- | -------------------------------------------------------------------------------------------- |
-| **check-ci-status**       | Refuses unless: dispatched from `main` at the given sha; the tag is new; `version.txt` matches the tag; the release notes exist; the newest `cicd-linux.yml` AND `cicd-mac.yml` runs on `main` have finished green |
-| **docker build**          | Builds the wasm in the pinned `linux/amd64` image (`make docker-build-base`, `docker-build-wasm`) |
-| **compute hashes**        | sha256 of `out/llama_cpp.wasm`; also written to the run summary                                 |
-| **zip release files**     | Packages `build/`, `scripts/`, `test/`, `icp.yaml`, `version.txt`, `BUILD-PROVENANCE.txt`, etc. |
-| **create GitHub release** | Attaches the zip, the bare `llama_cpp.wasm` and `llama_cpp.wasm.sha256`                        |
+| Step                      | Description                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **check-ci-status**       | Refuses unless all gates pass (see below), and the newest `cicd-linux` AND `cicd-mac` runs on `main` finished green |
+| **docker build**          | Builds the wasm in the pinned `linux/amd64` image (`make docker-build-base`, `docker-build-wasm`)                   |
+| **compute hashes**        | sha256 of `out/llama_cpp.wasm`; also written to the run summary                                                     |
+| **zip release files**     | Packages `build/`, `scripts/`, `test/`, `icp.yaml`, `version.txt`, `BUILD-PROVENANCE.txt`, etc.                     |
+| **create GitHub release** | Attaches the zip, the bare `llama_cpp.wasm` and `llama_cpp.wasm.sha256`                                             |
+
+The gates: the run is dispatched from `main`, at the full sha given; the tag has the form
+`vX.Y.Z` or `vX.Y.ZrcN` and does not exist yet; `version.txt` matches the tag; and the release
+notes exist.
 
 The build runs on `ubuntu-22.04` inside Docker, not on a macOS runner: the point is that
 anyone can reproduce the artifact. The tests run in `cicd-linux.yml` (the wasm QA, against

@@ -46,6 +46,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # The same form scripts/make-release-desc.sh accepts.
+      - name: Check the tag form
+        run: |
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$ ]]; then
+            echo "ERROR: tag '${TAG}' is not vX.Y.Z or vX.Y.ZrcN."
+            exit 1
+          fi
+
       # A release makes a new tag. An existing one may point at another commit, and
       # the release step would publish this build under it.
       - name: Check the tag is new
