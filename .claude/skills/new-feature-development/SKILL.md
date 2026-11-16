@@ -3,7 +3,7 @@ name: new-feature-development
 description: End-to-end lifecycle for adding a new capability to llama_cpp_canister — design, implement, test, document, and verify with no regressions
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Bash, Read, Edit, Write, AskUserQuestion
+allowed-tools: Bash, Read, Edit, Write, AskUserQuestion, Skill
 ---
 
 # New Feature Development for llama_cpp_canister
@@ -96,8 +96,8 @@ source /opt/miniconda3/etc/profile.d/conda.sh && conda activate llama_cpp_canist
 # Format the new files with the repo's clang-format:
 "$HOME/.icpp/wasi-sdk/wasi-sdk-25.0/bin/clang-format" --style=file -i src/<feature>.* native/test_<feature>.*
 
-# Native unit tests:
-icpp build-native && ./build-native/mockic.exe
+# Native unit tests (under icpp run-native's memory guard; never run mockic.exe directly):
+make test-llm-native
 
 # WASM build + local deploy (regenerates declarations):
 # Deploy as the identity the tests call as: since icpp-pro 6.0.0 pytest is told
@@ -154,3 +154,20 @@ self-attribution, never `--no-verify`.
 ```bash
 git add -A && git commit -m "<concise single-line summary>"
 ```
+
+## 11. Review and open the pull request
+
+Before every push to the PR, on a larger change run `/simplify` first. Then run
+the reviews of the README's Contributing section in this order, each until it
+has nothing left to address:
+
+1. `coderabbit review --base main --agent` (never `--use-credits`: it bills).
+2. `/code-review` on the branch diff.
+3. `/security-review` on the branch diff.
+
+Commit the fixes they make, then push and open the PR into `main`
+(`git push -u origin feature/<name>`, `gh pr create`); its description lists
+what each review found and what was done about it. CodeRabbit also reviews the PR on GitHub:
+handle its comments with `/coderabbit:autofix`, and let it review each update.
+When the change touches `CLAUDE.md`, skills or other instruction files, also run
+`/claude-api prompt-audit` on them.

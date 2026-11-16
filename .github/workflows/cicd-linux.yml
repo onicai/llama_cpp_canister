@@ -3,6 +3,11 @@ name: cicd-linux
 on:
   workflow_dispatch:
   push:
+    # The release skill's branches: release/v* holds only main plus the version
+    # bump, release-base/v* an old release. Neither needs CI of its own.
+    branches-ignore:
+      - "release/v[0-9]*"
+      - "release-base/v[0-9]*"
     paths:
       - "scripts/**"
       - "src/**"
@@ -22,8 +27,8 @@ on:
 # account's repos.
 #
 # The guard matters: runs on main are NEVER cancelled, so merge-commit CI and
-# the evidence behind a release stay intact. release.yml deliberately has no
-# concurrency block at all.
+# the evidence behind a release stay intact. release.yml has its own group per
+# tag, which never cancels a running release.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}

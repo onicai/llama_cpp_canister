@@ -13,27 +13,69 @@ How to create a new release of `llama_cpp_canister`.
 
 ## Steps
 
-### 1. Bump the version
+### 1. Open the release pull request and the review pull request
 
-Update `version.txt` in the repo root to the desired release version (e.g. `0.8.0`).
-Commit and push to `main`.
+On a branch `release/v<version>` off `main`:
 
-### 2. Trigger the release workflow
+- update `version.txt` in the repo root to the release version (e.g. `0.8.0`);
+- add the release notes, `docs/release-notes/v<version>.md`, written with
+  `scripts/make-release-summary.txt` (the release workflow refuses a tag without them).
+
+Commit both, and open two pull requests from the branch:
+
+- the **release pull request** into `main`;
+- a draft **review pull request** into `release-base/<prev>`, a branch pushed at the previous
+  release tag (rc included). Its diff is everything since that release. It is for review only,
+  and is closed, not merged.
+
+### 2. Review and merge the release pull request
+
+- The release pull request gets the reviews in the README's [Contributing](README.md#contributing)
+  section.
+- The review pull request gets a deep code review, `/code-review ultra`, started by a
+  maintainer (it is billed), and a Claude Security scan, `/claude-security` "Scan changes" at
+  high effort. Record the `main` commit the scan covered (`scanned base: <sha>`) on the release
+  pull request.
+
+Fix their findings before merging; a code fix goes through its own pull request into `main`,
+the release branch is then rebased on it, and what the rebase brought in is scanned too. The
+release pull request lists what each review found and what was done about it.
+
+Squash-merge with the commit subject exactly `v<version>`, without the `(#NN)` suffix:
+`scripts/make-release-desc.sh` leaves bare version commits out of the next changelog. Then close
+the review pull request, and delete the release branch and `release-base/<prev>`.
+
+### 3. Trigger the release workflow
+
+Take the head of `main` as `S`. Everything between the scanned base and `S`, other than the
+`v<version>` commit, must have been scanned; scan what merged after the scan. Wait until the
+`cicd-linux` and `cicd-mac` runs on `main` have finished and succeeded, then trigger the
+workflow from `main` with `S`. It refuses to build when `main` has moved past `S`, so the
+release contains only scanned code:
 
 1. Go to **Actions** > **Release llama_cpp_canister** in the GitHub UI.
 2. Click **Run workflow**.
-3. Enter the tag for the release (e.g. `v0.8.0`).
+3. Enter the tag for the release (e.g. `v0.8.0`) and the full sha of `S`.
 4. Click **Run workflow** to start.
 
-### 3. What the workflow does
+When a run fails in its last step, after it created the release, the tag exists and a new run
+refuses it. Check that the release is partial (assets missing) and that nobody has used it yet,
+then delete it with its tag (`gh release delete v<version> --repo onicai/llama_cpp_canister --cleanup-tag`)
+before retrying.
 
-| Step                      | Description                                                                                  |
-| ------------------------- | -------------------------------------------------------------------------------------------- |
-| **check-ci-status**       | Verifies the latest `cicd-linux.yml` AND `cicd-mac.yml` runs both succeeded                    |
-| **docker build**          | Builds the wasm in the pinned `linux/amd64` image (`make docker-build-base`, `docker-build-wasm`) |
-| **compute hashes**        | sha256 of `out/llama_cpp.wasm`; also written to the run summary                                 |
-| **zip release files**     | Packages `build/`, `scripts/`, `test/`, `icp.yaml`, `version.txt`, `BUILD-PROVENANCE.txt`, etc. |
-| **create GitHub release** | Attaches the zip, the bare `llama_cpp.wasm` and `llama_cpp.wasm.sha256`                        |
+### 4. What the workflow does
+
+| Step                      | Description                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **check-ci-status**       | Refuses unless all gates pass (see below), and the newest `cicd-linux` AND `cicd-mac` runs on `main` finished green |
+| **docker build**          | Builds the wasm in the pinned `linux/amd64` image (`make docker-build-base`, `docker-build-wasm`)                   |
+| **compute hashes**        | sha256 of `out/llama_cpp.wasm`; also written to the run summary                                                     |
+| **zip release files**     | Packages `build/`, `scripts/`, `test/`, `icp.yaml`, `version.txt`, `BUILD-PROVENANCE.txt`, etc.                     |
+| **create GitHub release** | Attaches the zip, the bare `llama_cpp.wasm` and `llama_cpp.wasm.sha256`                                             |
+
+The gates: the run is dispatched from `main`, at the full sha given; the tag has the form
+`vX.Y.Z` or `vX.Y.ZrcN` and does not exist yet; `version.txt` matches the tag; and the release
+notes exist.
 
 The build runs on `ubuntu-22.04` inside Docker, not on a macOS runner: the point is that
 anyone can reproduce the artifact. The tests run in `cicd-linux.yml` (the wasm QA, against
@@ -43,7 +85,7 @@ of which this workflow is gated on.
 The release page shows, at the top, the wasm sha256 and the two commits it was built from
 (this repo, and the pinned `llama_cpp_onicai_fork`), plus the commands to reproduce it.
 
-### 4. Post-release verification
+### 5. Post-release verification
 
 After the workflow completes:
 

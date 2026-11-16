@@ -1,4 +1,6 @@
 name: Release llama_cpp_canister
+# The release skill finds its run by this name.
+run-name: Release ${{ inputs.tag }}
 
 on:
   workflow_dispatch:
@@ -6,23 +8,71 @@ on:
       tag:
         description: "Tag for the release (e.g., v0.16.5, or v0.23.0rc1 for a prerelease)"
         required: true
+      expected_sha:
+        description: "Full sha of the main commit the release was reviewed and scanned at"
+        required: true
 
 permissions:
   contents: write  # to create the release
+
+# Runs for the same tag go one at a time, so a second one cannot pass the tag
+# check while the first is still building. GitHub keeps one pending run per group.
+concurrency:
+  group: release-${{ github.event.inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
   check-ci-status:
     name: Check if CI succeeded
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag }}
     steps:
+      # The release builds the head of main at dispatch time. It must be the commit
+      # the release skill reviewed and scanned: a merge that lands in between would
+      # otherwise ship unscanned code.
+      - name: Check the commit is the scanned one on main
+        env:
+          EXPECTED_SHA: ${{ github.event.inputs.expected_sha }}
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "ERROR: dispatched on ${GITHUB_REF}; a release is built from main only."
+            exit 1
+          fi
+          if [[ ! "${EXPECTED_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "ERROR: expected_sha must be the full 40-character lower-case sha, got '${EXPECTED_SHA}'."
+            exit 1
+          fi
+          if [ "${GITHUB_SHA}" != "${EXPECTED_SHA}" ]; then
+            echo "ERROR: main is at ${GITHUB_SHA}, but the release was scanned at ${EXPECTED_SHA}."
+            echo "Scan the commits in between, then dispatch again."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # scripts/make-release-desc.sh owns the tag form (vX.Y.Z or vX.Y.ZrcN).
+      - name: Check the tag form
+        run: scripts/make-release-desc.sh "${TAG}" > /dev/null
+
+      # A release makes a new tag. An existing one may point at another commit, and
+      # the release step would publish this build under it.
+      - name: Check the tag is new
+        run: scripts/check-tag-new.sh "${TAG}"
+
+      # version.txt is bumped by the release PR; dispatching before it merged, or
+      # with another tag, would ship a zip whose version.txt does not match.
+      - name: Check version.txt matches the tag
+        run: |
+          if [ "v$(tr -d '[:space:]' < version.txt)" != "${TAG}" ]; then
+            echo "ERROR: version.txt is $(cat version.txt), but the tag is ${TAG}."
+            exit 1
+          fi
 
       # The release notes are written and committed with the version bump (the
       # release skill), so a missing file fails here, before any build time.
       - name: Check the release notes
-        env:
-          TAG: ${{ github.event.inputs.tag }}
         run: |
           if [ ! -s "docs/release-notes/${TAG}.md" ]; then
             echo "ERROR: docs/release-notes/${TAG}.md is missing. Write it with"
@@ -43,22 +93,23 @@ jobs:
         run: |
           set -euo pipefail
           rc=0
-          # --branch main and --status completed are both load-bearing. Without
-          # them this reads the newest run on ANY branch: an in-flight PR run
-          # returns an empty conclusion (reported as <no runs>) and blocks the
-          # release, and a finished PR run would satisfy the gate with CI that
-          # never ran on main.
+          # --branch main is load-bearing. Without it this reads the newest run
+          # on ANY branch, and a finished PR run would satisfy the gate with CI
+          # that never ran on main. The newest run on main must have finished: a
+          # run still in progress or queued (a scan fix just merged) blocks the
+          # release, rather than an older green run letting it through.
           #
           # Deliberately NOT matched against github.sha: version.txt is in
           # neither workflow's path filter, so the release's own version-bump
           # commit triggers no CI and an exact-sha check would never pass.
           for wf in cicd-linux.yml cicd-mac.yml; do
             latest_run=$(gh run list --repo ${{ github.repository }} \
-              --workflow="$wf" --branch main --status completed --limit 1 \
-              --json conclusion --jq '.[0].conclusion')
-            echo "$wf (latest completed run on main): ${latest_run:-<no runs>}"
-            if [ "$latest_run" != "success" ]; then
-              echo "  ERROR: the latest $wf run was not successful."
+              --workflow="$wf" --branch main --limit 1 \
+              --json status,conclusion --jq '.[0] // empty | "\(.status) \(.conclusion)"')
+            echo "$wf (latest run on main): ${latest_run:-<no runs>}"
+            if [ "$latest_run" != "completed success" ]; then
+              echo "  ERROR: the latest $wf run has not finished successfully. If it was"
+              echo "  cancelled or skipped, run $wf on main again (Actions > Run workflow)."
               rc=1
             fi
           done
@@ -228,6 +279,11 @@ jobs:
           EOF
           cat RELEASE_NOTES.md
 
+      # The tag check ran before the build; a tag made since then (by hand, say) would
+      # get this build published under it.
+      - name: Check the tag is still new
+        run: scripts/check-tag-new.sh "${{ github.event.inputs.tag }}"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -236,6 +292,8 @@ jobs:
             llama_cpp.wasm
             llama_cpp.wasm.sha256
           tag_name: ${{ github.event.inputs.tag }}
+          # Tag the commit that was built, not whatever main is when the build ends.
+          target_commitish: ${{ github.sha }}
           # The hash is in the title as well as the body, so it is visible in the
           # releases LIST, not only on the detail page.
           name: "${{ github.event.inputs.tag }} — wasm ${{ steps.hashes.outputs.wasm_sha256 }}"
