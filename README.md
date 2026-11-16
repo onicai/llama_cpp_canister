@@ -593,10 +593,10 @@ The build files (`Makefile` and its `make ...` targets, `docker/`, `icpp.toml`, 
     the last ingest call, which samples it with `"-n"; "1"` at the end of the prompt,
     unless the prompt tokens that call decodes use up its `max_tokens_update` budget, or
     the canister's instruction guard leaves no room for one more decode. That call then
-    samples nothing, and the first token comes from the first generate call. The
+    samples nothing, and the first token comes from a later call. The
     `n_tokens_generated` of the calls add up to the tokens of the response. A call's
-    `output` can hold back the bytes of an incomplete UTF-8 character until the next
-    call, and a special token sampled without `-sp` is counted but adds no text.
+    `output` can hold back the bytes of an incomplete UTF-8 character for a later call,
+    and a special token sampled without `-sp` is counted but adds no text.
 
     **Query or update?**
 
