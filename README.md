@@ -591,7 +591,10 @@ The build files (`Makefile` and its `make ...` targets, `docker/`, `icpp.toml`, 
 
     The response is the `output` of every call concatenated, including the last ingest
     call: the token that `"-n"; "1"` samples at the end of the prompt is the first token
-    of the response, and the generate calls continue after it. Every call's `output`
+    of the response, and the generate calls continue after it. When `max_tokens_update`
+    is small, the prompt tokens can use up the last ingest call's budget: that call then
+    returns `n_tokens_generated = 0` and an empty `output`, and the first token comes from
+    the next call. Every call's `output`
     holds the text of the `n_tokens_generated` tokens of that call, so the counts of the
     calls add up to the tokens of the response. A special token sampled without `-sp`
     is counted but adds no text.
