@@ -595,10 +595,9 @@ The build files (`Makefile` and its `make ...` targets, `docker/`, `icpp.toml`, 
     samples nothing when its prompt tokens are exactly its `max_tokens_update` budget,
     or when the canister's 36B instruction guard leaves no room to decode one more
     token. Its `output` is then empty, and the first token comes from the first generate
-    call. Every call's `output` holds the text of the
-    `n_tokens_generated` tokens of that call, so the counts of the calls add up to the
-    tokens of the response. A special token sampled without `-sp` is counted but adds
-    no text.
+    call. Every call's `output` holds the text of the `n_tokens_generated` tokens of
+    that call, so the counts of the calls add up to the tokens of the response. A
+    special token sampled without `-sp` is counted but adds no text.
 
     **Query or update?**
 
