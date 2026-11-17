@@ -188,7 +188,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release/build release/scripts release/test
-          mkdir -p release/src/llama_cpp_onicai_fork
           cp version.txt requirements.txt README.md icp.yaml LICENSE __init__.py release/
           # docs/README-decision-models.md links to this upgrade note
           cp README-0003-305ba519.md release/
@@ -207,9 +206,6 @@ jobs:
           cp -r docs release/docs
           mkdir -p release/images && cp images/* release/images/
           mkdir -p release/examples && cp -r examples/classifier release/examples/classifier
-          # These come out of the container: the fork is not on the runner.
-          cp    out/fork/requirements.txt release/src/llama_cpp_onicai_fork/
-          cp -r out/fork/requirements     release/src/llama_cpp_onicai_fork/
           cp test/*.py release/test/
           (cd release && zip -qr ../llama_cpp_canister_${{ github.event.inputs.tag }}.zip .)
           # Also publish the bare wasm + hash, so verifying a release is a
