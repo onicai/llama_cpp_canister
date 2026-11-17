@@ -4,8 +4,9 @@
 # those are llama.cpp's model-CONVERSION deps (torch, numpy, transformers, ...),
 # which the canister never uses — it uploads pre-made gguf files. Since b10076
 # they pin `torch==2.11.0`, which has no x86_64-macOS wheel (Intel-Mac torch
-# stops at 2.2.2) and breaks CI. To convert models, install them from a clone of
-# this repo or from a llama.cpp checkout; the release zip does not ship them.
+# stops at 2.2.2) and breaks CI. To convert models, install them from the fork
+# cloned into src/ (see the README) or from a llama.cpp checkout; the release zip
+# does not ship them.
 
 -r scripts/requirements.txt
 # 6.0.0 is a breaking change: pytest is told which icp identity to run as, with
