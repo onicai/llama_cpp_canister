@@ -586,15 +586,17 @@ The build files (`Makefile` and its `make ...` targets, `docker/`, `icpp.toml`, 
        })'
        ```
 
-    In the loop, `-n` is the most tokens per call, and `max_tokens_update` (0 = no cap)
-    can lower it further.
+    In the loop, `-n` is the most tokens a call samples, and `max_tokens_update` (0 = no
+    cap) caps every token a call decodes, prompt tokens included.
 
-    The response is the `output` of every call concatenated, including the last ingest
-    call: the token that `"-n"; "1"` samples at the end of the prompt is the first token
-    of the response, and the generate calls continue after it. Every call's `output`
-    holds the text of the `n_tokens_generated` tokens of that call, so the counts of the
-    calls add up to the tokens of the response. A special token sampled without `-sp`
-    is counted but adds no text.
+    The response is the `output` of every call concatenated. Its first token comes from
+    the last ingest call, which samples it with `"-n"; "1"` at the end of the prompt,
+    unless the prompt tokens that call decodes use up its `max_tokens_update` budget, or
+    the canister's instruction guard leaves no room for one more decode. That call then
+    samples nothing, and the first token comes from a later call. The
+    `n_tokens_generated` of the calls add up to the tokens of the response. A call's
+    `output` can hold back the bytes of an incomplete UTF-8 character for a later call,
+    and a special token sampled without `-sp` is counted but adds no text.
 
     **Query or update?**
 
