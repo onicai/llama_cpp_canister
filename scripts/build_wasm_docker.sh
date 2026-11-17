@@ -40,12 +40,6 @@ mkdir -p out
 cp build/llama_cpp.wasm out/
 cp build/llama_cpp.did  out/
 
-# The release zip ships the fork's model-conversion requirements, and the fork
-# only exists inside this image.
-mkdir -p out/fork
-cp    src/llama_cpp_onicai_fork/requirements.txt out/fork/
-cp -r src/llama_cpp_onicai_fork/requirements     out/fork/
-
 # Record what produced these bytes, right next to them.
 sha256sum out/llama_cpp.wasm | cut -d ' ' -f 1 > out/llama_cpp.wasm.sha256
 cat > out/BUILD-PROVENANCE.txt <<PROVENANCE
